@@ -14,22 +14,13 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+   
         {/* Tabs (your Home is inside here) */}
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
-        {/* Modal already exists */}
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: 'modal', title: 'Modal' }}
-        />
-
-        {/* 👇 New Category Screen */}
-        <Stack.Screen
-          name="category/categoryScreen"
-          options={{ headerShown: false }}
-        />
-      </Stack>
+        <Stack>
+  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+  <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+  <Stack.Screen name="category" options={{ headerShown: false }} />
+</Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
   );

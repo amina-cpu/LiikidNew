@@ -1,6 +1,10 @@
-import React from 'react';
+import * as Location from "expo-location";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  FlatList,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
   Image,
   ScrollView,
   StyleSheet,
@@ -8,434 +12,598 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from 'react-native-vector-icons';
+} from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { supabase } from "../../lib/Supabase";
 
-// --- Dummy Data ---
-const categories = [
-  { id: '1', name: 'Smartphones', icon: 'smartphone' },
-  { id: '2', name: 'Headphones', icon: 'headphones' },
-  { id: '3', name: 'Tablets', icon: 'tablet' },
-  { id: '4', name: 'Laptops', icon: 'laptop' },
-];
+const PRIMARY_TEAL = "#00C897";
+const LIGHT_GRAY = "#F5F5F5";
+const DARK_GRAY = "#333333";
+const ACCENT_RED = "#FF5B5B";
+const ORANGE = "#FF6B35";
+const BLUE = "#4A90E2";
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+const SAFE_AREA_PADDING = 40;
 
-const tabs = ['All', 'Sell', 'Rent', 'Exchange'];
+interface Category {
+  id: number;
+  name: string;
+  description: string | null;
+}
 
-const products = [
-  {
-    id: 'p1',
-    name: 'iPhone 14 Pro Max 256GB',
-    price: '45,000 DA',
-    distance: '2.5 km',
-    image:
-      'https://via.placeholder.com/300/F5F5F5/000000?text=iPhone', // Replace with local image or real URL
-    type: 'Sell',
-  },
-  {
-    id: 'p2',
-    name: 'Samsung Galaxy S23 Ultra',
-    price: '38,000 DA',
-    distance: '1.8 km',
-    image:
-      'https://via.placeholder.com/300/F5F5F5/000000?text=Samsung', // Replace with local image or real URL
-    type: 'Sell',
-  },
-  {
-    id: 'p3',
-    name: 'Sony WH-1000XM5',
-    price: '2,500 DA/day',
-    distance: '3.2 km',
-    image:
-      'https://via.placeholder.com/300/F5F5F5/000000?text=Headphones', // Replace with local image or real URL
-    type: 'Rent',
-  },
-  {
-    id: 'p4',
-    name: 'iPad Pro 12.9" + Pencil',
-    price: '85,000 DA',
-    distance: '4.7 km',
-    image:
-      'https://via.placeholder.com/300/F5F5F5/000000?text=iPad', // Replace with local image or real URL
-    type: 'Exchange',
-  },
-  // Add more products for scrolling if needed
-];
+interface Subcategory {
+  id: number;
+  category_id: number;
+  name: string;
+  description: string | null;
+}
 
-// --- Sub Components ---
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+  listing_type: "sell" | "rent" | "exchange";
+  image_url: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_address: string | null;
+  subcategory_id: number | null;
+  sub_subcategory_id: number | null;
+  created_at: string;
+}
 
-const Header = () => (
-  <View style={styles.headerContainer}>
-    <TouchableOpacity style={styles.backButton}>
-      <Ionicons name="arrow-back" size={24} color="#000" />
-    </TouchableOpacity>
-    <View style={styles.searchContainer}>
-      <MaterialCommunityIcons
-        name="magnify"
-        size={20}
-        color="#888"
-        style={styles.searchIcon}
-      />
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search anything"
-        placeholderTextColor="#888"
-      />
-    </View>
-    <TouchableOpacity style={styles.locationContainer}>
-      <MaterialCommunityIcons
-        name="map-marker-outline"
-        size={20}
-        color="#4CAF50" // A green color
-      />
-      <Text style={styles.locationText}>Setif</Text>
-    </TouchableOpacity>
-  </View>
-);
+const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
-const CategoryItem = ({ name, icon }) => (
-  <TouchableOpacity style={styles.categoryItem}>
-    <MaterialCommunityIcons name={icon} size={20} color="#000" />
-    <Text style={styles.categoryText}>{name}</Text>
-  </TouchableOpacity>
-);
+// Calculate distance between two coordinates using Haversine formula
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
-const TabButton = ({ title, isActive }) => (
-  <TouchableOpacity
-    style={[
-      styles.tabButton,
-      isActive ? styles.activeTab : styles.inactiveTab,
-    ]}
-  >
-    <Text
-      style={[
-        styles.tabText,
-        isActive ? styles.activeTabText : styles.inactiveTabText,
-      ]}
-    >
-      {title}
-    </Text>
-  </TouchableOpacity>
-);
+const ProductCard: React.FC<{
+  product: Product;
+  userLat: number | null;
+  userLon: number | null;
+}> = ({ product, userLat, userLon }) => {
+  const [liked, setLiked] = useState(false);
+  const toggleLike = () => setLiked(!liked);
 
-const ProductCard = ({ product }) => (
-  <View style={styles.cardContainer}>
-    <View style={styles.cardHeader}>
-      <Image source={{ uri: product.image }} style={styles.productImage} />
-      <View style={styles.topIcons}>
-        <View style={styles.deliveryIconContainer}>
-          <MaterialCommunityIcons
-            name="truck-fast"
-            size={16}
-            color="#FFF"
-          />
-        </View>
-        <TouchableOpacity
-          style={[
-            styles.heartIconContainer,
-            product.type === 'Sell' ? styles.heartSell : styles.heartOther,
-          ]}
-        >
-          <MaterialCommunityIcons
-            name="heart"
-            size={20}
-            color="#FFF"
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-    <View style={styles.cardBody}>
-      <Text style={styles.productPrice}>{product.price}</Text>
-      <Text style={styles.productName} numberOfLines={2}>
-        {product.name}
-      </Text>
-      <View style={styles.distanceContainer}>
-        <MaterialCommunityIcons
-          name="map-marker"
-          size={14}
-          color="#4CAF50"
-        />
-        <Text style={styles.distanceText}>{product.distance}</Text>
-      </View>
-    </View>
-  </View>
-);
+  let distance = "N/A";
+  if (userLat && userLon && product.latitude && product.longitude) {
+    const dist = calculateDistance(
+      userLat,
+      userLon,
+      product.latitude,
+      product.longitude
+    );
+    distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
+  }
 
-// --- Main Component ---
+  const formatPrice = () => {
+    if (product.listing_type === "exchange") return "Exchange";
+    if (product.listing_type === "rent")
+      return `${product.price.toLocaleString()} DA/day`;
+    return `${product.price.toLocaleString()} DA`;
+  };
 
-const SecondPageClone = () => {
+  const getPriceColor = () => {
+    if (product.listing_type === "exchange") return "#9B59B6";
+    if (product.listing_type === "rent") return ORANGE;
+    return BLUE;
+  };
+
+  const hasDelivery = product.listing_type === "sell";
+
   return (
-    <View style={styles.screenContainer}>
-      {/* Header */}
-      <Header />
-
-      {/* Main Content ScrollView */}
-      <ScrollView
-        style={styles.contentScrollView}
-        showsVerticalScrollIndicator={false}
+    <View style={styles.cardContainer}>
+      <TouchableOpacity
+        onPress={() => console.log("Product Pressed:", product.id)}
+        style={styles.cardTouchable}
       >
-        {/* Section: Phone & Accessories */}
-        <View style={styles.sectionHeader}>
-          <MaterialCommunityIcons
-            name="cellphone"
-            size={20}
-            color="#4CAF50"
+        <View style={styles.imageWrapper}>
+          <Image
+            source={{
+              uri:
+                product.image_url ||
+                "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+            }}
+            style={styles.cardImage}
           />
-          <Text style={styles.sectionTitle}>Phone & Accessories</Text>
-        </View>
-
-        {/* Categories Horizontal Scroll */}
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={categories}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <CategoryItem name={item.name} icon={item.icon} />
+          {hasDelivery && (
+            <View style={styles.deliveryBadge}>
+              <MaterialCommunityIcons
+                name="truck-delivery"
+                size={16}
+                color={PRIMARY_TEAL}
+              />
+            </View>
           )}
-          contentContainerStyle={styles.categoryList}
-        />
-
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          {tabs.map((tab) => (
-            <TabButton key={tab} title={tab} isActive={tab === 'All'} />
-          ))}
+          <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
+            <Ionicons
+              name={liked ? "heart" : "heart-outline"}
+              size={24}
+              color={liked ? ACCENT_RED : "white"}
+            />
+          </TouchableOpacity>
         </View>
-
-        {/* Product Grid */}
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          scrollEnabled={false} // Nested FlatList: keep scrollEnabled false
-          columnWrapperStyle={styles.row}
-          renderItem={({ item }) => <ProductCard product={item} />}
-          contentContainerStyle={styles.productList}
-        />
-
-        {/* Load More Button */}
-        <TouchableOpacity style={styles.loadMoreButton}>
-          <Text style={styles.loadMoreButtonText}>Load More Items</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        <View style={styles.cardDetails}>
+          <Text style={[styles.cardPrice, { color: getPriceColor() }]}>
+            {formatPrice()}
+          </Text>
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {product.name}
+          </Text>
+          <View style={styles.distanceContainer}>
+            <Ionicons name="location-outline" size={14} color={PRIMARY_TEAL} />
+            <Text style={styles.cardDistance}>{distance}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
     </View>
   );
 };
 
-// --- Styles ---
+export default function CategoryScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const categoryId = params.id ? Number(params.id) : null;
+
+  const [selectedFilter, setSelectedFilter] = useState("All");
+  const [selectedSubcategory, setSelectedSubcategory] = useState<number | null>(null);
+  const [location, setLocation] = useState<string>("Loading...");
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLon, setUserLon] = useState<number | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const [category, setCategory] = useState<Category | null>(null);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user location
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setLocation("Permission denied");
+        return;
+      }
+
+      let coords = await Location.getCurrentPositionAsync({});
+      setUserLat(coords.coords.latitude);
+      setUserLon(coords.coords.longitude);
+
+      let reverse = await Location.reverseGeocodeAsync(coords.coords);
+      if (reverse.length > 0) {
+        let city = reverse[0].city || reverse[0].region || "Unknown";
+        setLocation(city);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (categoryId) {
+      fetchData();
+    }
+  }, [categoryId]);
+
+  // Filter products
+  useEffect(() => {
+    let filtered = products;
+
+    // Filter by subcategory
+    if (selectedSubcategory) {
+      filtered = filtered.filter((p) => p.subcategory_id === selectedSubcategory);
+    }
+
+    // Filter by listing type
+    if (selectedFilter !== "All") {
+      filtered = filtered.filter(
+        (p) => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
+      );
+    }
+
+    setFilteredProducts(filtered);
+  }, [selectedFilter, selectedSubcategory, products]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch category details
+      const { data: categoryData, error: categoryError } = await supabase
+        .from("categories")
+        .select("id, name, description")
+        .eq("id", categoryId)
+        .single();
+
+      if (categoryError) throw categoryError;
+      setCategory(categoryData);
+
+      // Fetch subcategories
+      const { data: subcategoriesData, error: subcategoriesError } =
+        await supabase
+          .from("subcategories")
+          .select("id, category_id, name, description")
+          .eq("category_id", categoryId)
+          .order("name");
+
+      if (subcategoriesError) throw subcategoriesError;
+      setSubcategories(subcategoriesData || []);
+
+      // Fetch products for this category
+      const { data: productsData, error: productsError } = await supabase
+        .from("products")
+        .select(
+          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at"
+        )
+        .eq("category_id", categoryId)
+        .order("created_at", { ascending: false });
+
+      if (productsError) throw productsError;
+      setProducts(productsData || []);
+      setFilteredProducts(productsData || []);
+    } catch (error: any) {
+      console.error("Error fetching data:", error);
+      Alert.alert("Error", "Failed to load data: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.safeArea, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color={PRIMARY_TEAL} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.contentContainer}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
+          </TouchableOpacity>
+          <View
+            style={[
+              styles.searchBar,
+              isSearchFocused && styles.searchBarFocused,
+            ]}
+          >
+            <Ionicons
+              name="search"
+              size={20}
+              color="#999"
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search anything"
+              placeholderTextColor="#999"
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+            />
+          </View>
+          <View style={styles.locationContainer}>
+            <Ionicons name="location-sharp" size={20} color={PRIMARY_TEAL} />
+            <Text style={styles.locationText}>{location}</Text>
+          </View>
+        </View>
+
+        {/* Category Title */}
+        <View style={styles.categoryTitleContainer}>
+          <Ionicons name="phone-portrait-outline" size={24} color={PRIMARY_TEAL} />
+          <Text style={styles.categoryTitle}>{category?.name || "Category"}</Text>
+        </View>
+
+        {/* Subcategories */}
+        {subcategories.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.subcategoryScroll}
+          >
+            {subcategories.map((sub) => (
+              <TouchableOpacity
+                key={sub.id}
+                style={[
+                  styles.subcategoryPill,
+                  selectedSubcategory === sub.id && styles.subcategoryPillActive,
+                ]}
+                onPress={() => setSelectedSubcategory(sub.id === selectedSubcategory ? null : sub.id)}
+              >
+                <Ionicons
+                  name="phone-portrait-outline"
+                  size={20}
+                  color={DARK_GRAY}
+                  style={styles.subcategoryIcon}
+                />
+                <Text style={styles.subcategoryText}>
+                  {sub.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Filters */}
+        <View style={styles.filterTabsWrapper}>
+          <View style={styles.filterTabs}>
+            {FILTER_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === tab && styles.filterButtonActive,
+                  selectedFilter === tab &&
+                    tab === "Sell" && { backgroundColor: BLUE },
+                  selectedFilter === tab &&
+                    tab === "Rent" && { backgroundColor: ORANGE },
+                  selectedFilter === tab &&
+                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                ]}
+                onPress={() => setSelectedFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selectedFilter === tab && styles.filterTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Products */}
+        {filteredProducts.length === 0 ? (
+          <Text style={styles.emptyText}>No products available</Text>
+        ) : (
+          <View style={styles.productGrid}>
+            {filteredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                userLat={userLat}
+                userLon={userLon}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  screenContainer: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 50, // For a status bar offset
+    backgroundColor: "white",
+    paddingTop: SAFE_AREA_PADDING,
   },
-  contentScrollView: {
-    flex: 1,
-    paddingHorizontal: 15,
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
-  // --- Header Styles ---
-  headerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingBottom: 15,
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: DARK_GRAY,
+  },
+  emptyText: {
+    textAlign: "center",
+    fontSize: 16,
+    color: "#999",
+    marginVertical: 20,
+    paddingHorizontal: 16,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
   backButton: {
-    padding: 5,
+    marginRight: 10,
   },
-  searchContainer: {
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    marginHorizontal: 10,
-    paddingHorizontal: 10,
-    height: 40,
+    height: 48,
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: 24,
+    marginRight: 10,
+    paddingHorizontal: 15,
+  },
+  searchBarFocused: {
+    borderWidth: 2,
+    borderColor: PRIMARY_TEAL,
   },
   searchIcon: {
-    marginRight: 5,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#000',
+    fontSize: 16,
+    color: DARK_GRAY,
     paddingVertical: 0,
   },
   locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   locationText: {
     marginLeft: 4,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    fontSize: 14,
+    fontWeight: "600",
+    color: DARK_GRAY,
   },
-  // --- Section Header (Phone & Accessories) ---
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  categoryTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
     marginTop: 10,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginLeft: 8,
-    color: '#000',
-  },
-  // --- Categories Scroll ---
-  categoryList: {
-    paddingRight: 20,
     marginBottom: 15,
   },
-  categoryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 15,
+  categoryTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: DARK_GRAY,
+    marginLeft: 8,
+  },
+  subcategoryScroll: {
+    paddingHorizontal: 16,
+    marginBottom: 15,
+  },
+  subcategoryPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginRight: 10,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: "white",
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: "#E0E0E0",
   },
-  categoryText: {
-    marginLeft: 8,
+  subcategoryPillActive: {
+    backgroundColor: DARK_GRAY,
+    borderColor: DARK_GRAY,
+  },
+  subcategoryText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
+    fontWeight: "600",
+    color: DARK_GRAY,
+    marginLeft: 6,
   },
-  // --- Tabs ---
-  tabsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 15,
-    padding: 3,
-    marginBottom: 15,
+  subcategoryTextActive: {
+    color: "white",
   },
-  tabButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    borderRadius: 15,
-    marginRight: 5, // Spacing between tabs
+  filterTabsWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
-  activeTab: {
-    backgroundColor: '#000',
+  filterTabs: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: 12,
+    padding: 4,
   },
-  inactiveTab: {
-    backgroundColor: 'transparent',
+  filterButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
-  tabText: {
+  filterButtonActive: {
+    backgroundColor: DARK_GRAY,
+  },
+  filterText: {
+    fontWeight: "600",
     fontSize: 14,
-    fontWeight: '600',
+    color: "#666",
   },
-  activeTabText: {
-    color: '#fff',
+  filterTextActive: {
+    color: "white",
   },
-  inactiveTabText: {
-    color: '#666',
-  },
-  // --- Product Grid ---
-  productList: {
-    paddingBottom: 20,
-  },
-  row: {
-    justifyContent: 'space-between',
-    marginBottom: 15,
+  productGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
   },
   cardContainer: {
-    width: '48%', // For two columns with some space in between
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    overflow: 'hidden',
-    shadowColor: '#000',
+    width: CARD_WIDTH,
+    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: "white",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
-    borderWidth: 1,
-    borderColor: '#EFEFEF',
   },
-  cardHeader: {
-    position: 'relative',
-    width: '100%',
-    aspectRatio: 1, // Square image container
+  cardTouchable: {
+    borderRadius: 16,
+    overflow: "hidden",
   },
-  productImage: {
-    width: '100%',
-    height: '100%',
+  imageWrapper: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#F7F7F7",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
-  topIcons: {
-    position: 'absolute',
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  deliveryBadge: {
+    position: "absolute",
     top: 10,
     left: 10,
+    backgroundColor: "white",
+    padding: 6,
+    borderRadius: 8,
+  },
+  heartIcon: {
+    position: "absolute",
+    top: 10,
     right: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  deliveryIconContainer: {
-    backgroundColor: '#4CAF50',
-    borderRadius: 50,
     padding: 5,
-    alignSelf: 'flex-start',
   },
-  heartIconContainer: {
-    borderRadius: 50,
-    padding: 4,
-    alignSelf: 'flex-end',
+  cardDetails: {
+    padding: 12,
   },
-  heartSell: {
-    backgroundColor: '#FF0000', // Red for Sell/Heart
-  },
-  heartOther: {
-    backgroundColor: '#777777', // Grey for Rent/Exchange
-  },
-  cardBody: {
-    padding: 10,
-  },
-  productPrice: {
+  cardPrice: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
+    fontWeight: "700",
     marginBottom: 4,
   },
-  productName: {
+  cardTitle: {
     fontSize: 14,
-    color: '#333',
-    minHeight: 36, // Ensure consistent height for 2 lines
+    fontWeight: "500",
+    color: DARK_GRAY,
+    minHeight: 36,
   },
   distanceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
   },
-  distanceText: {
-    marginLeft: 5,
+  cardDistance: {
+    marginLeft: 4,
     fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '500',
-  },
-  // --- Load More Button ---
-  loadMoreButton: {
-    backgroundColor: '#000',
-    paddingVertical: 15,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  loadMoreButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: "#666",
   },
 });
-
-export default SecondPageClone;
