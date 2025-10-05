@@ -479,31 +479,31 @@ const styles = StyleSheet.create({
   },
   subcategoryScroll: {
     paddingHorizontal: 16,
-    marginBottom: 15,
+    marginBottom: 20,
   },
   subcategoryPill: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    marginRight: 8,
-    borderRadius: 20,
+    marginRight: 12,
+    borderRadius: 8,
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#E0E0E0",
+    borderColor: "#D0D0D0",
   },
   subcategoryPillActive: {
-    backgroundColor: DARK_GRAY,
+    backgroundColor: "white",
     borderColor: DARK_GRAY,
+    borderWidth: 1.5,
+  },
+  subcategoryIcon: {
+    marginRight: 6,
   },
   subcategoryText: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "500",
     color: DARK_GRAY,
-    marginLeft: 6,
-  },
-  subcategoryTextActive: {
-    color: "white",
   },
   filterTabsWrapper: {
     paddingHorizontal: 16,

@@ -108,7 +108,8 @@ const CategoryButton: React.FC<{ category: Category; index: number }> = ({ categ
   return (
     <TouchableOpacity
       style={[styles.categoryButton, { backgroundColor: bgColor }]}
-      onPress={() => router.push(`/category/index?id=${category.id}`)}
+      onPress={() => router.push(`/category?id=${category.id}`)
+}
     >
       <FontAwesome name={getCategoryIcon(category.name)} size={28} color="white" />
       <Text style={styles.categoryText}>{category.name}</Text>
