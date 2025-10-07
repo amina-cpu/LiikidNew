@@ -96,11 +96,12 @@ export default function TabLayout() {
         }}
       />
        <Tabs.Screen
-        name="filters"
-        options={{
-          href: null, // This hides it from the tab bar
-        }}
-      />
+  name="filters"
+  options={{
+    headerShown: false,  // Move this inside options
+    href: null, // This hides it from the tab bar
+  }}
+/>
  <Tabs.Screen
         name="product_detail"
         options={{

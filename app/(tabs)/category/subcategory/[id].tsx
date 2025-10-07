@@ -17,7 +17,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../../../lib/Supabase";
 
-const PRIMARY_TEAL = "#00C897";
+const PRIMARY_TEAL = "#16A085";
 const LIGHT_GRAY = "#F5F5F5";
 const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";

@@ -1,9 +1,12 @@
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
+
+
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
   ScrollView,
@@ -17,7 +20,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../../lib/Supabase";
 
-const PRIMARY_TEAL = "#00C897";
+const PRIMARY_TEAL = "#16A085";
 const LIGHT_GRAY = "#F5F5F5";
 const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
@@ -158,6 +161,59 @@ const ProductCard: React.FC<{
   );
 };
 
+// Load More Button with Hover Animation
+const LoadMoreButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
+  const scaleAnim = new Animated.Value(1);
+  const translateYAnim = new Animated.Value(0);
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: -5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.loadMoreContainer,
+        {
+          transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.loadMoreButton}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+      >
+        <Text style={styles.loadMoreText}>Load More Items</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function CategoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -267,6 +323,15 @@ export default function CategoryScreen() {
     }
   };
 
+  const handleLoadMore = () => {
+    console.log("Load more items");
+    // Add your load more logic here
+  };
+
+  const openFilters = () => {
+    router.push("/filters");
+  };
+
   if (loading) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
@@ -330,9 +395,7 @@ export default function CategoryScreen() {
                   styles.subcategoryPill,
                   selectedSubcategory === sub.id && styles.subcategoryPillActive,
                 ]}
-                
-onPress={() => router.push(`/category/subcategory/${sub.id}`)}
-
+                onPress={() => router.push(`/category/subcategory/${sub.id}`)}
               >
                 <Ionicons
                   name="phone-portrait-outline"
@@ -394,7 +457,28 @@ onPress={() => router.push(`/category/subcategory/${sub.id}`)}
             ))}
           </View>
         )}
+
+        {/* Load More Button */}
+        {filteredProducts.length > 0 && (
+          <LoadMoreButton onPress={handleLoadMore} />
+        )}
       </ScrollView>
+
+      {/* Floating Filter Button */}
+    <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
+  <View style={styles.filterIconContainer}>
+    <Image
+      source={require("../../../assets/icons/floating.png")} // <-- update path if needed
+      style={styles.floatingImageIcon}
+    />
+   
+   
+    
+  </View>
+</TouchableOpacity>
+
+
+
     </View>
   );
 }
@@ -422,7 +506,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   header: {
     flexDirection: "row",
@@ -507,6 +591,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: DARK_GRAY,
   },
+  floatingImageIcon: {
+  width: 28,
+  height: 28,
+  resizeMode: "contain",
+  tintColor: "white", // Optional — remove if your icon is already colored correctly
+},
+
   filterTabsWrapper: {
     paddingHorizontal: 16,
     marginBottom: 20,
@@ -607,5 +698,65 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 12,
     color: "#666",
+  },
+  // Load More Button Styles
+  loadMoreContainer: {
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  loadMoreButton: {
+    backgroundColor: PRIMARY_TEAL,
+    borderRadius: 30,
+    paddingVertical: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loadMoreText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  // Floating Filter Button Styles
+  floatingFilterButton: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    backgroundColor: PRIMARY_TEAL,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  filterIconContainer: {
+    position: "relative",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: ACCENT_RED,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  filterBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "700",
   },
 });

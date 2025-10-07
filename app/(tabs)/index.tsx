@@ -18,7 +18,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../lib/Supabase";
 
-const PRIMARY_TEAL = "#00C897";
+const PRIMARY_TEAL = "#16A085";
 const LIGHT_GRAY = "#F5F5F5";
 const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
@@ -74,7 +74,7 @@ const getCategoryIcon = (categoryName: string): IconName => {
   return "cog";
 };
 
-const CATEGORY_COLORS = [ORANGE, BLUE, DARK_GRAY, "#8E44AD", "#E91E63", "#27AE60", "#F39C12", "#16A085"];
+const CATEGORY_COLORS = [ORANGE, BLUE, DARK_GRAY, "#8E44AD", "#E91E63", "#16A085", "#F39C12", "#16A085"];
 
 const getCategoryColor = (index: number): string => {
   return CATEGORY_COLORS[index % CATEGORY_COLORS.length];
