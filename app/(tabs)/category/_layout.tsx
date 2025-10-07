@@ -8,8 +8,10 @@ export default function CategoryLayout() {
         options={{ 
           headerShown: false,
           presentation: "card"
-        }} 
-      />
+        }}/>
+         <Stack.Screen name="subcategory" options={{ headerShown: false }} />
+      
+     
     </Stack>
   );
 }

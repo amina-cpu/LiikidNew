@@ -10,9 +10,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import FontAwesome from "react-native-vector-icons/FontAwesome";
 import Ionicons from "react-native-vector-icons/Ionicons";
@@ -121,7 +120,9 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
+  
 }> = ({ product, userLat, userLon }) => {
+   const router = useRouter();
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
@@ -160,7 +161,7 @@ const ProductCard: React.FC<{
   return (
     <View style={styles.cardContainer}>
       <TouchableOpacity
-        onPress={() => console.log("Product Pressed:", product.id)}
+       onPress={() => router.push(`/product_detail?id=${product.id}`)}
         style={styles.cardTouchable}
       >
         <View style={styles.imageWrapper}>
@@ -243,12 +244,13 @@ const LoadMoreButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
 };
 
 export default function HomeScreen() {
-  const [selectedFilter, setSelectedFilter] = useState("All");
+
   const [location, setLocation] = useState<string>("Loading...");
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  
+  const router = useRouter(); // <-- 2. The router hook MUST be called here
+  const [selectedFilter, setSelectedFilter] = useState("All");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -356,26 +358,28 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <View
-            style={[
-              styles.searchBar,
-              isSearchFocused && styles.searchBarFocused,
-            ]}
+           <TouchableOpacity 
+            style={styles.searchBarWrapper} // A new style may be helpful
+            onPress={() => {
+              // Navigate to the newly created filters screen
+              router.push('/filters');
+            }}
+            activeOpacity={0.7}
           >
-            <Ionicons
-              name="search"
-              size={20}
-              color="#999"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search anything"
-              placeholderTextColor="#999"
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-            />
-          </View>
+            <View
+              style={styles.searchBar} // Keep the styling consistent
+            >
+              <Ionicons
+                name="search"
+                size={20}
+                color="#999"
+                style={styles.searchIcon}
+              />
+              <Text style={styles.searchInputPlaceholder}>
+                Search anything
+              </Text>
+            </View>
+          </TouchableOpacity>
           <View style={styles.locationContainer}>
             <Ionicons name="location-sharp" size={20} color={PRIMARY_TEAL} />
             <Text style={styles.locationText}>{location}</Text>
@@ -483,28 +487,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  searchBarWrapper: {
+    flex: 1, 
+    marginRight: 10,
+  },
+
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
     height: 48,
-    backgroundColor: LIGHT_GRAY,
-    borderRadius: 24,
-    marginRight: 10,
+    backgroundColor: 'white', // White background
+    borderRadius: 24, // Full pill shape
     paddingHorizontal: 15,
+    borderWidth: 1, // Light border for the default state
+    borderColor: LIGHT_GRAY, 
   },
+  
   searchBarFocused: {
-    borderWidth: 2,
-    borderColor: PRIMARY_TEAL,
+    borderColor: PRIMARY_TEAL, // Green border color
+    borderWidth: 2, // Thicker border when focused
   },
+  
   searchIcon: {
     marginRight: 8,
+    color: "#999",
   },
+  
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: DARK_GRAY,
+    color: "#999", // Placeholder color
     paddingVertical: 0,
+    backgroundColor: 'transparent', 
   },
   locationContainer: {
     flexDirection: "row",

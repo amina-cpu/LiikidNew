@@ -59,6 +59,8 @@ export default function AddProduct() {
     } else {
       setSubcategories([]);
       setSubcategoryId(null);
+      setSubSubcategories([]);
+      setSubSubcategoryId(null);
     }
   }, [category_id]);
 
@@ -148,15 +150,46 @@ export default function AddProduct() {
   // Pick image from gallery
   const pickImage = async () => {
     try {
+      // Request permissions first
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          "Permission requise",
+          "Nous avons besoin d'accéder à vos photos pour télécharger une image."
+        );
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 1,
+        quality: 0.3, // Very low quality for maximum compression
+        allowsMultipleSelection: false,
+        // Compress image dimensions
+        exif: false, // Don't include EXIF data
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        setImage(result.assets[0].uri);
+        const asset = result.assets[0];
+        console.log("Image selected:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize
+        });
+
+        // Check file size if available
+        if (asset.fileSize && asset.fileSize > 3 * 1024 * 1024) {
+          Alert.alert(
+            "Image trop grande",
+            "L'image est trop grande. Veuillez choisir une image plus petite ou prendre une nouvelle photo avec une qualité réduite."
+          );
+          return;
+        }
+
+        setImage(asset.uri);
       }
     } catch (error: any) {
       console.error("Error picking image:", error);
@@ -168,27 +201,49 @@ export default function AddProduct() {
   const uploadImage = async (uri: string): Promise<string | null> => {
     try {
       console.log("Starting image upload...");
-      setUploading(true);
+      console.log("Image URI:", uri);
 
+      // Read file as base64
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: "base64",
       });
 
-      const fileName = `products/${Date.now()}.jpg`;
-      const arrayBuffer = decode(base64);
+      console.log("Base64 length:", base64.length);
 
+      // Check if base64 is too large (>5MB encoded ~= 6.7MB file)
+      if (base64.length > 7000000) {
+        throw new Error("L'image est trop grande. Veuillez choisir une image plus petite.");
+      }
+
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+      
+      console.log("Decoding base64 to ArrayBuffer...");
+      const arrayBuffer = decode(base64);
+      
+      console.log("ArrayBuffer size:", arrayBuffer.byteLength);
       console.log("Uploading to storage:", fileName);
 
-      const { data, error } = await supabase.storage
+      // Upload with timeout
+      const uploadPromise = supabase.storage
         .from("product-images")
         .upload(fileName, arrayBuffer, {
           contentType: "image/jpeg",
+          upsert: false,
         });
+
+      // Add 30 second timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Upload timeout - connexion trop lente")), 30000)
+      );
+
+      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
 
       if (error) {
         console.error("Storage upload error:", error);
         throw error;
       }
+
+      console.log("Upload successful, getting public URL...");
 
       const { data: publicUrlData } = supabase.storage
         .from("product-images")
@@ -197,33 +252,55 @@ export default function AddProduct() {
       console.log("Image uploaded successfully:", publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
     } catch (err: any) {
-      console.error("Upload error:", err);
-      Alert.alert("Erreur", "Échec du téléchargement de l'image: " + err.message);
+      console.error("Upload error details:", err);
+      
+      let errorMessage = "Échec du téléchargement de l'image";
+      
+      if (err.message.includes("timeout")) {
+        errorMessage = "Timeout: Connexion trop lente. Vérifiez votre connexion internet.";
+      } else if (err.message.includes("trop grande")) {
+        errorMessage = err.message;
+      } else if (err.message.includes("NetworkError") || err.message.includes("network")) {
+        errorMessage = "Erreur réseau. Vérifiez votre connexion internet.";
+      } else if (err.statusCode === "413") {
+        errorMessage = "L'image est trop grande.";
+      } else if (err.message) {
+        errorMessage += ": " + err.message;
+      }
+      
+      Alert.alert("Erreur d'upload", errorMessage);
       return null;
-    } finally {
-      setUploading(false);
     }
   };
 
   // Handle submit
   const handleSubmit = async () => {
+    // Prevent multiple submissions
+    if (uploading) {
+      return;
+    }
+
     try {
       console.log("=== Starting form submission ===");
+      setUploading(true);
       
       // Validation
       if (!name.trim()) {
         Alert.alert("Erreur", "Veuillez entrer le nom du produit");
+        setUploading(false);
         return;
       }
       
       const priceValue = parseFloat(price);
       if (!price || isNaN(priceValue) || priceValue <= 0) {
         Alert.alert("Erreur", "Veuillez entrer un prix valide");
+        setUploading(false);
         return;
       }
       
       if (!category_id) {
         Alert.alert("Erreur", "Veuillez sélectionner une catégorie");
+        setUploading(false);
         return;
       }
 
@@ -242,10 +319,32 @@ export default function AddProduct() {
       // Upload image if exists
       if (image) {
         console.log("Uploading image...");
-        imageUrl = await uploadImage(image);
+        try {
+          imageUrl = await uploadImage(image);
+        } catch (uploadError: any) {
+          console.error("Image upload failed:", uploadError);
+          setUploading(false);
+          
+          Alert.alert(
+            "Erreur d'image",
+            "Le téléchargement de l'image a échoué. Voulez-vous continuer sans image?",
+            [
+              { text: "Annuler", style: "cancel", onPress: () => setUploading(false) },
+              { 
+                text: "Continuer", 
+                onPress: async () => {
+                  setUploading(true);
+                  await insertProduct(null);
+                }
+              }
+            ]
+          );
+          return;
+        }
         
-        // If image upload failed, ask user if they want to continue
+        // If image upload returned null (failed but handled), ask user
         if (!imageUrl) {
+          setUploading(false);
           Alert.alert(
             "Erreur d'image",
             "Le téléchargement de l'image a échoué. Voulez-vous continuer sans image?",
@@ -253,7 +352,10 @@ export default function AddProduct() {
               { text: "Annuler", style: "cancel" },
               { 
                 text: "Continuer", 
-                onPress: () => insertProduct(null) 
+                onPress: async () => {
+                  setUploading(true);
+                  await insertProduct(null);
+                }
               }
             ]
           );
@@ -266,6 +368,7 @@ export default function AddProduct() {
     } catch (error: any) {
       console.error("=== Error in handleSubmit ===", error);
       Alert.alert("Erreur", "Une erreur s'est produite: " + (error.message || "Erreur inconnue"));
+      setUploading(false);
     }
   };
 
@@ -273,21 +376,38 @@ export default function AddProduct() {
     try {
       console.log("Inserting product into database...");
       
+      // Build product data - only include fields that exist
       const productData: any = {
         name: name.trim(),
         description: description.trim() || null,
         price: parseFloat(price),
         listing_type: listingType,
         category_id: category_id,
-        subcategory_id: subcategory_id,
-        sub_subcategory_id: sub_subcategory_id,
         image_url: imageUrl,
-        location_address: locationAddress.trim() || null,
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
       };
 
-      console.log("Product data:", productData);
+      // Only add optional fields if they have values
+      if (subcategory_id) {
+        productData.subcategory_id = subcategory_id;
+      }
+      
+      if (sub_subcategory_id) {
+        productData.sub_subcategory_id = sub_subcategory_id;
+      }
+
+      if (locationAddress.trim()) {
+        productData.location_address = locationAddress.trim();
+      }
+
+      if (latitude && !isNaN(parseFloat(latitude))) {
+        productData.latitude = parseFloat(latitude);
+      }
+
+      if (longitude && !isNaN(parseFloat(longitude))) {
+        productData.longitude = parseFloat(longitude);
+      }
+
+      console.log("Product data to insert:", productData);
 
       const { data, error } = await supabase
         .from("products")
@@ -301,20 +421,29 @@ export default function AddProduct() {
 
       console.log("Product inserted successfully:", data);
 
-      Alert.alert("✅ Succès", "Produit ajouté avec succès!");
-
-      // Reset form
-      setName("");
-      setDescription("");
-      setPrice("");
-      setListingType("sell");
-      setLocationAddress("");
-      setLatitude("");
-      setLongitude("");
-      setImage(null);
-      if (categories.length > 0) {
-        setCategoryId(categories[0].id);
-      }
+      Alert.alert(
+        "✅ Succès", 
+        "Produit ajouté avec succès!",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              // Reset form
+              setName("");
+              setDescription("");
+              setPrice("");
+              setListingType("sell");
+              setLocationAddress("");
+              setLatitude("");
+              setLongitude("");
+              setImage(null);
+              if (categories.length > 0) {
+                setCategoryId(categories[0].id);
+              }
+            }
+          }
+        ]
+      );
 
     } catch (error: any) {
       console.error("=== Error in insertProduct ===", error);
@@ -322,15 +451,18 @@ export default function AddProduct() {
       let errorMessage = "Impossible d'ajouter le produit";
       
       if (error.code === "23503") {
-        errorMessage = "Catégorie invalide";
+        errorMessage = "Référence de catégorie invalide. Veuillez réessayer.";
       } else if (error.code === "42501") {
         errorMessage = "Vous n'avez pas la permission d'ajouter des produits";
+      } else if (error.code === "23505") {
+        errorMessage = "Ce produit existe déjà";
       } else if (error.message) {
         errorMessage = error.message;
       }
       
       Alert.alert("Erreur", errorMessage);
-      throw error;
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -406,7 +538,12 @@ export default function AddProduct() {
         <View style={styles.pickerWrapper}>
           <Picker
             selectedValue={category_id}
-            onValueChange={(value) => setCategoryId(value)}
+            onValueChange={(value) => {
+              setCategoryId(value);
+              // Reset subcategories when category changes
+              setSubcategoryId(null);
+              setSubSubcategoryId(null);
+            }}
             style={styles.picker}
             enabled={!uploading}
           >
@@ -423,7 +560,11 @@ export default function AddProduct() {
           <View style={styles.pickerWrapper}>
             <Picker
               selectedValue={subcategory_id}
-              onValueChange={(value) => setSubcategoryId(value)}
+              onValueChange={(value) => {
+                setSubcategoryId(value);
+                // Reset sub-subcategories when subcategory changes
+                setSubSubcategoryId(null);
+              }}
               style={styles.picker}
               enabled={!uploading}
             >
@@ -618,4 +759,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
-});  
+});

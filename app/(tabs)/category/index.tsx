@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
-import { supabase } from "../../lib/Supabase";
+import { supabase } from "../../../lib/Supabase";
 
 const PRIMARY_TEAL = "#00C897";
 const LIGHT_GRAY = "#F5F5F5";
@@ -330,7 +330,9 @@ export default function CategoryScreen() {
                   styles.subcategoryPill,
                   selectedSubcategory === sub.id && styles.subcategoryPillActive,
                 ]}
-                onPress={() => setSelectedSubcategory(sub.id === selectedSubcategory ? null : sub.id)}
+                
+onPress={() => router.push(`/category/subcategory/${sub.id}`)}
+
               >
                 <Ionicons
                   name="phone-portrait-outline"

@@ -1,19 +1,14 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// Constants
 const PRIMARY_COLOR = '#000000';
 const INACTIVE_COLOR = '#999999';
 
-/** 
- * Custom Messages Icon with Two Chat Bubbles (matching the photo)
- */
 const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    {/* Back bubble (top right) */}
     <Path
       d="M18 3C19.66 3 21 4.34 21 6V12C21 13.66 19.66 15 18 15H16V17L14 15H12"
       stroke={color}
@@ -22,31 +17,14 @@ const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }
       strokeLinejoin="round"
       fill="none"
     />
-    {/* Front bubble (bottom left) - filled */}
     <Path
       d="M3 8C3 6.34 4.34 5 6 5H12C13.66 5 15 6.34 15 8V14C15 15.66 13.66 17 12 17H8L6 19V17H6C4.34 17 3 15.66 3 14V8Z"
       fill={color}
     />
-    {/* Dots in front bubble */}
     <Circle cx="6.5" cy="11" r="1" fill="white" />
     <Circle cx="9" cy="11" r="1" fill="white" />
     <Circle cx="11.5" cy="11" r="1" fill="white" />
   </Svg>
-);
-
-/** 
- * Custom Tab Bar Button for the Central 'Add' Icon
- */
-const AddButtonTab: React.FC<any> = ({ onPress }) => (
-  <TouchableOpacity
-    activeOpacity={0.8}
-    onPress={onPress}
-    style={styles.addButtonContainer}
-  >
-    <View style={styles.addIconWrapper}>
-      <Icon name="plus" size={24} color={PRIMARY_COLOR} />
-    </View>
-  </TouchableOpacity>
 );
 
 export default function TabLayout() {
@@ -58,13 +36,11 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: 'white',
-          height: 100,
+          height: 120,
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
           paddingBottom: 25,
           paddingTop: 10,
-          elevation: 0,
-          shadowOpacity: 0,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -73,7 +49,6 @@ export default function TabLayout() {
         },
       }}>
 
-      {/* 1. Home Screen */}
       <Tabs.Screen
         name="index"
         options={{
@@ -82,7 +57,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 2. Map Screen */}
       <Tabs.Screen
         name="map"
         options={{
@@ -91,7 +65,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 3. Add Screen (Central Button) */}
       <Tabs.Screen
         name="add"
         options={{
@@ -100,7 +73,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 4. Messages Screen */}
       <Tabs.Screen
         name="messages"
         options={{
@@ -116,7 +88,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* 5. Profile Screen */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -124,21 +95,30 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Icon name="account" size={24} color={color} />,
         }}
       />
+       <Tabs.Screen
+        name="filters"
+        options={{
+          href: null, // This hides it from the tab bar
+        }}
+      />
+ <Tabs.Screen
+        name="product_detail"
+        options={{
+          href: null, // This hides it from the tab bar
+        }}
+      />
+      {/* Hide category from tab bar */}
+      <Tabs.Screen
+        name="category"
+        options={{
+          href: null, // This hides it from the tab bar
+        }}
+      />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  addButtonContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 10,
-  },
-  addIconWrapper: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   badge: {
     position: 'absolute',
     right: -6,
