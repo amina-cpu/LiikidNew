@@ -44,6 +44,7 @@ interface Product {
   subcategory_id: number | null;
   sub_subcategory_id: number | null;
   created_at: string;
+  delivery: boolean; // Added delivery field
 }
 
 interface Category {
@@ -78,6 +79,7 @@ const ProductCard: React.FC<{
   userLat: number | null; 
   userLon: number | null;
 }> = ({ product, userLat, userLon }) => {
+  const router = useRouter();
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
@@ -99,11 +101,12 @@ const ProductCard: React.FC<{
     return BLUE;
   };
 
-  const hasDelivery = product.listing_type === "sell";
-
   return (
     <View style={styles.cardContainer}>
-      <TouchableOpacity style={styles.cardTouchable}>
+      <TouchableOpacity 
+        style={styles.cardTouchable}
+        onPress={() => router.push(`/product_detail?id=${product.id}`)}
+      >
         <View style={styles.imageWrapper}>
           <Image
             source={{
@@ -113,7 +116,8 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {hasDelivery && (
+          {/* Show delivery badge only if delivery is true */}
+          {product.delivery && (
             <View style={styles.deliveryBadge}>
               <MaterialCommunityIcons
                 name="truck-delivery"
@@ -229,10 +233,10 @@ export default function SubcategoryScreen() {
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
 
-      // Fetch products
+      // Fetch products - NOW INCLUDING delivery column
       const { data: productData, error: productError } = await supabase
         .from("products")
-        .select("*")
+        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery")
         .eq("subcategory_id", subcategoryId)
         .order("created_at", { ascending: false });
 

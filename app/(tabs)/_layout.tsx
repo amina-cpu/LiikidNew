@@ -56,6 +56,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Icon name="home-variant" size={24} color={color} />,
         }}
       />
+      
 
       <Tabs.Screen
         name="map"
@@ -97,6 +98,13 @@ export default function TabLayout() {
       />
        <Tabs.Screen
   name="filters"
+  options={{
+    headerShown: false,  // Move this inside options
+    href: null, // This hides it from the tab bar
+  }}
+/>
+<Tabs.Screen
+  name="search"
   options={{
     headerShown: false,  // Move this inside options
     href: null, // This hides it from the tab bar

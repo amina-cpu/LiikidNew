@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -10,8 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
 import { supabase } from "../../lib/Supabase";
 
 // --- Constants ---
@@ -173,8 +173,13 @@ export default function FiltersScreen() {
         setSelectedCondition('All');
     };
 
+    const handleBack = () => {
+        // Simply use router.back() - it should work correctly
+        router.back();
+    };
+
     const handleSeeResults = () => {
-        // Apply filters and navigate back or to results
+        // Apply filters and navigate back
         router.back();
     };
 
@@ -182,7 +187,7 @@ export default function FiltersScreen() {
         <View style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color={DARK_GRAY} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Filters</Text>

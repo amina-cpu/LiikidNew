@@ -56,6 +56,7 @@ interface Product {
   longitude: number | null;
   location_address: string | null;
   created_at: string;
+  delivery: boolean; // Added delivery field
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
@@ -107,8 +108,7 @@ const CategoryButton: React.FC<{ category: Category; index: number }> = ({ categ
   return (
     <TouchableOpacity
       style={[styles.categoryButton, { backgroundColor: bgColor }]}
-      onPress={() => router.push(`/category?id=${category.id}`)
-}
+      onPress={() => router.push(`/category?id=${category.id}`)}
     >
       <FontAwesome name={getCategoryIcon(category.name)} size={28} color="white" />
       <Text style={styles.categoryText}>{category.name}</Text>
@@ -120,9 +120,8 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
-  
 }> = ({ product, userLat, userLon }) => {
-   const router = useRouter();
+  const router = useRouter();
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
@@ -156,12 +155,10 @@ const ProductCard: React.FC<{
     return BLUE;
   };
 
-  const hasDelivery = product.listing_type === "sell"; // Show delivery badge for sell items
-
   return (
     <View style={styles.cardContainer}>
       <TouchableOpacity
-       onPress={() => router.push(`/product_detail?id=${product.id}`)}
+        onPress={() => router.push(`/product_detail?id=${product.id}`)}
         style={styles.cardTouchable}
       >
         <View style={styles.imageWrapper}>
@@ -171,7 +168,8 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {hasDelivery && (
+          {/* Show delivery badge only if delivery is true */}
+          {product.delivery && (
             <View style={styles.deliveryBadge}>
               <MaterialCommunityIcons
                 name="truck-delivery"
@@ -244,12 +242,11 @@ const LoadMoreButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
 };
 
 export default function HomeScreen() {
-
   const [location, setLocation] = useState<string>("Loading...");
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const router = useRouter(); // <-- 2. The router hook MUST be called here
+  const router = useRouter();
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -316,11 +313,11 @@ export default function HomeScreen() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Fetch products
+      // Fetch products - NOW INCLUDING delivery column
       console.log("HOME: Fetching products...");
       const { data: productsData, error: productsError } = await supabase
         .from("products")
-        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at")
+        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, delivery")
         .order("created_at", { ascending: false })
         .limit(20);
 
@@ -358,17 +355,14 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
-           <TouchableOpacity 
-            style={styles.searchBarWrapper} // A new style may be helpful
+          <TouchableOpacity 
+            style={styles.searchBarWrapper}
             onPress={() => {
-              // Navigate to the newly created filters screen
-              router.push('/filters');
+              router.push('/search');
             }}
             activeOpacity={0.7}
           >
-            <View
-              style={styles.searchBar} // Keep the styling consistent
-            >
+            <View style={styles.searchBar}>
               <Ionicons
                 name="search"
                 size={20}
@@ -491,34 +485,35 @@ const styles = StyleSheet.create({
     flex: 1, 
     marginRight: 10,
   },
-
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     height: 48,
-    backgroundColor: 'white', // White background
-    borderRadius: 24, // Full pill shape
+    backgroundColor: 'white',
+    borderRadius: 24,
     paddingHorizontal: 15,
-    borderWidth: 1, // Light border for the default state
+    borderWidth: 1,
     borderColor: LIGHT_GRAY, 
   },
-  
   searchBarFocused: {
-    borderColor: PRIMARY_TEAL, // Green border color
-    borderWidth: 2, // Thicker border when focused
+    borderColor: PRIMARY_TEAL,
+    borderWidth: 2,
   },
-  
   searchIcon: {
     marginRight: 8,
     color: "#999",
   },
-  
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: "#999", // Placeholder color
+    color: "#999",
     paddingVertical: 0,
     backgroundColor: 'transparent', 
+  },
+  searchInputPlaceholder: {
+    flex: 1,
+    fontSize: 16,
+    color: "#999",
   },
   locationContainer: {
     flexDirection: "row",

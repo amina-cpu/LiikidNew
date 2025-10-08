@@ -1,7 +1,6 @@
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -54,6 +53,7 @@ interface Product {
   subcategory_id: number | null;
   sub_subcategory_id: number | null;
   created_at: string;
+  delivery: boolean; // Added delivery field
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
@@ -83,6 +83,7 @@ const ProductCard: React.FC<{
   userLat: number | null;
   userLon: number | null;
 }> = ({ product, userLat, userLon }) => {
+  const router = useRouter();
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
@@ -110,12 +111,10 @@ const ProductCard: React.FC<{
     return BLUE;
   };
 
-  const hasDelivery = product.listing_type === "sell";
-
   return (
     <View style={styles.cardContainer}>
       <TouchableOpacity
-        onPress={() => console.log("Product Pressed:", product.id)}
+        onPress={() => router.push(`/product_detail?id=${product.id}`)}
         style={styles.cardTouchable}
       >
         <View style={styles.imageWrapper}>
@@ -127,7 +126,8 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {hasDelivery && (
+          {/* Show delivery badge only if delivery is true */}
+          {product.delivery && (
             <View style={styles.deliveryBadge}>
               <MaterialCommunityIcons
                 name="truck-delivery"
@@ -303,11 +303,11 @@ export default function CategoryScreen() {
       if (subcategoriesError) throw subcategoriesError;
       setSubcategories(subcategoriesData || []);
 
-      // Fetch products for this category
+      // Fetch products for this category - NOW INCLUDING delivery column
       const { data: productsData, error: productsError } = await supabase
         .from("products")
         .select(
-          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at"
+          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery"
         )
         .eq("category_id", categoryId)
         .order("created_at", { ascending: false });
@@ -465,20 +465,14 @@ export default function CategoryScreen() {
       </ScrollView>
 
       {/* Floating Filter Button */}
-    <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
-  <View style={styles.filterIconContainer}>
-    <Image
-      source={require("../../../assets/icons/floating.png")} // <-- update path if needed
-      style={styles.floatingImageIcon}
-    />
-   
-   
-    
-  </View>
-</TouchableOpacity>
-
-
-
+      <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
+        <View style={styles.filterIconContainer}>
+          <Image
+            source={require("../../../assets/icons/floating.png")}
+            style={styles.floatingImageIcon}
+          />
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -592,12 +586,11 @@ const styles = StyleSheet.create({
     color: DARK_GRAY,
   },
   floatingImageIcon: {
-  width: 28,
-  height: 28,
-  resizeMode: "contain",
-  tintColor: "white", // Optional — remove if your icon is already colored correctly
-},
-
+    width: 28,
+    height: 28,
+    resizeMode: "contain",
+    tintColor: "white",
+  },
   filterTabsWrapper: {
     paddingHorizontal: 16,
     marginBottom: 20,
@@ -699,7 +692,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
   },
-  // Load More Button Styles
   loadMoreContainer: {
     paddingHorizontal: 16,
     marginTop: 20,
@@ -721,7 +713,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-  // Floating Filter Button Styles
   floatingFilterButton: {
     position: "absolute",
     bottom: 30,
