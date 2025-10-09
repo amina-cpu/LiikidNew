@@ -1,15 +1,27 @@
-import { Picker } from "@react-native-picker/picker";
-import { decode } from "base64-arraybuffer";
-import * as FileSystem from "expo-file-system/legacy";
-import * as ImagePicker from "expo-image-picker";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Button, Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { supabase } from "../../lib/Supabase";
+import { decode } from 'base64-arraybuffer';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { supabase } from '../../lib/Supabase';
 
 interface Category {
   id: number;
   name: string;
   description: string | null;
+  delivery?: boolean;
 }
 
 interface Subcategory {
@@ -26,76 +38,83 @@ interface SubSubcategory {
   description: string | null;
 }
 
-export default function AddProduct() {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [listingType, setListingType] = useState<"sell" | "rent" | "exchange">("sell");
-  const [locationAddress, setLocationAddress] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
-  
-  const [category_id, setCategoryId] = useState<number | null>(null);
-  const [subcategory_id, setSubcategoryId] = useState<number | null>(null);
-  const [sub_subcategory_id, setSubSubcategoryId] = useState<number | null>(null);
+const AddListingForm = () => {
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [dealType, setDealType] = useState<'sell' | 'rent' | 'exchange'>('sell');
+  const [alsoExchange, setAlsoExchange] = useState(false);
+  const [price, setPrice] = useState('');
+  const [currency, setCurrency] = useState('DA');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [condition, setCondition] = useState<'new' | 'used'>('new');
+  const [deliveryMethod, setDeliveryMethod] = useState<string | null>(null);
+  const [locationAddress, setLocationAddress] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
+  const [selectedSubSubcategory, setSelectedSubSubcategory] = useState<SubSubcategory | null>(null);
   
-  const [loadingCategories, setLoadingCategories] = useState(true);
-  const [image, setImage] = useState<string | null>(null);
+  const [errors, setErrors] = useState<any>({});
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [categoryStep, setCategoryStep] = useState(1);
   const [uploading, setUploading] = useState(false);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
-  // Fetch categories on component mount
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Fetch categories on mount
   useEffect(() => {
     fetchCategories();
   }, []);
 
   // Fetch subcategories when category changes
   useEffect(() => {
-    if (category_id) {
-      fetchSubcategories(category_id);
+    if (selectedCategory) {
+      fetchSubcategories(selectedCategory.id);
     } else {
       setSubcategories([]);
-      setSubcategoryId(null);
+      setSelectedSubcategory(null);
       setSubSubcategories([]);
-      setSubSubcategoryId(null);
+      setSelectedSubSubcategory(null);
     }
-  }, [category_id]);
+  }, [selectedCategory]);
 
   // Fetch sub-subcategories when subcategory changes
   useEffect(() => {
-    if (subcategory_id) {
-      fetchSubSubcategories(subcategory_id);
+    if (selectedSubcategory) {
+      fetchSubSubcategories(selectedSubcategory.id);
     } else {
       setSubSubcategories([]);
-      setSubSubcategoryId(null);
+      setSelectedSubSubcategory(null);
     }
-  }, [subcategory_id]);
+  }, [selectedSubcategory]);
 
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true);
       const { data, error } = await supabase
-        .from("categories")
-        .select("id, name, description")
-        .order("name");
+        .from('categories')
+        .select('id, name, description, delivery')
+        .order('name');
 
-      if (error) {
-        console.error("Error fetching categories:", error);
-        throw error;
-      }
+      if (error) throw error;
 
       if (data && data.length > 0) {
         setCategories(data);
-        setCategoryId(data[0].id);
       } else {
         setCategories([]);
       }
     } catch (error: any) {
-      console.error("Error in fetchCategories:", error);
-      Alert.alert("Erreur", "Impossible de charger les catégories: " + error.message);
+      console.error('Error fetching categories:', error);
+      Alert.alert('Error', 'Unable to load categories: ' + error.message);
     } finally {
       setLoadingCategories(false);
     }
@@ -104,295 +123,246 @@ export default function AddProduct() {
   const fetchSubcategories = async (categoryId: number) => {
     try {
       const { data, error } = await supabase
-        .from("subcategories")
-        .select("id, category_id, name, description")
-        .eq("category_id", categoryId)
-        .order("name");
+        .from('subcategories')
+        .select('id, category_id, name, description')
+        .eq('category_id', categoryId)
+        .order('name');
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         setSubcategories(data);
-        setSubcategoryId(data[0].id);
       } else {
         setSubcategories([]);
-        setSubcategoryId(null);
       }
     } catch (error: any) {
-      console.error("Error fetching subcategories:", error);
-      Alert.alert("Erreur", "Impossible de charger les sous-catégories");
+      console.error('Error fetching subcategories:', error);
+      Alert.alert('Error', 'Unable to load subcategories');
     }
   };
 
   const fetchSubSubcategories = async (subcategoryId: number) => {
     try {
       const { data, error } = await supabase
-        .from("sub_subcategories")
-        .select("id, subcategory_id, name, description")
-        .eq("subcategory_id", subcategoryId)
-        .order("name");
+        .from('sub_subcategories')
+        .select('id, subcategory_id, name, description')
+        .eq('subcategory_id', subcategoryId)
+        .order('name');
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         setSubSubcategories(data);
-        setSubSubcategoryId(data[0].id);
       } else {
         setSubSubcategories([]);
-        setSubSubcategoryId(null);
       }
     } catch (error: any) {
-      console.error("Error fetching sub-subcategories:", error);
-      Alert.alert("Erreur", "Impossible de charger les sous-sous-catégories");
+      console.error('Error fetching sub-subcategories:', error);
+      Alert.alert('Error', 'Unable to load sub-subcategories');
     }
   };
 
-  // Pick image from gallery
   const pickImage = async () => {
     try {
-      // Request permissions first
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
         Alert.alert(
-          "Permission requise",
-          "Nous avons besoin d'accéder à vos photos pour télécharger une image."
+          'Permission Required',
+          'We need access to your photos to upload an image.'
         );
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.3, // Very low quality for maximum compression
+        quality: 0.3,
         allowsMultipleSelection: false,
-        // Compress image dimensions
-        exif: false, // Don't include EXIF data
       });
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        console.log("Image selected:", {
-          uri: asset.uri,
-          width: asset.width,
-          height: asset.height,
-          fileSize: asset.fileSize
-        });
-
-        // Check file size if available
+        
         if (asset.fileSize && asset.fileSize > 3 * 1024 * 1024) {
           Alert.alert(
-            "Image trop grande",
-            "L'image est trop grande. Veuillez choisir une image plus petite ou prendre une nouvelle photo avec une qualité réduite."
+            'Image Too Large',
+            'The image is too large. Please choose a smaller image.'
           );
           return;
         }
 
-        setImage(asset.uri);
+        setPhotos([...photos, asset.uri]);
       }
     } catch (error: any) {
-      console.error("Error picking image:", error);
-      Alert.alert("Erreur", "Impossible de sélectionner l'image");
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Unable to select image');
     }
   };
 
-  // Upload image to Supabase Storage
+  const removePhoto = (index: number) => {
+    const newPhotos = photos.filter((_, i) => i !== index);
+    setPhotos(newPhotos);
+    if (mainPhotoIndex === index) {
+      setMainPhotoIndex(0);
+    } else if (mainPhotoIndex > index) {
+      setMainPhotoIndex(mainPhotoIndex - 1);
+    }
+  };
+
   const uploadImage = async (uri: string): Promise<string | null> => {
     try {
-      console.log("Starting image upload...");
-      console.log("Image URI:", uri);
+      console.log('Starting image upload...');
+      console.log('Image URI:', uri);
 
-      // Read file as base64
+      // Read file as base64 using legacy API
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: "base64",
+        encoding: FileSystem.EncodingType.Base64,
       });
 
-      console.log("Base64 length:", base64.length);
+      console.log('Base64 length:', base64.length);
 
-      // Check if base64 is too large (>5MB encoded ~= 6.7MB file)
       if (base64.length > 7000000) {
-        throw new Error("L'image est trop grande. Veuillez choisir une image plus petite.");
+        throw new Error('Image is too large. Please choose a smaller image.');
       }
 
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
       
-      console.log("Decoding base64 to ArrayBuffer...");
+      console.log('Decoding base64 to ArrayBuffer...');
       const arrayBuffer = decode(base64);
       
-      console.log("ArrayBuffer size:", arrayBuffer.byteLength);
-      console.log("Uploading to storage:", fileName);
+      console.log('ArrayBuffer size:', arrayBuffer.byteLength);
+      console.log('Uploading to storage:', fileName);
 
-      // Upload with timeout
-      const uploadPromise = supabase.storage
-        .from("product-images")
+      const { data, error } = await supabase.storage
+        .from('product-images')
         .upload(fileName, arrayBuffer, {
-          contentType: "image/jpeg",
+          contentType: 'image/jpeg',
           upsert: false,
         });
 
-      // Add 30 second timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Upload timeout - connexion trop lente")), 30000)
-      );
-
-      const { data, error } = await Promise.race([uploadPromise, timeoutPromise]) as any;
-
       if (error) {
-        console.error("Storage upload error:", error);
+        console.error('Storage upload error:', error);
         throw error;
       }
 
-      console.log("Upload successful, getting public URL...");
+      console.log('Upload successful, getting public URL...');
 
       const { data: publicUrlData } = supabase.storage
-        .from("product-images")
+        .from('product-images')
         .getPublicUrl(fileName);
 
-      console.log("Image uploaded successfully:", publicUrlData.publicUrl);
+      console.log('Image uploaded successfully:', publicUrlData.publicUrl);
       return publicUrlData.publicUrl;
     } catch (err: any) {
-      console.error("Upload error details:", err);
-      
-      let errorMessage = "Échec du téléchargement de l'image";
-      
-      if (err.message.includes("timeout")) {
-        errorMessage = "Timeout: Connexion trop lente. Vérifiez votre connexion internet.";
-      } else if (err.message.includes("trop grande")) {
-        errorMessage = err.message;
-      } else if (err.message.includes("NetworkError") || err.message.includes("network")) {
-        errorMessage = "Erreur réseau. Vérifiez votre connexion internet.";
-      } else if (err.statusCode === "413") {
-        errorMessage = "L'image est trop grande.";
-      } else if (err.message) {
-        errorMessage += ": " + err.message;
-      }
-      
-      Alert.alert("Erreur d'upload", errorMessage);
+      console.error('Upload error:', err);
+      Alert.alert('Upload Error', err.message || 'Failed to upload image');
       return null;
     }
   };
 
-  // Handle submit
-  const handleSubmit = async () => {
-    // Prevent multiple submissions
-    if (uploading) {
+  const validateForm = () => {
+    const newErrors: any = {};
+    
+    if (photos.length === 0) {
+      newErrors.photos = 'Please add at least one photo.';
+    }
+    if (!title.trim()) {
+      newErrors.title = 'Please enter a title.';
+    }
+    if (!description.trim()) {
+      newErrors.description = 'Please add a description.';
+    }
+    if (dealType !== 'exchange' && !price.trim()) {
+      newErrors.price = 'Please enter a price.';
+    }
+    if (!selectedSubSubcategory && !selectedSubcategory && !selectedCategory) {
+      newErrors.category = 'Please select a category.';
+    }
+    
+    // Only validate delivery if category allows delivery
+    if (selectedCategory?.delivery !== false) {
+      if (!deliveryMethod) {
+        newErrors.delivery = 'Please select a delivery method.';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePublish = async () => {
+    if (uploading) return;
+
+    if (!validateForm()) {
+      Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
 
     try {
-      console.log("=== Starting form submission ===");
       setUploading(true);
-      
-      // Validation
-      if (!name.trim()) {
-        Alert.alert("Erreur", "Veuillez entrer le nom du produit");
-        setUploading(false);
-        return;
-      }
-      
-      const priceValue = parseFloat(price);
-      if (!price || isNaN(priceValue) || priceValue <= 0) {
-        Alert.alert("Erreur", "Veuillez entrer un prix valide");
-        setUploading(false);
-        return;
-      }
-      
-      if (!category_id) {
-        Alert.alert("Erreur", "Veuillez sélectionner une catégorie");
-        setUploading(false);
-        return;
-      }
 
-      console.log("Form data:", { 
-        name, 
-        price: priceValue, 
-        category_id, 
-        subcategory_id,
-        sub_subcategory_id,
-        listingType,
-        hasImage: !!image 
-      });
-
-      let imageUrl = null;
-
-      // Upload image if exists
-      if (image) {
-        console.log("Uploading image...");
-        try {
-          imageUrl = await uploadImage(image);
-        } catch (uploadError: any) {
-          console.error("Image upload failed:", uploadError);
-          setUploading(false);
-          
-          Alert.alert(
-            "Erreur d'image",
-            "Le téléchargement de l'image a échoué. Voulez-vous continuer sans image?",
-            [
-              { text: "Annuler", style: "cancel", onPress: () => setUploading(false) },
-              { 
-                text: "Continuer", 
-                onPress: async () => {
-                  setUploading(true);
-                  await insertProduct(null);
-                }
-              }
-            ]
-          );
-          return;
-        }
+      // Upload ALL photos
+      const uploadedUrls: string[] = [];
+      
+      for (let i = 0; i < photos.length; i++) {
+        console.log(`Uploading photo ${i + 1} of ${photos.length}...`);
+        const imageUrl = await uploadImage(photos[i]);
         
-        // If image upload returned null (failed but handled), ask user
-        if (!imageUrl) {
-          setUploading(false);
-          Alert.alert(
-            "Erreur d'image",
-            "Le téléchargement de l'image a échoué. Voulez-vous continuer sans image?",
-            [
-              { text: "Annuler", style: "cancel" },
-              { 
-                text: "Continuer", 
-                onPress: async () => {
-                  setUploading(true);
-                  await insertProduct(null);
-                }
-              }
-            ]
-          );
-          return;
+        if (imageUrl) {
+          uploadedUrls.push(imageUrl);
+        } else {
+          console.warn(`Failed to upload photo ${i + 1}`);
         }
       }
 
-      await insertProduct(imageUrl);
+      if (uploadedUrls.length === 0) {
+        Alert.alert(
+          'Image Upload Failed',
+          'All image uploads failed. Do you want to continue without images?',
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => setUploading(false) },
+            { text: 'Continue', onPress: () => insertProduct([]) }
+          ]
+        );
+        return;
+      }
+
+      // Reorder so main photo is first
+      const mainUrl = uploadedUrls[mainPhotoIndex];
+      const otherUrls = uploadedUrls.filter((_, idx) => idx !== mainPhotoIndex);
+      const orderedUrls = [mainUrl, ...otherUrls];
+
+      await insertProduct(orderedUrls);
 
     } catch (error: any) {
-      console.error("=== Error in handleSubmit ===", error);
-      Alert.alert("Erreur", "Une erreur s'est produite: " + (error.message || "Erreur inconnue"));
+      console.error('Error in handlePublish:', error);
+      Alert.alert('Error', 'An error occurred: ' + (error.message || 'Unknown error'));
       setUploading(false);
     }
   };
 
-  const insertProduct = async (imageUrl: string | null) => {
+  const insertProduct = async (imageUrls: string[]) => {
     try {
-      console.log("Inserting product into database...");
+      console.log('Inserting product into database...');
       
-      // Build product data - only include fields that exist
       const productData: any = {
-        name: name.trim(),
+        name: title.trim(),
         description: description.trim() || null,
-        price: parseFloat(price),
-        listing_type: listingType,
-        category_id: category_id,
-        image_url: imageUrl,
+        price: dealType !== 'exchange' ? parseFloat(price) : null,
+        listing_type: dealType,
+        category_id: selectedCategory?.id || null,
+        image_url: imageUrls.length > 0 ? imageUrls[0] : null, // Main image
+        delivery: deliveryMethod === 'Delivery' || deliveryMethod === 'Both',
       };
 
-      // Only add optional fields if they have values
-      if (subcategory_id) {
-        productData.subcategory_id = subcategory_id;
+      if (selectedSubcategory) {
+        productData.subcategory_id = selectedSubcategory.id;
       }
       
-      if (sub_subcategory_id) {
-        productData.sub_subcategory_id = sub_subcategory_id;
+      if (selectedSubSubcategory) {
+        productData.sub_subcategory_id = selectedSubSubcategory.id;
       }
 
       if (locationAddress.trim()) {
@@ -407,356 +377,868 @@ export default function AddProduct() {
         productData.longitude = parseFloat(longitude);
       }
 
-      console.log("Product data to insert:", productData);
+      console.log('Product data:', productData);
 
       const { data, error } = await supabase
-        .from("products")
+        .from('products')
         .insert([productData])
         .select();
 
       if (error) {
-        console.error("Database insert error:", error);
+        console.error('Database insert error:', error);
         throw error;
       }
 
-      console.log("Product inserted successfully:", data);
+      const productId = data[0]?.id;
+      console.log('Product inserted successfully:', data);
+
+      // Insert additional images into product_images table
+      if (imageUrls.length > 1 && productId) {
+        const imageRecords = imageUrls.slice(1).map((url, index) => ({
+          product_id: productId,
+          image_url: url,
+          order: index + 2, // Start from 2 (main image is 1)
+        }));
+
+        const { error: imagesError } = await supabase
+          .from('product_images')
+          .insert(imageRecords);
+
+        if (imagesError) {
+          console.error('Error inserting additional images:', imagesError);
+          // Don't fail the whole operation, just log it
+        } else {
+          console.log('Additional images inserted successfully');
+        }
+      }
 
       Alert.alert(
-        "✅ Succès", 
-        "Produit ajouté avec succès!",
+        '✅ Success', 
+        'Listing published successfully!',
         [
           {
-            text: "OK",
+            text: 'OK',
             onPress: () => {
               // Reset form
-              setName("");
-              setDescription("");
-              setPrice("");
-              setListingType("sell");
-              setLocationAddress("");
-              setLatitude("");
-              setLongitude("");
-              setImage(null);
-              if (categories.length > 0) {
-                setCategoryId(categories[0].id);
-              }
+              setPhotos([]);
+              setMainPhotoIndex(0);
+              setTitle('');
+              setDescription('');
+              setPrice('');
+              setDealType('sell');
+              setAlsoExchange(false);
+              setPhoneNumber('');
+              setCondition('new');
+              setDeliveryMethod(null);
+              setLocationAddress('');
+              setLatitude('');
+              setLongitude('');
+              setSelectedCategory(null);
+              setSelectedSubcategory(null);
+              setSelectedSubSubcategory(null);
+              setErrors({});
             }
           }
         ]
       );
 
     } catch (error: any) {
-      console.error("=== Error in insertProduct ===", error);
+      console.error('Error in insertProduct:', error);
       
-      let errorMessage = "Impossible d'ajouter le produit";
+      let errorMessage = 'Unable to add product';
       
-      if (error.code === "23503") {
-        errorMessage = "Référence de catégorie invalide. Veuillez réessayer.";
-      } else if (error.code === "42501") {
-        errorMessage = "Vous n'avez pas la permission d'ajouter des produits";
-      } else if (error.code === "23505") {
-        errorMessage = "Ce produit existe déjà";
+      if (error.code === '23503') {
+        errorMessage = 'Invalid category reference. Please try again.';
+      } else if (error.code === '42501') {
+        errorMessage = 'You do not have permission to add products';
+      } else if (error.code === '23505') {
+        errorMessage = 'This product already exists';
       } else if (error.message) {
         errorMessage = error.message;
       }
       
-      Alert.alert("Erreur", errorMessage);
+      Alert.alert('Error', errorMessage);
     } finally {
       setUploading(false);
     }
   };
 
+  const renderCategoryModal = () => {
+    return (
+      <Modal
+        visible={showCategoryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {categoryStep === 1 ? 'Select Category' : 
+               categoryStep === 2 ? 'Select Subcategory' : 
+               'Select Sub-subcategory'}
+            </Text>
+            
+            <ScrollView style={styles.modalScroll}>
+              {categoryStep === 1 && categories.map(cat => (
+                <TouchableOpacity
+                  key={cat.id}
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setSelectedCategory(cat);
+                    setSelectedSubcategory(null);
+                    setSelectedSubSubcategory(null);
+                    // Reset delivery if category doesn't support it
+                    if (cat.delivery === false) {
+                      setDeliveryMethod(null);
+                    }
+                    if (subcategories.length > 0 || cat.id !== selectedCategory?.id) {
+                      setCategoryStep(2);
+                    } else {
+                      setShowCategoryModal(false);
+                      setCategoryStep(1);
+                    }
+                  }}
+                >
+                  <Text style={styles.modalOptionText}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+              
+              {categoryStep === 2 && subcategories.map(sub => (
+                <TouchableOpacity
+                  key={sub.id}
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setSelectedSubcategory(sub);
+                    setSelectedSubSubcategory(null);
+                    if (subSubcategories.length > 0 || sub.id !== selectedSubcategory?.id) {
+                      setCategoryStep(3);
+                    } else {
+                      setShowCategoryModal(false);
+                      setCategoryStep(1);
+                    }
+                  }}
+                >
+                  <Text style={styles.modalOptionText}>{sub.name}</Text>
+                </TouchableOpacity>
+              ))}
+              
+              {categoryStep === 3 && subSubcategories.map(subsub => (
+                <TouchableOpacity
+                  key={subsub.id}
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setSelectedSubSubcategory(subsub);
+                    setShowCategoryModal(false);
+                    setCategoryStep(1);
+                  }}
+                >
+                  <Text style={styles.modalOptionText}>{subsub.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => {
+                setShowCategoryModal(false);
+                setCategoryStep(1);
+              }}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderDeliveryModal = () => {
+    return (
+      <Modal
+        visible={showDeliveryModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowDeliveryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Delivery Method</Text>
+            
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                setDeliveryMethod('In-person');
+                setShowDeliveryModal(false);
+              }}
+            >
+              <Text style={styles.modalOptionText}>In-person Meeting</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                setDeliveryMethod('Delivery');
+                setShowDeliveryModal(false);
+              }}
+            >
+              <Text style={styles.modalOptionText}>Delivery</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                setDeliveryMethod('Both');
+                setShowDeliveryModal(false);
+              }}
+            >
+              <Text style={styles.modalOptionText}>Both</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setShowDeliveryModal(false)}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (loadingCategories) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Chargement des catégories...</Text>
+        <ActivityIndicator size="large" color="#10B981" />
+        <Text style={styles.loadingText}>Loading categories...</Text>
       </View>
     );
   }
 
-  if (categories.length === 0) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>
-          Aucune catégorie disponible. Veuillez ajouter des catégories d'abord.
-        </Text>
-        <Button title="Réessayer" onPress={fetchCategories} color="#007AFF" />
-      </View>
-    );
-  }
+  // Check if category allows delivery
+  const categoryAllowsDelivery = selectedCategory?.delivery !== false;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Ajouter un Produit</Text>
-
-      <TextInput
-        placeholder="Nom du produit *"
-        value={name}
-        onChangeText={setName}
-        style={styles.input}
-        editable={!uploading}
-      />
-
-      <TextInput
-        placeholder="Description (optionnel)"
-        value={description}
-        onChangeText={setDescription}
-        style={[styles.input, styles.textArea]}
-        multiline
-        numberOfLines={4}
-        editable={!uploading}
-      />
-
-      <TextInput
-        placeholder="Prix (DZD) *"
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="decimal-pad"
-        style={styles.input}
-        editable={!uploading}
-      />
-
-      <View style={styles.pickerContainer}>
-        <Text style={styles.label}>Type d'annonce *</Text>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={listingType}
-            onValueChange={(value) => setListingType(value)}
-            style={styles.picker}
-            enabled={!uploading}
-          >
-            <Picker.Item label="🛒 Vendre" value="sell" />
-            <Picker.Item label="🏠 Louer" value="rent" />
-            <Picker.Item label="🔄 Échanger" value="exchange" />
-          </Picker>
-        </View>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Add Listing</Text>
       </View>
 
-      <View style={styles.pickerContainer}>
-        <Text style={styles.label}>Catégorie *</Text>
-        <View style={styles.pickerWrapper}>
-          <Picker
-            selectedValue={category_id}
-            onValueChange={(value) => {
-              setCategoryId(value);
-              // Reset subcategories when category changes
-              setSubcategoryId(null);
-              setSubSubcategoryId(null);
-            }}
-            style={styles.picker}
-            enabled={!uploading}
-          >
-            {categories.map((cat) => (
-              <Picker.Item key={cat.id} label={cat.name} value={cat.id} />
+      <ScrollView ref={scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Photos */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Photos</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+            <TouchableOpacity style={styles.addPhotoBox} onPress={pickImage} disabled={uploading}>
+              <Text style={styles.addPhotoPlus}>+</Text>
+              <Text style={styles.addPhotoText}>Add Photo</Text>
+            </TouchableOpacity>
+            
+            {photos.map((photo, index) => (
+              <View key={index} style={styles.photoItem}>
+                <Image source={{ uri: photo }} style={styles.photoImage} />
+                <TouchableOpacity
+                  style={styles.photoDelete}
+                  onPress={() => removePhoto(index)}
+                  disabled={uploading}
+                >
+                  <Text style={styles.photoDeleteText}>×</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.photoStar}
+                  onPress={() => setMainPhotoIndex(index)}
+                  disabled={uploading}
+                >
+                  <Text style={styles.photoStarText}>
+                    {mainPhotoIndex === index ? '★' : '☆'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ))}
-          </Picker>
+          </ScrollView>
+          {errors.photos && <Text style={styles.errorText}>{errors.photos}</Text>}
         </View>
-      </View>
 
-      {subcategories.length > 0 && (
-        <View style={styles.pickerContainer}>
-          <Text style={styles.label}>Sous-catégorie</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={subcategory_id}
-              onValueChange={(value) => {
-                setSubcategoryId(value);
-                // Reset sub-subcategories when subcategory changes
-                setSubSubcategoryId(null);
-              }}
-              style={styles.picker}
-              enabled={!uploading}
+        {/* Title */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Title</Text>
+          <View style={[styles.inputContainer, errors.title && styles.inputError]}>
+            <TextInput
+              style={styles.input}
+              placeholder="What are you selling?"
+              value={title}
+              onChangeText={setTitle}
+              maxLength={200}
+              editable={!uploading}
+            />
+            {errors.title && <Text style={styles.errorIcon}>▲</Text>}
+          </View>
+          {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
+        </View>
+
+        {/* Description */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Description</Text>
+          <View style={[styles.inputContainer, errors.description && styles.inputError]}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Describe your item in detail..."
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={4}
+              maxLength={2000}
+              editable={!uploading}
+            />
+            {errors.description && <Text style={styles.errorIconTextArea}>▲</Text>}
+          </View>
+          {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
+        </View>
+
+        {/* Category */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Category</Text>
+          <TouchableOpacity
+            style={[styles.selectContainer, errors.category && styles.inputError]}
+            onPress={() => setShowCategoryModal(true)}
+            disabled={uploading}
+          >
+            <Text style={[styles.selectText, !selectedSubSubcategory && !selectedSubcategory && !selectedCategory && styles.placeholderText]}>
+              {selectedSubSubcategory?.name || selectedSubcategory?.name || selectedCategory?.name || 'Select category'}
+            </Text>
+            <Text style={styles.selectArrow}>›</Text>
+          </TouchableOpacity>
+          {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+        </View>
+
+        {/* Deal Type */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Deal Type</Text>
+          <View style={styles.dealTypeContainer}>
+            <TouchableOpacity
+              style={[styles.dealTypeButton, dealType === 'sell' && styles.dealTypeSell]}
+              onPress={() => setDealType('sell')}
+              disabled={uploading}
             >
-              {subcategories.map((sub) => (
-                <Picker.Item key={sub.id} label={sub.name} value={sub.id} />
-              ))}
-            </Picker>
+              <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>
+                Sell
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.dealTypeButton, dealType === 'rent' && styles.dealTypeRent]}
+              onPress={() => setDealType('rent')}
+              disabled={uploading}
+            >
+              <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>
+                Rent
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.dealTypeButton, dealType === 'exchange' && styles.dealTypeExchange]}
+              onPress={() => setDealType('exchange')}
+              disabled={uploading}
+            >
+              <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>
+                Exchange
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>Also available for exchange</Text>
+            <Switch
+              value={alsoExchange}
+              onValueChange={setAlsoExchange}
+              trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+              thumbColor="#fff"
+              disabled={uploading}
+            />
           </View>
         </View>
-      )}
 
-      {subSubcategories.length > 0 && (
-        <View style={styles.pickerContainer}>
-          <Text style={styles.label}>Sous-sous-catégorie</Text>
-          <View style={styles.pickerWrapper}>
-            <Picker
-              selectedValue={sub_subcategory_id}
-              onValueChange={(value) => setSubSubcategoryId(value)}
-              style={styles.picker}
-              enabled={!uploading}
-            >
-              {subSubcategories.map((subsub) => (
-                <Picker.Item key={subsub.id} label={subsub.name} value={subsub.id} />
-              ))}
-            </Picker>
+        {/* Price */}
+        {dealType !== 'exchange' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Price</Text>
+            <View style={styles.priceRow}>
+              <View style={[styles.priceInputContainer, errors.price && styles.inputError]}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Price"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                  editable={!uploading}
+                />
+                {errors.price && <Text style={styles.errorIcon}>▲</Text>}
+              </View>
+              <View style={styles.currencyContainer}>
+                <Text style={styles.currencyText}>DA</Text>
+              </View>
+            </View>
+            {errors.price && <Text style={styles.errorText}>{errors.price}</Text>}
+          </View>
+        )}
+
+        {/* Phone Number */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Phone Number (Optional)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 0777770707"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+              editable={!uploading}
+            />
           </View>
         </View>
-      )}
 
-      <Text style={styles.sectionTitle}>📍 Localisation (optionnel)</Text>
-
-      <TextInput
-        placeholder="Adresse"
-        value={locationAddress}
-        onChangeText={setLocationAddress}
-        style={styles.input}
-        editable={!uploading}
-      />
-
-      <View style={styles.coordinatesContainer}>
-        <TextInput
-          placeholder="Latitude"
-          value={latitude}
-          onChangeText={setLatitude}
-          keyboardType="decimal-pad"
-          style={[styles.input, styles.coordinateInput]}
-          editable={!uploading}
-        />
-        <TextInput
-          placeholder="Longitude"
-          value={longitude}
-          onChangeText={setLongitude}
-          keyboardType="decimal-pad"
-          style={[styles.input, styles.coordinateInput]}
-          editable={!uploading}
-        />
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <Button 
-          title="📷 Choisir une image" 
-          onPress={pickImage} 
-          color="#007AFF" 
-          disabled={uploading}
-        />
-      </View>
-
-      {image && <Image source={{ uri: image }} style={styles.image} />}
-
-      <View style={styles.buttonContainer}>
-        <Button
-          title={uploading ? "Téléchargement..." : "➕ Ajouter le produit"}
-          onPress={handleSubmit}
-          color="#34C759"
-          disabled={uploading}
-        />
-      </View>
-
-      {uploading && (
-        <View style={styles.uploadingContainer}>
-          <ActivityIndicator size="small" color="#007AFF" />
-          <Text style={styles.uploadingText}>Envoi en cours...</Text>
+        {/* Condition */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Condition</Text>
+          <View style={styles.conditionContainer}>
+            <TouchableOpacity
+              style={[styles.conditionButton, condition === 'new' && styles.conditionActive]}
+              onPress={() => setCondition('new')}
+              disabled={uploading}
+            >
+              <Text style={[styles.conditionText, condition === 'new' && styles.conditionTextActive]}>
+                New
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.conditionButton, condition === 'used' && styles.conditionActive]}
+              onPress={() => setCondition('used')}
+              disabled={uploading}
+            >
+              <Text style={[styles.conditionText, condition === 'used' && styles.conditionTextActive]}>
+                Used
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
-    </ScrollView>
+
+        {/* Delivery Method - Only show if category allows delivery */}
+        {categoryAllowsDelivery && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Method</Text>
+            <TouchableOpacity
+              style={[styles.selectContainer, errors.delivery && styles.inputError]}
+              onPress={() => setShowDeliveryModal(true)}
+              disabled={uploading}
+            >
+              <Text style={[styles.selectText, !deliveryMethod && styles.placeholderText]}>
+                {deliveryMethod || 'Select delivery method'}
+              </Text>
+              <Text style={styles.selectArrow}>›</Text>
+            </TouchableOpacity>
+            {errors.delivery && <Text style={styles.errorText}>{errors.delivery}</Text>}
+          </View>
+        )}
+
+        {/* Location */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Address (optional)"
+            value={locationAddress}
+            onChangeText={setLocationAddress}
+            editable={!uploading}
+          />
+          <View style={styles.mapContainer}>
+            <View style={styles.mapPlaceholder}>
+              <View style={styles.mapPin}>
+                <Text style={styles.mapPinText}>📍</Text>
+              </View>
+            </View>
+            <Text style={styles.mapLabel}>Tap to set location</Text>
+          </View>
+        </View>
+
+        {/* Publish Button */}
+        <TouchableOpacity 
+          style={[styles.publishButton, uploading && styles.publishButtonDisabled]} 
+          onPress={handlePublish}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <View style={styles.uploadingRow}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.uploadingText}>Uploading {photos.length} photo{photos.length > 1 ? 's' : ''}...</Text>
+            </View>
+          ) : (
+            <Text style={styles.publishButtonText}>Publish Listing</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+
+      {renderCategoryModal()}
+      {renderDeliveryModal()}
+    </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    paddingBottom: 40,
+    flex: 1,
+    backgroundColor: '#fff',
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: "#666",
+    color: '#666',
   },
-  errorContainer: {
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  backButtonText: {
+    fontSize: 24,
+    color: '#111',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111',
+  },
+  scrollView: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
   },
-  errorText: {
-    fontSize: 16,
-    color: "#FF3B30",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 24,
-    textAlign: "center",
-    color: "#000",
+  section: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 16,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111',
     marginBottom: 12,
-    color: "#000",
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#E5E5EA",
-    padding: 12,
-    marginBottom: 16,
-    borderRadius: 10,
-    fontSize: 16,
-    backgroundColor: "#FFF",
+  photosScroll: {
+    flexDirection: 'row',
   },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
+  addPhotoBox: {
+    width: 90,
+    height: 90,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  pickerContainer: {
-    marginBottom: 16,
+  addPhotoPlus: {
+    fontSize: 32,
+    color: '#9CA3AF',
+    marginBottom: 4,
   },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: "#000",
-    fontWeight: "600",
+  addPhotoText: {
+    fontSize: 12,
+    color: '#6B7280',
   },
-  pickerWrapper: {
-    borderWidth: 1,
-    borderColor: "#E5E5EA",
-    borderRadius: 10,
-    backgroundColor: "#FFF",
-    overflow: "hidden",
+  photoItem: {
+    width: 90,
+    height: 90,
+    marginRight: 12,
+    position: 'relative',
   },
-  picker: {
-    height: 50,
-  },
-  coordinatesContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  coordinateInput: {
-    flex: 1,
-  },
-  buttonContainer: {
-    marginVertical: 8,
-  },
-  image: {
-    width: "100%",
-    height: 250,
-    marginVertical: 16,
-    borderRadius: 12,
-    backgroundColor: "#F2F2F7",
-  },
-  uploadingContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#F2F2F7",
+  photoImage: {
+    width: '100%',
+    height: '100%',
     borderRadius: 8,
   },
-  uploadingText: {
-    marginLeft: 8,
+  photoDelete: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoDeleteText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  photoStar: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoStarText: {
+    color: '#FBBF24',
+    fontSize: 16,
+  },
+  inputContainer: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+  },
+  input: {
+    flex: 1,
+    padding: 12,
     fontSize: 14,
-    color: "#666",
+    color: '#111',
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  inputError: {
+    borderColor: '#EF4444',
+  },
+  errorIcon: {
+    color: '#EF4444',
+    fontSize: 12,
+  },
+  errorIconTextArea: {
+    color: '#EF4444',
+    fontSize: 12,
+    position: 'absolute',
+    right: 12,
+    top: 12,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  placeholderText: {
+    color: '#9CA3AF',
+  },
+  selectContainer: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  selectText: {
+    fontSize: 14,
+    color: '#111',
+  },
+  selectArrow: {
+    fontSize: 20,
+    color: '#9CA3AF',
+  },
+  dealTypeContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  dealTypeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+  },
+  dealTypeSell: {
+    backgroundColor: '#1D4ED8',
+  },
+  dealTypeRent: {
+    backgroundColor: '#C2410C',
+  },
+  dealTypeExchange: {
+    backgroundColor: '#7E22CE',
+  },
+  dealTypeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  dealTypeTextActive: {
+    color: '#fff',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: '#111',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  priceInputContainer: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: 12,
+  },
+  currencyContainer: {
+    width: 60,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  currencyText: {
+    fontSize: 14,
+    color: '#111',
+    fontWeight: '500',
+  },
+  conditionContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  conditionButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+  },
+  conditionActive: {
+    backgroundColor: '#111',
+  },
+  conditionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  conditionTextActive: {
+    color: '#fff',
+  },
+  mapContainer: {
+    alignItems: 'center',
+  },
+  mapPlaceholder: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  mapPin: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapPinText: {
+    fontSize: 20,
+  },
+  mapLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  publishButton: {
+    margin: 16,
+    backgroundColor: '#10B981',
+    padding: 16,
+    borderRadius: 50,
+    alignItems: 'center',
+  },
+  publishButtonDisabled: {
+    opacity: 0.6,
+  },
+  publishButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  uploadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  uploadingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '70%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  modalOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#111',
+  },
+  modalClose: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
   },
 });
+
+export default AddListingForm;

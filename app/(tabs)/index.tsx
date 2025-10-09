@@ -44,6 +44,7 @@ interface Category {
   id: number;
   name: string;
   description: string | null;
+  delivery: boolean; // New field to control delivery at category level
 }
 
 interface Product {
@@ -56,7 +57,7 @@ interface Product {
   longitude: number | null;
   location_address: string | null;
   created_at: string;
-  delivery: boolean; // Added delivery field
+  category_id: number; // Link to category
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
@@ -120,10 +121,15 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
-}> = ({ product, userLat, userLon }) => {
+  categories: Category[];
+}> = ({ product, userLat, userLon, categories }) => {
   const router = useRouter();
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
+
+  // Check if product's category accepts delivery
+  const category = categories.find(c => c.id === product.category_id);
+  const categoryAcceptsDelivery = category?.delivery || false;
 
   // Calculate distance
   let distance = "N/A";
@@ -168,8 +174,8 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {/* Show delivery badge only if delivery is true */}
-          {product.delivery && (
+          {/* Show delivery badge only if category accepts delivery */}
+          {categoryAcceptsDelivery && (
             <View style={styles.deliveryBadge}>
               <MaterialCommunityIcons
                 name="truck-delivery"
@@ -297,11 +303,11 @@ export default function HomeScreen() {
       console.log("=== HOME: Starting fetchData ===");
       setLoading(true);
 
-      // Fetch categories
+      // Fetch categories with delivery field
       console.log("HOME: Fetching categories...");
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
-        .select("id, name, description")
+        .select("id, name, description, delivery")
         .order("name");
 
       console.log("HOME: Categories result:", {
@@ -313,11 +319,11 @@ export default function HomeScreen() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Fetch products - NOW INCLUDING delivery column
+      // Fetch products with category_id
       console.log("HOME: Fetching products...");
       const { data: productsData, error: productsError } = await supabase
         .from("products")
-        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, delivery")
+        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, category_id")
         .order("created_at", { ascending: false })
         .limit(20);
 
@@ -435,6 +441,7 @@ export default function HomeScreen() {
                 product={product}
                 userLat={userLat}
                 userLon={userLon}
+                categories={categories}
               />
             ))}
           </View>
