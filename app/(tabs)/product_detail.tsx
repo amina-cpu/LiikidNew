@@ -1,22 +1,22 @@
-import { useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams } from "expo-router";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
   Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { supabase } from '../../lib/Supabase';
+} from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { supabase } from "../../lib/Supabase";
 
 interface ProductImage {
   image_url: string;
@@ -27,7 +27,7 @@ interface ProductDetail {
   id: number;
   name: string;
   price: number;
-  listing_type: 'sell' | 'rent' | 'exchange';
+  listing_type: "sell" | "rent" | "exchange";
   description: string;
   image_url: string | null;
   location_address: string | null;
@@ -38,18 +38,18 @@ interface ProductDetail {
   product_images?: ProductImage[];
 }
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 const PRODUCT_IMAGE_HEIGHT = width * 1.1;
 
 const COLORS = {
-  primary: '#00A78F',
-  secondary: '#363636',
-  textLight: '#8A8A8E',
-  price: '#007AFF',
-  background: '#FFFFFF',
-  border: '#E8E8E8',
-  white: '#FFFFFF',
-  mapDark: '#333333',
+  primary: "#00A78F",
+  secondary: "#363636",
+  textLight: "#8A8A8E",
+  price: "#007AFF",
+  background: "#FFFFFF",
+  border: "#E8E8E8",
+  white: "#FFFFFF",
+  overlay: "rgba(0,0,0,0.4)",
 };
 
 const ProductDetailScreen = () => {
@@ -58,12 +58,14 @@ const ProductDetailScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!productId || Array.isArray(productId)) {
       setLoading(false);
-      setError('Invalid Product ID.');
+      setError("Invalid Product ID.");
       return;
     }
 
@@ -72,7 +74,7 @@ const ProductDetailScreen = () => {
       setError(null);
       try {
         const { data, error } = await supabase
-          .from('products')
+          .from("products")
           .select(`
             id,
             name,
@@ -86,34 +88,32 @@ const ProductDetailScreen = () => {
             created_at,
             product_images (image_url, order)
           `)
-          .eq('id', productId)
+          .eq("id", productId)
           .single();
 
         if (error) throw error;
 
         if (data) {
-          const productData: ProductDetail = {
+          setProduct({
             id: data.id,
             name: data.name,
             price: data.price,
-            listing_type: data.listing_type as 'sell' | 'rent' | 'exchange',
-            description: data.description || 'No description provided.',
+            listing_type: data.listing_type,
+            description: data.description || "No description provided.",
             image_url: data.image_url,
             location_address: data.location_address,
             latitude: data.latitude,
             longitude: data.longitude,
             created_at: new Date(data.created_at).toLocaleDateString(),
-            hasShipping: data.listing_type === 'sell',
+            hasShipping: data.listing_type === "sell",
             product_images: data.product_images || [],
-          };
-          setProduct(productData);
+          });
         } else {
-          setError('Product not found.');
+          setError("Product not found.");
         }
       } catch (e: any) {
-        console.error('Fetch Product Detail Error:', e);
-        Alert.alert('Error', e.message || 'Failed to fetch product details.');
-        setError('Failed to load product.');
+        Alert.alert("Error", e.message || "Failed to fetch product details.");
+        setError("Failed to load product.");
       } finally {
         setLoading(false);
       }
@@ -122,50 +122,50 @@ const ProductDetailScreen = () => {
     fetchProductDetail();
   }, [productId]);
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const handleScroll = (event: any) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / width);
     setActiveIndex(index);
   };
 
+  const toggleFavorite = () => setIsFavorite((prev) => !prev);
+
   if (loading) {
     return (
-      <View style={[styles.flexContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.flexCenter]}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 10, color: COLORS.secondary }}>Loading product details...</Text>
+        <Text style={{ marginTop: 10, color: COLORS.secondary }}>
+          Loading product details...
+        </Text>
       </View>
     );
   }
 
   if (error || !product) {
     return (
-      <View style={[styles.flexContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.flexCenter]}>
         <Ionicons name="alert-circle-outline" size={40} color={COLORS.textLight} />
         <Text style={{ marginTop: 10, fontSize: 16, color: COLORS.textLight }}>
-          {error || 'Product not found.'}
+          {error || "Product not found."}
         </Text>
       </View>
     );
   }
 
   const formatPrice = () => {
-    if (!product) return 'N/A';
-    if (product.listing_type === 'exchange') return 'Exchange';
-    if (product.listing_type === 'rent') return `${product.price.toLocaleString()} DA/month`;
-    return `${product.price.toLocaleString()} DA`;
+    if (product.listing_type === "exchange") return "Exchange";
+    if (product.listing_type === "rent") return `${product.price} DA/month`;
+
+    return `${product.price} DA`;
   };
 
   const allImages = [
     product.image_url,
     ...(product.product_images?.map((img) => img.image_url) || []),
   ].filter(Boolean);
-
+ const router = useRouter();
   return (
     <SafeAreaView style={styles.flexContainer}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* --- IMAGE CAROUSEL --- */}
         <View style={styles.imageSection}>
           <ScrollView
@@ -180,10 +180,9 @@ const ProductDetailScreen = () => {
               <Image
                 key={index}
                 source={{
-                  uri: img || 'https://placehold.co/600x660/333333/FFFFFF?text=Product+Image',
+                  uri: img || "https://placehold.co/600x660/333333/FFFFFF?text=Product+Image",
                 }}
                 style={styles.productImage}
-                resizeMode="cover"
               />
             ))}
           </ScrollView>
@@ -195,217 +194,157 @@ const ProductDetailScreen = () => {
                 key={index}
                 style={[
                   styles.dot,
-                  { backgroundColor: index === activeIndex ? COLORS.white : 'rgba(255,255,255,0.5)' },
+                  { backgroundColor: index === activeIndex ? COLORS.white : "rgba(255,255,255,0.4)" },
                 ]}
               />
             ))}
           </View>
 
-          {/* Header Overlay */}
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => console.log('Go Back')}>
-              <Ionicons name="arrow-back" size={24} color={COLORS.white} />
+          {/* --- CUSTOM HEADER --- */}
+          <View style={styles.headerOverlay}>
+            <TouchableOpacity style={styles.headerBtn}  onPress={() => router.back() }>
+              <Ionicons name="arrow-back" size={22} color={COLORS.white} />
             </TouchableOpacity>
-            <View style={styles.headerRight}>
-              <TouchableOpacity style={styles.iconButton} onPress={() => console.log('Options')}>
-                <Ionicons name="ellipsis-vertical" size={24} color={COLORS.white} />
+
+            <View style={styles.rightIcons}>
+              <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
+                <Ionicons
+                  name={isFavorite ? "heart" : "heart-outline"}
+                  size={22}
+                  color={COLORS.white}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.headerBtn}
+                onPress={() => setShowMenu(true)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.white} />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
+        {/* --- DETAILS --- */}
         <View style={styles.detailsPadding}>
           <Text style={styles.title}>{product.name}</Text>
-          <Text style={styles.conditionText}>
-            Used - <Text style={styles.conditionValue}>Good</Text>
-          </Text>
-
           <Text style={styles.priceText}>{formatPrice()}</Text>
-
           {product.hasShipping && (
             <View style={styles.shippingContainer}>
               <MaterialCommunityIcons name="truck-delivery" size={20} color={COLORS.primary} />
               <Text style={styles.shippingText}>Shipping available</Text>
             </View>
           )}
-
-          <View style={styles.descriptionContainer}>
-            <Text style={styles.descriptionHeader}>Description</Text>
-            <Text style={styles.descriptionText} numberOfLines={4}>
-              {product.description}{' '}
-              <Text style={styles.seeMore}>See more</Text>
-            </Text>
-
-            <View style={styles.descriptionFooter}>
-              <Text style={styles.postedText}>Posted on {product.created_at}</Text>
-              <View style={styles.likesContainer}>
-                <Ionicons name="heart" size={16} color="red" />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.mapCard}>
-            <View style={styles.mapImageContainer}>
-              <View style={styles.stylizedMap}>
-                <View style={styles.settifPin}>
-                  <Text style={styles.settifText}>
-                    {product.location_address || 'Location'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <Text style={styles.mapDisclaimer}>
-              Map is approximate to keep seller's location private.
-            </Text>
-          </View>
+          <Text style={styles.descriptionHeader}>Description</Text>
+          <Text style={styles.descriptionText}>{product.description}</Text>
         </View>
-        <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={styles.footer}>
+      {/* --- BOTTOM MENU MODAL --- */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={showMenu}
+        onRequestClose={() => setShowMenu(false)}
+      >
         <TouchableOpacity
-          style={[styles.button, styles.callButton]}
-          onPress={() => console.log('Call Action for product:', product.id)}
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPressOut={() => setShowMenu(false)}
         >
-          <Text style={styles.callButtonText}>Call</Text>
+          <View style={styles.bottomSheet}>
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="share-social-outline" size={22} color={COLORS.secondary} />
+              <Text style={styles.menuText}>Share item</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="flag-outline" size={22} color={COLORS.secondary} />
+              <Text style={styles.menuText}>Report this item</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem}>
+              <Ionicons name="link-outline" size={22} color={COLORS.secondary} />
+              <Text style={styles.menuText}>Copy link</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.chatButton]}
-          onPress={() => console.log('Chat Action for product:', product.id)}
-        >
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   flexContainer: { flex: 1, backgroundColor: COLORS.background },
+  flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
-  contentContainer: { paddingBottom: 20 },
-  detailsPadding: { paddingHorizontal: 20, marginTop: 15 },
+  imageSection: { width, height: PRODUCT_IMAGE_HEIGHT },
+  productImage: { width, height: "100%" },
 
-  imageSection: { width, height: PRODUCT_IMAGE_HEIGHT, backgroundColor: '#000' },
-  productImage: { width, height: '100%' },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingTop: 10,
+  headerOverlay: {
+    position: "absolute",
+    top: 50,
+    left: 15,
+    right: 15,
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
-  headerRight: { flexDirection: 'row' },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 10,
+  headerBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
   },
+  rightIcons: { flexDirection: "row", gap: 10 },
+
   paginationContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 20,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
   },
   dot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 4 },
 
-  title: { fontSize: 24, fontWeight: '700', color: COLORS.secondary, marginBottom: 5 },
-  conditionText: { fontSize: 14, color: COLORS.textLight, marginBottom: 10 },
-  conditionValue: { fontWeight: '600', color: COLORS.textLight },
-  priceText: { fontSize: 32, fontWeight: '700', color: COLORS.price, marginBottom: 15 },
+  detailsPadding: { padding: 20 },
+  title: { fontSize: 24, fontWeight: "700", color: COLORS.secondary, marginBottom: 5 },
+  priceText: { fontSize: 26, fontWeight: "700", color: COLORS.price, marginBottom: 15 },
   shippingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,167,143,0.1)',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,167,143,0.1)",
     padding: 8,
     borderRadius: 8,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginBottom: 25,
   },
-  shippingText: { marginLeft: 8, color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  shippingText: { marginLeft: 8, color: COLORS.primary, fontWeight: "600" },
+  descriptionHeader: { fontSize: 18, fontWeight: "700", color: COLORS.secondary, marginBottom: 10 },
+  descriptionText: { fontSize: 16, color: COLORS.secondary },
 
-  descriptionContainer: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 20,
-    marginBottom: 25,
-  },
-  descriptionHeader: { fontSize: 18, fontWeight: '700', color: COLORS.secondary, marginBottom: 10 },
-  descriptionText: { fontSize: 16, lineHeight: 24, color: COLORS.secondary },
-  seeMore: { color: COLORS.primary, fontWeight: '600' },
-  descriptionFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  postedText: { fontSize: 13, color: COLORS.textLight },
-  likesContainer: { flexDirection: 'row', alignItems: 'center' },
-
-  mapCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    paddingBottom: 15,
-  },
-  mapImageContainer: { width: '100%', height: 180, overflow: 'hidden' },
-  stylizedMap: {
+  modalOverlay: {
     flex: 1,
-    backgroundColor: COLORS.mapDark,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.3)",
+    justifyContent: "flex-end",
   },
-  settifPin: {
-    width: 60,
-    height: 30,
-    borderRadius: 15,
+  bottomSheet: {
     backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingVertical: 10,
   },
-  settifText: { fontWeight: 'bold', color: COLORS.mapDark, fontSize: 12 },
-  mapDisclaimer: { textAlign: 'center', marginTop: 10, fontSize: 13, color: COLORS.textLight },
-
-  footer: {
-    flexDirection: 'row',
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.white,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    paddingHorizontal: 20,
   },
-  button: {
-    flex: 1,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 5,
+  menuText: {
+    fontSize: 16,
+    marginLeft: 10,
+    color: COLORS.secondary,
   },
-  callButton: { backgroundColor: COLORS.white, borderWidth: 2, borderColor: COLORS.primary },
-  callButtonText: { color: COLORS.primary, fontSize: 16, fontWeight: '700' },
-  chatButton: { backgroundColor: COLORS.primary },
-  chatButtonText: { color: COLORS.white, fontSize: 16, fontWeight: '700' },
 });
 
 export default ProductDetailScreen;

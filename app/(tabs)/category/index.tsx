@@ -16,6 +16,8 @@ import {
   View,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import FontAwesome from "react-native-vector-icons/FontAwesome";
+
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../../lib/Supabase";
 
@@ -27,6 +29,10 @@ const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
 const SAFE_AREA_PADDING = 40;
+
+// Pagination constants
+const INITIAL_PRODUCT_LIMIT = 8;
+const LOAD_MORE_INCREMENT = 6;
 
 interface Category {
   id: number;
@@ -161,8 +167,11 @@ const ProductCard: React.FC<{
   );
 };
 
-// Load More Button with Hover Animation
-const LoadMoreButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
+// Load More Button with Hover Animation and Loading Indicator
+const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
+  onPress,
+  loading,
+}) => {
   const scaleAnim = new Animated.Value(1);
   const translateYAnim = new Animated.Value(0);
 
@@ -207,8 +216,13 @@ const LoadMoreButton: React.FC<{ onPress: () => void }> = ({ onPress }) => {
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
+        disabled={loading} // Disable button while loading
       >
-        <Text style={styles.loadMoreText}>Load More Items</Text>
+        {loading ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <Text style={styles.loadMoreText}>Load More Items</Text>
+        )}
       </TouchableOpacity>
     </Animated.View>
   );
@@ -231,6 +245,8 @@ export default function CategoryScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreProducts, setHasMoreProducts] = useState(true); // Flag if there are more products on the server
 
   // Fetch user location
   useEffect(() => {
@@ -253,15 +269,19 @@ export default function CategoryScreen() {
     })();
   }, []);
 
+  // Fetch initial category details and products
   useEffect(() => {
     if (categoryId) {
-      fetchData();
+      fetchData(true);
     }
   }, [categoryId]);
 
-  // Filter products
+  // Filter products whenever products or filter state changes
   useEffect(() => {
-    let filtered = products;
+    let filtered: Product[];
+
+    // Start with the products currently loaded (this array is paginated)
+    filtered = products;
 
     // Filter by subcategory
     if (selectedSubcategory) {
@@ -276,12 +296,56 @@ export default function CategoryScreen() {
     }
 
     setFilteredProducts(filtered);
+    // When filtering by listing type or subcategory, reset the 'hasMoreProducts' flag
+    // as it only makes sense for the master list (`products`), not the temporary filtered view.
+    // However, since `handleLoadMore` only runs for the 'All' filter (in a typical setup),
+    // we keep `hasMoreProducts` logic tied to the main product list.
   }, [selectedFilter, selectedSubcategory, products]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+  const fetchProducts = async (isInitialLoad: boolean) => {
+    if (!categoryId) return;
 
+    const from = isInitialLoad ? 0 : products.length;
+    const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
+    const to = from + limit - 1;
+
+    if (!isInitialLoad) {
+      setLoadingMore(true);
+    }
+
+    try {
+      const { data: productsData, error: productsError, count } = await supabase
+        .from("products")
+        .select(
+          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery",
+          { count: "exact" }
+        )
+        .eq("category_id", categoryId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (productsError) throw productsError;
+
+      const newProducts = isInitialLoad ? productsData || [] : [...products, ...(productsData || [])];
+      setProducts(newProducts);
+      
+      // Update hasMoreProducts flag based on total count
+      setHasMoreProducts(
+        (count || 0) > newProducts.length
+      );
+    } catch (error: any) {
+      console.error("Error fetching products:", error);
+      Alert.alert("Error", "Failed to load products: " + error.message);
+    } finally {
+      if (!isInitialLoad) {
+        setLoadingMore(false);
+      }
+    }
+  };
+
+  const fetchData = async (isInitialLoad: boolean) => {
+    setLoading(true);
+    try {
       // Fetch category details
       const { data: categoryData, error: categoryError } = await supabase
         .from("categories")
@@ -303,18 +367,8 @@ export default function CategoryScreen() {
       if (subcategoriesError) throw subcategoriesError;
       setSubcategories(subcategoriesData || []);
 
-      // Fetch products for this category - NOW INCLUDING delivery column
-      const { data: productsData, error: productsError } = await supabase
-        .from("products")
-        .select(
-          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery"
-        )
-        .eq("category_id", categoryId)
-        .order("created_at", { ascending: false });
-
-      if (productsError) throw productsError;
-      setProducts(productsData || []);
-      setFilteredProducts(productsData || []);
+      // Fetch products (Initial Load)
+      await fetchProducts(isInitialLoad);
     } catch (error: any) {
       console.error("Error fetching data:", error);
       Alert.alert("Error", "Failed to load data: " + error.message);
@@ -324,15 +378,20 @@ export default function CategoryScreen() {
   };
 
   const handleLoadMore = () => {
-    console.log("Load more items");
-    // Add your load more logic here
+    // Only allow loading more if the 'All' filter is selected,
+    // as pagination is difficult to manage on the client-side with other active filters.
+    if (selectedFilter === "All" && !selectedSubcategory) {
+        fetchProducts(false);
+    } else {
+        Alert.alert("Info", "Load More is available only when 'All' is selected and no subcategory filter is applied.");
+    }
   };
 
   const openFilters = () => {
     router.push("/filters");
   };
 
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
@@ -459,12 +518,12 @@ export default function CategoryScreen() {
         )}
 
         {/* Load More Button */}
-        {filteredProducts.length > 0 && (
-          <LoadMoreButton onPress={handleLoadMore} />
+        {selectedFilter === "All" && !selectedSubcategory && hasMoreProducts && (
+          <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
         )}
       </ScrollView>
 
-      {/* Floating Filter Button */}
+       {/* Floating Filter Button */}
       <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
         <View style={styles.filterIconContainer}>
           <Image
@@ -693,20 +752,21 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   loadMoreContainer: {
-    paddingHorizontal: 16,
+    marginHorizontal: 16,
     marginTop: 20,
     marginBottom: 20,
+    shadowColor: PRIMARY_TEAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   loadMoreButton: {
     backgroundColor: PRIMARY_TEAL,
     borderRadius: 30,
     paddingVertical: 16,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    justifyContent: "center",
   },
   loadMoreText: {
     color: "white",

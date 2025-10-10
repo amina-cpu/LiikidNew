@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Animated,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
@@ -24,6 +25,10 @@ const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+
+// Pagination constants
+const INITIAL_PRODUCT_LIMIT = 8;
+const LOAD_MORE_INCREMENT = 6;
 
 interface SubSubcategory {
   id: number;
@@ -46,7 +51,7 @@ interface Product {
   created_at: string;
   delivery: boolean; // Added delivery field
 }
-
+const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 interface Category {
   id: number;
   name: string;
@@ -58,10 +63,13 @@ interface Subcategory {
   name: string;
 }
 
-const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
-
 // Helper for distance
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
@@ -74,9 +82,9 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
-const ProductCard: React.FC<{ 
-  product: Product; 
-  userLat: number | null; 
+const ProductCard: React.FC<{
+  product: Product;
+  userLat: number | null;
   userLon: number | null;
 }> = ({ product, userLat, userLon }) => {
   const router = useRouter();
@@ -85,13 +93,19 @@ const ProductCard: React.FC<{
 
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
-    const dist = calculateDistance(userLat, userLon, product.latitude, product.longitude);
+    const dist = calculateDistance(
+      userLat,
+      userLon,
+      product.latitude,
+      product.longitude
+    );
     distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
   }
 
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
-    if (product.listing_type === "rent") return `${product.price.toLocaleString()} DA/month`;
+    if (product.listing_type === "rent")
+      return `${product.price.toLocaleString()} DA/month`;
     return `${product.price.toLocaleString()} DA`;
   };
 
@@ -103,7 +117,7 @@ const ProductCard: React.FC<{
 
   return (
     <View style={styles.cardContainer}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.cardTouchable}
         onPress={() => router.push(`/product_detail?id=${product.id}`)}
       >
@@ -151,20 +165,85 @@ const ProductCard: React.FC<{
   );
 };
 
+// Load More Button with Hover Animation and Loading Indicator
+const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
+  onPress,
+  loading,
+}) => {
+  const scaleAnim = new Animated.Value(1);
+  const translateYAnim = new Animated.Value(0);
+
+  const handlePressIn = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: -5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.loadMoreContainer,
+        {
+          transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={styles.loadMoreButton}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+        disabled={loading} // Disable button while loading
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <Text style={styles.loadMoreText}>Load More Items</Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function SubcategoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const subcategoryId = params.id ? Number(params.id) : null;
 
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
+  // products holds the current list of products loaded via pagination
   const [products, setProducts] = useState<Product[]>([]);
+  // filteredProducts is the view after applying client-side filters (brand, type, search)
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState("All");
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [location, setLocation] = useState<string>("Loading...");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Flag to know if there are more products to fetch from the server
+  const [hasMoreProducts, setHasMoreProducts] = useState(true);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -193,14 +272,75 @@ export default function SubcategoryScreen() {
 
   useEffect(() => {
     if (subcategoryId) {
-      fetchData();
+      // Pass true for initial load
+      fetchData(true);
     }
   }, [subcategoryId]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+  // Filter products whenever products or filter state changes
+  useEffect(() => {
+    let filtered = products;
 
+    // Filter by brand
+    if (selectedBrand) {
+      filtered = filtered.filter(p => p.sub_subcategory_id === selectedBrand);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    setFilteredProducts(filtered);
+  }, [selectedBrand, searchQuery, products]);
+
+  const fetchProducts = async (isInitialLoad: boolean) => {
+    if (!subcategoryId) return;
+
+    const from = isInitialLoad ? 0 : products.length;
+    const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
+    const to = from + limit - 1;
+
+    // Only show the spinner inside the button for non-initial load
+    if (!isInitialLoad) {
+        setLoadingMore(true);
+    }
+
+    try {
+        // Fetch products with range for pagination and count for total
+        const { data: productData, error: productError, count } = await supabase
+          .from("products")
+          .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery", { count: "exact" })
+          .eq("subcategory_id", subcategoryId)
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        if (productError) throw productError;
+
+        const newProducts = productData || [];
+
+        // Update the main products list
+        setProducts(prevProducts =>
+            isInitialLoad ? newProducts : [...prevProducts, ...newProducts]
+        );
+
+        // Check if the total count is greater than the total number of items currently loaded
+        setHasMoreProducts((count || 0) > (isInitialLoad ? newProducts.length : products.length + newProducts.length));
+
+    } catch (e: any) {
+        Alert.alert("Error", e.message);
+    } finally {
+        if (!isInitialLoad) {
+          setLoadingMore(false);
+        }
+    }
+  };
+
+  const fetchData = async (isInitialLoad: boolean) => {
+    setLoading(true);
+    try {
       // Fetch subcategory details
       const { data: subcategoryData, error: subcategoryError } = await supabase
         .from("subcategories")
@@ -233,16 +373,9 @@ export default function SubcategoryScreen() {
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
 
-      // Fetch products - NOW INCLUDING delivery column
-      const { data: productData, error: productError } = await supabase
-        .from("products")
-        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery")
-        .eq("subcategory_id", subcategoryId)
-        .order("created_at", { ascending: false });
+      // Fetch initial products
+      await fetchProducts(isInitialLoad);
 
-      if (productError) throw productError;
-      setProducts(productData || []);
-      setFilteredProducts(productData || []);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
@@ -250,33 +383,23 @@ export default function SubcategoryScreen() {
     }
   };
 
-  // Filter products
-  useEffect(() => {
-    let filtered = products;
-
-    // Filter by brand
-    if (selectedBrand) {
-      filtered = filtered.filter(p => p.sub_subcategory_id === selectedBrand);
-    }
-
-    // Filter by listing type
-    if (selectedFilter !== "All") {
-      filtered = filtered.filter(
-        p => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
+  const handleLoadMore = () => {
+    // Only allow loading more if no client-side filters are active
+    if (selectedBrand === null && !searchQuery.trim()) {
+      fetchProducts(false);
+    } else {
+      Alert.alert(
+        "Filter Active",
+        "Please clear the Brand and Search filters to load more items from the server."
       );
     }
+  };
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
+  const openFilters = () => {
+    router.push("/filters");
+  };
 
-    setFilteredProducts(filtered);
-  }, [selectedBrand, selectedFilter, searchQuery, products]);
-
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
@@ -287,7 +410,7 @@ export default function SubcategoryScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Header with Search */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -307,7 +430,7 @@ export default function SubcategoryScreen() {
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search smartphones"
+              placeholder={`Search ${subcategory?.name || "items"}`}
               placeholderTextColor="#999"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -320,12 +443,42 @@ export default function SubcategoryScreen() {
             <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
           </View>
         </View>
-
+<View style={styles.filterTabsWrapper}>
+          <View style={styles.filterTabs}>
+            {FILTER_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === tab && styles.filterButtonActive,
+                  selectedFilter === tab &&
+                    tab === "Sell" && { backgroundColor: BLUE },
+                  selectedFilter === tab &&
+                    tab === "Rent" && { backgroundColor: ORANGE },
+                  selectedFilter === tab &&
+                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                ]}
+                onPress={() => setSelectedFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selectedFilter === tab && styles.filterTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
         {/* Breadcrumb */}
         <View style={styles.breadcrumbContainer}>
-          <Text style={styles.breadcrumbText}>
-            {category?.name || "Category"}
-          </Text>
+          <TouchableOpacity onPress={() => router.push(`/category/${category?.id}`)}>
+            <Text style={styles.breadcrumbText}>
+              {category?.name || "Category"}
+            </Text>
+          </TouchableOpacity>
           <Ionicons name="chevron-forward" size={16} color="#999" style={styles.breadcrumbArrow} />
           <Text style={[styles.breadcrumbText, styles.breadcrumbActive]}>
             {subcategory?.name || "Subcategory"}
@@ -375,71 +528,57 @@ export default function SubcategoryScreen() {
           </ScrollView>
         )}
 
-        {/* Filter Tabs */}
-        <View style={styles.filterTabsWrapper}>
-          <View style={styles.filterTabs}>
-            {FILTER_TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.filterButton,
-                  selectedFilter === tab && styles.filterButtonActive,
-                  selectedFilter === tab &&
-                    tab === "Sell" && { backgroundColor: BLUE },
-                  selectedFilter === tab &&
-                    tab === "Rent" && { backgroundColor: ORANGE },
-                  selectedFilter === tab &&
-                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
-                ]}
-                onPress={() => setSelectedFilter(tab)}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    selectedFilter === tab && styles.filterTextActive,
-                  ]}
-                >
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
         {/* Product Grid */}
         {filteredProducts.length === 0 ? (
           <Text style={styles.emptyText}>No products found</Text>
         ) : (
           <View style={styles.productGrid}>
             {filteredProducts.map((product) => (
-              <ProductCard 
-                key={product.id} 
-                product={product} 
-                userLat={userLat} 
-                userLon={userLon} 
+              <ProductCard
+                key={product.id}
+                product={product}
+                userLat={userLat}
+                userLon={userLon}
               />
             ))}
           </View>
         )}
+
+        {/* Load More Button - Only shows if no filters are active AND there are more products on the server */}
+        {selectedBrand === null && !searchQuery.trim() && hasMoreProducts && (
+            <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
+        )}
+
       </ScrollView>
+
+      {/* Floating Filter Button */}
+      <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
+        <View style={styles.filterIconContainer}>
+          <Image
+            source={require("../../../../assets/icons/floating.png")}
+            style={styles.floatingImageIcon}
+          />
+        </View>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
-    backgroundColor: "white", 
-    paddingTop: 40 
+  safeArea: {
+    flex: 1,
+    backgroundColor: "white",
+    paddingTop: 40,
   },
-  loadingContainer: { 
-    justifyContent: "center", 
-    alignItems: "center" 
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    flex: 1,
   },
-  loadingText: { 
-    marginTop: 10, 
-    fontSize: 16, 
-    color: DARK_GRAY 
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: DARK_GRAY,
   },
   header: {
     flexDirection: "row",
@@ -503,9 +642,9 @@ const styles = StyleSheet.create({
     color: DARK_GRAY,
     fontWeight: "600",
   },
-  brandScroll: { 
-    paddingHorizontal: 16, 
-    marginBottom: 16 
+  brandScroll: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   brandPill: {
     paddingHorizontal: 20,
@@ -519,42 +658,12 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_TEAL,
     borderWidth: 0,
   },
-  brandText: { 
-    fontSize: 14, 
-    fontWeight: "600", 
-    color: DARK_GRAY
+  brandText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: DARK_GRAY,
   },
   brandTextActive: {
-    color: "white",
-  },
-  filterTabsWrapper: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  filterTabs: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: LIGHT_GRAY,
-    borderRadius: 12,
-    padding: 4,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  filterButtonActive: {
-    backgroundColor: DARK_GRAY,
-  },
-  filterText: {
-    fontWeight: "600",
-    fontSize: 14,
-    color: "#666",
-  },
-  filterTextActive: {
     color: "white",
   },
   productGrid: {
@@ -574,19 +683,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  cardTouchable: { 
-    borderRadius: 16, 
-    overflow: "hidden" 
+  cardTouchable: {
+    borderRadius: 16,
+    overflow: "hidden",
   },
   imageWrapper: {
     width: "100%",
     aspectRatio: 1,
     backgroundColor: "#F7F7F7",
   },
-  cardImage: { 
-    width: "100%", 
-    height: "100%", 
-    resizeMode: "cover" 
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   deliveryBadge: {
     position: "absolute",
@@ -596,40 +705,105 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
   },
-  heartIcon: { 
-    position: "absolute", 
-    top: 10, 
-    right: 10, 
-    padding: 5 
+  heartIcon: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    padding: 5,
   },
-  cardDetails: { 
-    padding: 12 
+  cardDetails: {
+    padding: 12,
   },
-  cardPrice: { 
-    fontSize: 16, 
-    fontWeight: "700", 
-    marginBottom: 4 
+  cardPrice: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
   },
-  cardTitle: { 
-    fontSize: 14, 
-    fontWeight: "500", 
-    color: DARK_GRAY, 
-    minHeight: 36 
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: DARK_GRAY,
+    minHeight: 36,
   },
-  distanceContainer: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    marginTop: 4 
+  distanceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
   },
-  cardDistance: { 
-    marginLeft: 4, 
-    fontSize: 12, 
-    color: "#666" 
+  cardDistance: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: "#666",
   },
-  emptyText: { 
-    textAlign: "center", 
-    fontSize: 16, 
-    color: "#999", 
-    marginVertical: 20 
+  emptyText: {
+    textAlign: "center",
+    fontSize: 16,
+    color: "#999",
+    marginVertical: 20,
+  },
+  loadMoreContainer: {
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 20,
+    shadowColor: PRIMARY_TEAL,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  loadMoreButton: {
+    backgroundColor: PRIMARY_TEAL,
+    borderRadius: 30,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadMoreText: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  floatingFilterButton: {
+    position: "absolute",
+    bottom: 30,
+    right: 20,
+    backgroundColor: PRIMARY_TEAL,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  filterIconContainer: {
+    position: "relative",
+  },
+  floatingImageIcon: {
+    width: 28,
+    height: 28,
+    resizeMode: "contain",
+    tintColor: "white",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    backgroundColor: ACCENT_RED,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "white",
+  },
+  filterBadgeText: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "700",
   },
 });
