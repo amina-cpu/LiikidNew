@@ -1,11 +1,12 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const PRIMARY_COLOR = '#000000';
 const INACTIVE_COLOR = '#999999';
+const HOVER_COLOR = '#00C853'; // Green hover color
 
 const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -27,7 +28,36 @@ const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }
   </Svg>
 );
 
+// Custom tab bar button for Home
+const HomeTabButton: React.FC<{ children: React.ReactNode; onPress: () => void }> = ({
+  children,
+  onPress,
+}) => {
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
+      style={[
+        styles.homeButton,
+        isPressed && styles.homeButtonHover, // green hover effect
+      ]}
+      activeOpacity={0.9}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+};
+
 export default function TabLayout() {
+  const router = useRouter();
+
+  const handleHomePress = () => {
+    router.push('/');
+  };
+
   return (
     <Tabs
       screenOptions={{
@@ -36,27 +66,51 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: 'white',
-          height: 120,
+          height: 80, // reduced height
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
-          paddingBottom: 25,
-          paddingTop: 10,
+          paddingBottom: 10,
+          paddingTop: 5,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
           marginTop: 2,
         },
-      }}>
-
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <Icon name="home-variant" size={24} color={color} />,
+          tabBarButton: (props) => (
+            <HomeTabButton onPress={handleHomePress}>
+              <View style={styles.tabItem}>
+                <Icon
+                  name="home-variant"
+                  size={24}
+                  color={
+                    props.accessibilityState?.selected ? PRIMARY_COLOR : INACTIVE_COLOR
+                  }
+                />
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '500',
+                    marginTop: 2,
+                    color: props.accessibilityState?.selected
+                      ? PRIMARY_COLOR
+                      : INACTIVE_COLOR,
+                  }}
+                >
+                  Home
+                </Text>
+              </View>
+            </HomeTabButton>
+          ),
         }}
       />
-      
 
       <Tabs.Screen
         name="map"
@@ -96,31 +150,31 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Icon name="account" size={24} color={color} />,
         }}
       />
-       <Tabs.Screen
-  name="filters"
-  options={{
-    headerShown: false,  // Move this inside options
-    href: null, // This hides it from the tab bar
-  }}
-/>
-<Tabs.Screen
-  name="search"
-  options={{
-    headerShown: false,  // Move this inside options
-    href: null, // This hides it from the tab bar
-  }}
-/>
- <Tabs.Screen
-        name="product_detail"
+
+      <Tabs.Screen
+        name="filters"
         options={{
-          href: null, // This hides it from the tab bar
+          headerShown: false,
+          href: null,
         }}
       />
-      {/* Hide category from tab bar */}
+      <Tabs.Screen
+        name="search"
+        options={{
+          headerShown: false,
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="product_detail"
+        options={{
+          href: null,
+        }}
+      />
       <Tabs.Screen
         name="category"
         options={{
-          href: null, // This hides it from the tab bar
+          href: null,
         }}
       />
     </Tabs>
@@ -128,6 +182,20 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
+  tabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  homeButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  homeButtonHover: {
+    borderTopWidth: 3,
+    borderTopColor: HOVER_COLOR,
+  },
   badge: {
     position: 'absolute',
     right: -6,

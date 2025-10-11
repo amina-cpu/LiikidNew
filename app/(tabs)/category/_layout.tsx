@@ -11,7 +11,13 @@ export default function CategoryLayout() {
         }}/>
          <Stack.Screen name="subcategory" options={{ headerShown: false }} />
       
-     
+      <Stack.Screen 
+        name="search_results
+        " 
+        options={{ 
+          headerShown: false,
+          presentation: "card"
+        }}/>
     </Stack>
   );
 }

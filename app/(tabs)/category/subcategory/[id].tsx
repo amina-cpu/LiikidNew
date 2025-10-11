@@ -1,24 +1,27 @@
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  Animated,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../../../lib/Supabase";
 
 const PRIMARY_TEAL = "#16A085";
+const SEARCH_GREEN = "#059669";
 const LIGHT_GRAY = "#F5F5F5";
 const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
@@ -35,6 +38,7 @@ interface SubSubcategory {
   subcategory_id: number;
   name: string;
   description: string | null;
+  hasResults?: boolean;
 }
 
 interface Product {
@@ -49,9 +53,11 @@ interface Product {
   subcategory_id: number | null;
   sub_subcategory_id: number | null;
   created_at: string;
-  delivery: boolean; // Added delivery field
+  delivery: boolean;
 }
+
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
+
 interface Category {
   id: number;
   name: string;
@@ -130,7 +136,6 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {/* Show delivery badge only if delivery is true */}
           {product.delivery && (
             <View style={styles.deliveryBadge}>
               <MaterialCommunityIcons
@@ -214,7 +219,7 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
-        disabled={loading} // Disable button while loading
+        disabled={loading}
       >
         {loading ? (
           <ActivityIndicator size="small" color="white" />
@@ -230,11 +235,12 @@ export default function SubcategoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const subcategoryId = params.id ? Number(params.id) : null;
+  const searchMode = params.searchMode === 'true';
+  const searchQueryParam = params.searchQuery as string || '';
+  const [selectedFilter, setSelectedFilter] = useState<string>("All");
 
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
-  // products holds the current list of products loaded via pagination
   const [products, setProducts] = useState<Product[]>([]);
-  // filteredProducts is the view after applying client-side filters (brand, type, search)
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
   const [userLat, setUserLat] = useState<number | null>(null);
@@ -242,12 +248,12 @@ export default function SubcategoryScreen() {
   const [location, setLocation] = useState<string>("Loading...");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  // Flag to know if there are more products to fetch from the server
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(searchQueryParam);
+  const searchInputRef = useRef<TextInput>(null);
+  const hasNavigatedRef = useRef(false);
 
-  // For breadcrumb
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategory, setSubcategory] = useState<Subcategory | null>(null);
 
@@ -272,10 +278,20 @@ export default function SubcategoryScreen() {
 
   useEffect(() => {
     if (subcategoryId) {
-      // Pass true for initial load
       fetchData(true);
     }
   }, [subcategoryId]);
+useEffect(() => {
+  if (subSubcategories.length > 0 && (searchQuery.trim() || searchMode)) {
+    const queryToUse = searchQuery.trim() || searchQueryParam;
+    const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
+
+    if (subsWithResults.length === 1 && !hasNavigatedRef.current && queryToUse) {
+      hasNavigatedRef.current = true;
+      router.push(`/category/subcategory/subsubcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(queryToUse)}`);
+    }
+  }
+}, [subSubcategories, searchQuery, searchMode]);
 
   // Filter products whenever products or filter state changes
   useEffect(() => {
@@ -286,6 +302,13 @@ export default function SubcategoryScreen() {
       filtered = filtered.filter(p => p.sub_subcategory_id === selectedBrand);
     }
 
+    // Filter by listing type
+    if (selectedFilter !== "All") {
+      filtered = filtered.filter(
+        p => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
+      );
+    }
+
     // Filter by search query
     if (searchQuery.trim()) {
       filtered = filtered.filter(p =>
@@ -294,7 +317,42 @@ export default function SubcategoryScreen() {
     }
 
     setFilteredProducts(filtered);
-  }, [selectedBrand, searchQuery, products]);
+
+    // Update sub-subcategories with results when searching
+    if (searchQuery.trim() || (searchMode && searchQueryParam)) {
+      const queryToUse = searchQuery.trim() || searchQueryParam;
+      const subSubcategoryIds = [...new Set(filtered.map(p => p.sub_subcategory_id).filter(Boolean))];
+      
+      setSubSubcategories(prevSubs => {
+        const updatedSubs = prevSubs.map(sub => ({
+          ...sub,
+          hasResults: subSubcategoryIds.includes(sub.id)
+        }));
+
+        // Auto-navigate if only one sub-subcategory has results and we haven't navigated yet
+        const subsWithResults = updatedSubs.filter(sub => sub.hasResults);
+       // inside the filter effect, REMOVE the router.push call completely
+setSubSubcategories(prevSubs => {
+  const updatedSubs = prevSubs.map(sub => ({
+    ...sub,
+    hasResults: subSubcategoryIds.includes(sub.id)
+  }));
+  return updatedSubs;
+});
+
+
+        return updatedSubs;
+      });
+    } else {
+      // Reset hasResults when search is cleared
+      setSubSubcategories(prevSubs => 
+        prevSubs.map(sub => ({
+          ...sub,
+          hasResults: false
+        }))
+      );
+    }
+  }, [selectedBrand, selectedFilter, searchQuery, products]);
 
   const fetchProducts = async (isInitialLoad: boolean) => {
     if (!subcategoryId) return;
@@ -303,13 +361,11 @@ export default function SubcategoryScreen() {
     const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
     const to = from + limit - 1;
 
-    // Only show the spinner inside the button for non-initial load
     if (!isInitialLoad) {
         setLoadingMore(true);
     }
 
     try {
-        // Fetch products with range for pagination and count for total
         const { data: productData, error: productError, count } = await supabase
           .from("products")
           .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery", { count: "exact" })
@@ -321,12 +377,10 @@ export default function SubcategoryScreen() {
 
         const newProducts = productData || [];
 
-        // Update the main products list
         setProducts(prevProducts =>
             isInitialLoad ? newProducts : [...prevProducts, ...newProducts]
         );
 
-        // Check if the total count is greater than the total number of items currently loaded
         setHasMoreProducts((count || 0) > (isInitialLoad ? newProducts.length : products.length + newProducts.length));
 
     } catch (e: any) {
@@ -341,7 +395,6 @@ export default function SubcategoryScreen() {
   const fetchData = async (isInitialLoad: boolean) => {
     setLoading(true);
     try {
-      // Fetch subcategory details
       const { data: subcategoryData, error: subcategoryError } = await supabase
         .from("subcategories")
         .select("id, category_id, name")
@@ -351,7 +404,6 @@ export default function SubcategoryScreen() {
       if (subcategoryError) throw subcategoryError;
       setSubcategory(subcategoryData);
 
-      // Fetch category details
       if (subcategoryData?.category_id) {
         const { data: categoryData, error: categoryError } = await supabase
           .from("categories")
@@ -363,7 +415,6 @@ export default function SubcategoryScreen() {
         setCategory(categoryData);
       }
 
-      // Fetch sub-subcategories (brands)
       const { data: brands, error: brandError } = await supabase
         .from("sub_subcategories")
         .select("id, subcategory_id, name, description")
@@ -373,7 +424,13 @@ export default function SubcategoryScreen() {
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
 
-      // Fetch initial products
+      // Check if there's only one sub-subcategory
+      if (brands && brands.length === 1) {
+        // Navigate to the only sub-subcategory
+        router.replace(`/category/subcategory/subsubcategory/${brands[0].id}`);
+        return;
+      }
+
       await fetchProducts(isInitialLoad);
 
     } catch (e: any) {
@@ -384,13 +441,12 @@ export default function SubcategoryScreen() {
   };
 
   const handleLoadMore = () => {
-    // Only allow loading more if no client-side filters are active
-    if (selectedBrand === null && !searchQuery.trim()) {
+    if (selectedBrand === null && selectedFilter === "All" && !searchQuery.trim()) {
       fetchProducts(false);
     } else {
       Alert.alert(
         "Filter Active",
-        "Please clear the Brand and Search filters to load more items from the server."
+        "Please clear all filters to load more items from the server."
       );
     }
   };
@@ -398,6 +454,24 @@ export default function SubcategoryScreen() {
   const openFilters = () => {
     router.push("/filters");
   };
+
+  const handleSearchBarPress = () => {
+    setIsSearchActive(true);
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleCancelSearch = () => {
+    setIsSearchActive(false);
+    setSearchQuery("");
+    Keyboard.dismiss();
+  };
+
+  // Filter visible sub-subcategories when searching
+  const visibleSubSubcategories = (searchQuery.trim() || (searchMode && searchQueryParam))
+    ? subSubcategories.filter(sub => sub.hasResults)
+    : subSubcategories;
 
   if (loading && products.length === 0) {
     return (
@@ -410,156 +484,206 @@ export default function SubcategoryScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Header with Search */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
-          </TouchableOpacity>
-          <View
-            style={[
-              styles.searchBar,
-              isSearchFocused && styles.searchBarFocused,
-            ]}
-          >
-            <Ionicons
-              name="search"
-              size={20}
-              color="#999"
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder={`Search ${subcategory?.name || "items"}`}
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-            />
-          </View>
-          <View style={styles.locationContainer}>
-            <Ionicons name="location-sharp" size={20} color={PRIMARY_TEAL} />
-            <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
-          </View>
-        </View>
-<View style={styles.filterTabsWrapper}>
-          <View style={styles.filterTabs}>
-            {FILTER_TABS.map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={[
-                  styles.filterButton,
-                  selectedFilter === tab && styles.filterButtonActive,
-                  selectedFilter === tab &&
-                    tab === "Sell" && { backgroundColor: BLUE },
-                  selectedFilter === tab &&
-                    tab === "Rent" && { backgroundColor: ORANGE },
-                  selectedFilter === tab &&
-                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
-                ]}
-                onPress={() => setSelectedFilter(tab)}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    selectedFilter === tab && styles.filterTextActive,
-                  ]}
-                >
-                  {tab}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      {/* Fullscreen Search Overlay */}
+      {isSearchActive && (
+        <View style={styles.searchOverlay}>
+          <View style={styles.searchOverlayHeader}>
+            <TouchableOpacity onPress={handleCancelSearch} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={SEARCH_GREEN} />
+            </TouchableOpacity>
+            <View style={styles.searchBarExpanded}>
+              <Ionicons
+                name="search"
+                size={20}
+                color={SEARCH_GREEN}
+                style={styles.searchIcon}
+              />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchInputExpanded}
+                placeholder={`Search in ${subcategory?.name || 'this subcategory'}`}
+                placeholderTextColor="#999"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                onSubmitEditing={() => {
+                  setIsSearchActive(false);
+                  Keyboard.dismiss();
+                }}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Ionicons name="close-circle" size={20} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-        {/* Breadcrumb */}
-        <View style={styles.breadcrumbContainer}>
-          <TouchableOpacity onPress={() => router.push(`/category/${category?.id}`)}>
-            <Text style={styles.breadcrumbText}>
-              {category?.name || "Category"}
-            </Text>
-          </TouchableOpacity>
-          <Ionicons name="chevron-forward" size={16} color="#999" style={styles.breadcrumbArrow} />
-          <Text style={[styles.breadcrumbText, styles.breadcrumbActive]}>
-            {subcategory?.name || "Subcategory"}
-          </Text>
-        </View>
+      )}
 
-        {/* Brand Pills (Sub-subcategories) */}
-        {subSubcategories.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.brandScroll}
-          >
+      {/* Normal Content */}
+      {!isSearchActive && (
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+          {/* Header with Search */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
+            </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.brandPill,
-                selectedBrand === null && styles.brandPillActive,
-              ]}
-              onPress={() => setSelectedBrand(null)}
+              style={styles.searchBarWrapper}
+              onPress={handleSearchBarPress}
+              activeOpacity={0.7}
             >
-              <Text style={[
-                styles.brandText,
-                selectedBrand === null && styles.brandTextActive
+              <View style={[
+                styles.searchBar,
+                (searchQuery.trim() || (searchMode && searchQueryParam)) && styles.searchBarFocused
               ]}>
-                All
+                <Ionicons
+                  name="search"
+                  size={20}
+                  color={(searchQuery.trim() || (searchMode && searchQueryParam)) ? SEARCH_GREEN : "#999"}
+                  style={styles.searchIcon}
+                />
+                <Text style={styles.searchPlaceholder} numberOfLines={1}>
+                  {(searchQuery.trim() || (searchMode && searchQueryParam))
+                    ? (searchQuery.trim() || searchQueryParam)
+                    : `Search in ${subcategory?.name}`}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.locationContainer}>
+              <Ionicons name="location-sharp" size={20} color={PRIMARY_TEAL} />
+              <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
+            </View>
+          </View>
+
+          {/* Breadcrumb */}
+          <View style={styles.breadcrumbContainer}>
+            <TouchableOpacity onPress={() => router.push(`/category/${category?.id}`)}>
+              <Text style={styles.breadcrumbText}>
+                {category?.name || "Category"}
               </Text>
             </TouchableOpacity>
-            {subSubcategories.map((brand) => (
+            <Ionicons name="chevron-forward" size={16} color="#999" style={styles.breadcrumbArrow} />
+            <Text style={[styles.breadcrumbText, styles.breadcrumbActive]}>
+              {subcategory?.name || "Subcategory"}
+            </Text>
+          </View>
+
+          {/* Brand Pills (Sub-subcategories) */}
+          {visibleSubSubcategories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.brandScroll}
+            >
               <TouchableOpacity
-                key={brand.id}
                 style={[
                   styles.brandPill,
-                  selectedBrand === brand.id && styles.brandPillActive,
+                  selectedBrand === null && styles.brandPillActive,
                 ]}
-                onPress={() =>
-                  setSelectedBrand(selectedBrand === brand.id ? null : brand.id)
-                }
+                onPress={() => setSelectedBrand(null)}
               >
                 <Text style={[
                   styles.brandText,
-                  selectedBrand === brand.id && styles.brandTextActive
+                  selectedBrand === null && styles.brandTextActive
                 ]}>
-                  {brand.name}
+                  All
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+              {visibleSubSubcategories.map((brand) => (
+                <TouchableOpacity
+                  key={brand.id}
+                  style={[
+                    styles.brandPill,
+                    selectedBrand === brand.id && styles.brandPillActive,
+                  ]}
+                  onPress={() =>
+                    setSelectedBrand(selectedBrand === brand.id ? null : brand.id)
+                  }
+                >
+                  {brand.hasResults && (
+                    <View style={styles.redDot} />
+                  )}
+                  <Text style={[
+                    styles.brandText,
+                    selectedBrand === brand.id && styles.brandTextActive
+                  ]}>
+                    {brand.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
-        {/* Product Grid */}
-        {filteredProducts.length === 0 ? (
-          <Text style={styles.emptyText}>No products found</Text>
-        ) : (
-          <View style={styles.productGrid}>
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                userLat={userLat}
-                userLon={userLon}
-              />
-            ))}
+          {/* Listing Type Filters */}
+          <View style={styles.filterTabsWrapper}>
+            <View style={styles.filterTabs}>
+              {FILTER_TABS.map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[
+                    styles.filterButton,
+                    selectedFilter === tab && styles.filterButtonActive,
+                    selectedFilter === tab &&
+                      tab === "Sell" && { backgroundColor: BLUE },
+                    selectedFilter === tab &&
+                      tab === "Rent" && { backgroundColor: ORANGE },
+                    selectedFilter === tab &&
+                      tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                  ]}
+                  onPress={() => setSelectedFilter(tab)}
+                >
+                  <Text
+                    style={[
+                      styles.filterText,
+                      selectedFilter === tab && styles.filterTextActive,
+                    ]}
+                  >
+                    {tab}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        )}
 
-        {/* Load More Button - Only shows if no filters are active AND there are more products on the server */}
-        {selectedBrand === null && !searchQuery.trim() && hasMoreProducts && (
-            <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
-        )}
+          {/* Product Grid */}
+          {filteredProducts.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {searchQuery.trim() ? "No products found matching your search" : "No products found"}
+            </Text>
+          ) : (
+            <View style={styles.productGrid}>
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  userLat={userLat}
+                  userLon={userLon}
+                />
+              ))}
+            </View>
+          )}
 
-      </ScrollView>
+          {/* Load More Button */}
+          {selectedBrand === null && selectedFilter === "All" && !searchQuery.trim() && hasMoreProducts && (
+              <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
+          )}
+
+        </ScrollView>
+      )}
 
       {/* Floating Filter Button */}
-      <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
-        <View style={styles.filterIconContainer}>
-          <Image
-            source={require("../../../../assets/icons/floating.png")}
-            style={styles.floatingImageIcon}
-          />
-        </View>
-      </TouchableOpacity>
+      {!isSearchActive && (
+        <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
+          <View style={styles.filterIconContainer}>
+            <Image
+              source={require("../../../../assets/icons/floating.png")}
+              style={styles.floatingImageIcon}
+            />
+          </View>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -589,28 +713,30 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 10,
   },
+  searchBarWrapper: {
+    flex: 1,
+    marginRight: 10,
+  },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    flex: 1,
     height: 44,
     backgroundColor: LIGHT_GRAY,
     borderRadius: 22,
-    marginRight: 10,
     paddingHorizontal: 15,
+    borderWidth: 2,
+    borderColor: "transparent",
   },
   searchBarFocused: {
-    borderWidth: 2,
-    borderColor: PRIMARY_TEAL,
+    borderColor: SEARCH_GREEN,
   },
   searchIcon: {
     marginRight: 8,
   },
-  searchInput: {
+  searchPlaceholder: {
     flex: 1,
     fontSize: 15,
-    color: DARK_GRAY,
-    paddingVertical: 0,
+    color: "#999",
   },
   locationContainer: {
     flexDirection: "row",
@@ -622,6 +748,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: DARK_GRAY,
+  },
+  searchOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "white",
+    zIndex: 1000,
+    paddingTop: 40,
+  },
+  searchOverlayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  searchBarExpanded: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    height: 52,
+    backgroundColor: "white",
+    borderRadius: 26,
+    paddingHorizontal: 15,
+    borderWidth: 2,
+    borderColor: SEARCH_GREEN,
+  },
+  searchInputExpanded: {
+    flex: 1,
+    fontSize: 16,
+    color: DARK_GRAY,
+    paddingVertical: 0,
   },
   breadcrumbContainer: {
     flexDirection: "row",
@@ -647,6 +806,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   brandPill: {
+    position: "relative",
     paddingHorizontal: 20,
     paddingVertical: 8,
     marginRight: 10,
@@ -658,12 +818,59 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_TEAL,
     borderWidth: 0,
   },
+  redDot: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: ACCENT_RED,
+    borderWidth: 3.5,
+    borderColor: "white",
+    zIndex: 10,
+    shadowColor: ACCENT_RED,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 8,
+  },
   brandText: {
     fontSize: 14,
     fontWeight: "600",
     color: DARK_GRAY,
   },
   brandTextActive: {
+    color: "white",
+  },
+  filterTabsWrapper: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  filterTabs: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: 12,
+    padding: 4,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  filterButtonActive: {
+    backgroundColor: DARK_GRAY,
+  },
+  filterText: {
+    fontWeight: "600",
+    fontSize: 14,
+    color: "#666",
+  },
+  filterTextActive: {
     color: "white",
   },
   productGrid: {

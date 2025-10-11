@@ -1,5 +1,5 @@
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -48,7 +48,9 @@ interface Category {
   id: number;
   name: string;
   description: string | null;
-  delivery: boolean; // New field to control delivery at category level
+  delivery: boolean;
+  hasResults?: boolean; // For search mode
+  productCount?: number; // For search mode
 }
 
 interface Product {
@@ -61,7 +63,7 @@ interface Product {
   longitude: number | null;
   location_address: string | null;
   created_at: string;
-  category_id: number; // Link to category
+  category_id: number;
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
@@ -116,18 +118,46 @@ const calculateDistance = (
   return R * c;
 };
 
-const CategoryButton: React.FC<{ category: Category; index: number }> = ({
+const CategoryButton: React.FC<{ 
+  category: Category; 
+  index: number;
+  searchMode: boolean;
+  searchQuery: string;
+}> = ({
   category,
   index,
+  searchMode,
+  searchQuery,
 }) => {
   const router = useRouter();
   const bgColor = getCategoryColor(index);
 
+  const handlePress = () => {
+    if (searchMode) {
+      // Navigate to category with search query
+      router.push({
+        pathname: `/category`,
+        params: {
+          id: category.id,
+          searchQuery: searchQuery,
+          searchMode: 'true',
+        },
+      });
+    } else {
+      // Normal navigation
+      router.push(`/category?id=${category.id}`);
+    }
+  };
+
   return (
     <TouchableOpacity
       style={[styles.categoryButton, { backgroundColor: bgColor }]}
-      onPress={() => router.push(`/category?id=${category.id}`)}
+      onPress={handlePress}
     >
+      {/* Red dot indicator for categories with search results */}
+      {searchMode && category.hasResults && (
+        <View style={styles.redDot} />
+      )}
       <FontAwesome name={getCategoryIcon(category.name)} size={28} color="white" />
       <Text style={styles.categoryText}>{category.name}</Text>
     </TouchableOpacity>
@@ -273,7 +303,7 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
-        disabled={loading} // Disable button while loading
+        disabled={loading}
       >
         {loading ? (
           <ActivityIndicator size="small" color="white" />
@@ -290,15 +320,18 @@ export default function HomeScreen() {
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const searchQuery = params.query as string || '';
+  const searchMode = !!searchQuery;
+
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  // Use a derived state for the currently *displayed* products (based on limit and filter)
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT); // Current number of products to show
-  const [hasMoreProducts, setHasMoreProducts] = useState(true); // Flag if there are more products on the server
+  const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT);
+  const [hasMoreProducts, setHasMoreProducts] = useState(true);
 
   // Fetch user location
   useEffect(() => {
@@ -332,16 +365,11 @@ export default function HomeScreen() {
         (p) => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
       );
     }
-    // Only display products up to the current limit
     setDisplayedProducts(filtered);
   }, [selectedFilter, products]);
 
   // Combined fetch function for initial load and load more
   const fetchProducts = async (isInitialLoad: boolean) => {
-    const from = products.length; // Start index for the next batch
-    const to = from + LOAD_MORE_INCREMENT - 1; // End index for the next batch
-    const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
-
     if (!isInitialLoad) {
       setLoadingMore(true);
     } else {
@@ -349,35 +377,39 @@ export default function HomeScreen() {
     }
 
     try {
-      console.log(
-        `HOME: Fetching products - from: ${from}, limit: ${limit}`
-      );
-      
-      const { data: productsData, error: productsError, count } = await supabase
+      let query = supabase
         .from("products")
         .select(
           "id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, category_id",
-          { count: "exact" } // Request the total count
+          { count: "exact" }
         )
-        .order("created_at", { ascending: false })
-        .range(from, from + limit - 1); // Use range for pagination
-      
-      console.log("HOME: Products result:", {
-        count: productsData?.length,
-        totalCount: count,
-        error: productsError,
-      });
+        .order("created_at", { ascending: false });
+
+      // Apply search filter if in search mode
+      if (searchMode && searchQuery) {
+        query = query.ilike("name", `%${searchQuery}%`);
+      }
+
+      // Only apply pagination when NOT in search mode
+      if (!searchMode) {
+        const from = isInitialLoad ? 0 : products.length;
+        const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
+        query = query.range(from, from + limit - 1);
+      }
+
+      const { data: productsData, error: productsError, count } = await query;
 
       if (productsError) throw productsError;
 
-      // Append new products to the existing list
       const newProducts = isInitialLoad ? productsData || [] : [...products, ...(productsData || [])];
       setProducts(newProducts);
       
-      // Update hasMoreProducts flag
-      setHasMoreProducts(
-        (count || 0) > newProducts.length
-      );
+      // In search mode, we load all products at once
+      if (searchMode) {
+        setHasMoreProducts(false);
+      } else {
+        setHasMoreProducts((count || 0) > newProducts.length);
+      }
     } catch (error: any) {
       console.error("HOME ERROR fetching products:", error);
       Alert.alert("Error", "Failed to load products: " + error.message);
@@ -390,12 +422,46 @@ export default function HomeScreen() {
     }
   };
 
+  const markCategoriesWithResults = async () => {
+    if (!searchMode || !searchQuery) return;
+
+    try {
+      // Get products matching search query
+      const { data: productsData, error } = await supabase
+        .from("products")
+        .select("category_id")
+        .ilike("name", `%${searchQuery}%`);
+
+      if (error) throw error;
+
+      if (productsData) {
+        const categoryIds = [...new Set(productsData.map(p => p.category_id))];
+        
+        // Count products per category
+        const categoryCounts = productsData.reduce((acc, p) => {
+          acc[p.category_id] = (acc[p.category_id] || 0) + 1;
+          return acc;
+        }, {} as Record<number, number>);
+
+        setCategories(prevCats => 
+          prevCats.map(cat => ({
+            ...cat,
+            hasResults: categoryIds.includes(cat.id),
+            productCount: categoryCounts[cat.id] || 0,
+          }))
+        );
+      }
+    } catch (error: any) {
+      console.error("Error marking categories:", error);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
       console.log("=== HOME: Starting fetchData ===");
 
-      // Fetch categories first (no change here)
+      // Fetch categories first
       console.log("HOME: Fetching categories...");
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
@@ -405,14 +471,15 @@ export default function HomeScreen() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Fetch initial products (using the new fetchProducts logic)
+      // Fetch initial products
       await fetchProducts(true);
 
-      console.log(
-        "HOME: Fetch complete - categories:",
-        categoriesData?.length,
-        "initial products fetched."
-      );
+      // Mark categories with results if in search mode
+      if (searchMode && searchQuery) {
+        await markCategoriesWithResults();
+      }
+
+      console.log("HOME: Fetch complete");
     } catch (error: any) {
       console.error("HOME ERROR:", error);
       Alert.alert("Error", "Failed to load data: " + error.message);
@@ -422,14 +489,18 @@ export default function HomeScreen() {
     }
   };
 
-  // Initial data fetch
+  // Initial data fetch - re-fetch when search query changes
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [searchQuery]);
 
   const handleLoadMore = () => {
-    // We fetch the next batch from the server directly
     fetchProducts(false);
+  };
+
+  const handleBackToHome = () => {
+    // Navigate to homepage without search query
+    router.push('/');
   };
 
   if (loading && products.length === 0) {
@@ -441,14 +512,27 @@ export default function HomeScreen() {
     );
   }
 
-  // Filter the currently available products to display only the filtered ones
-  const finalDisplayedProducts = displayedProducts.filter(p => selectedFilter === 'All' || p.listing_type.toLowerCase() === selectedFilter.toLowerCase());
+  const finalDisplayedProducts = displayedProducts.filter(p => 
+    selectedFilter === 'All' || p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
+  );
+
+  // Filter categories to show only those with results in search mode
+  const displayCategories = searchMode 
+    ? categories.filter(cat => cat.hasResults) 
+    : categories;
 
   return (
     <View style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
+          {/* Back arrow - only show in search mode */}
+          {searchMode && (
+            <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity
             style={styles.searchBarWrapper}
             onPress={() => {
@@ -463,7 +547,9 @@ export default function HomeScreen() {
                 color="#999"
                 style={styles.searchIcon}
               />
-              <Text style={styles.searchInputPlaceholder}>Search anything</Text>
+              <Text style={styles.searchInputPlaceholder}>
+                {searchMode ? searchQuery : "Search anything"}
+              </Text>
             </View>
           </TouchableOpacity>
           <View style={styles.locationContainer}>
@@ -474,7 +560,7 @@ export default function HomeScreen() {
 
         {/* Categories */}
         <Text style={styles.sectionTitle}>Categories</Text>
-        {categories.length === 0 ? (
+        {displayCategories.length === 0 ? (
           <Text style={styles.emptyText}>No categories available</Text>
         ) : (
           <ScrollView
@@ -482,8 +568,14 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryScroll}
           >
-            {categories.map((cat, index) => (
-              <CategoryButton key={cat.id} category={cat} index={index} />
+            {displayCategories.map((cat, index) => (
+              <CategoryButton 
+                key={cat.id} 
+                category={cat} 
+                index={index}
+                searchMode={searchMode}
+                searchQuery={searchQuery}
+              />
             ))}
           </ScrollView>
         )}
@@ -521,7 +613,9 @@ export default function HomeScreen() {
 
         {/* Products */}
         {finalDisplayedProducts.length === 0 ? (
-          <Text style={styles.emptyText}>No products available for this filter.</Text>
+          <Text style={styles.emptyText}>
+            {searchMode ? "No products found matching your search" : "No products available for this filter."}
+          </Text>
         ) : (
           <View style={styles.productGrid}>
             {finalDisplayedProducts.map((product) => (
@@ -536,12 +630,11 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Load More Button */}
-        {selectedFilter === "All" && hasMoreProducts && (
+        {/* Load More Button - Only in normal mode */}
+        {!searchMode && selectedFilter === "All" && hasMoreProducts && (
           <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
         )}
-        {/* Show a message if there are no more products and we're on the 'All' tab */}
-        {selectedFilter === "All" && !hasMoreProducts && products.length > 0 && (
+        {!searchMode && selectedFilter === "All" && !hasMoreProducts && products.length > 0 && (
           <Text style={styles.noMoreText}></Text>
         )}
       </ScrollView>
@@ -587,6 +680,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 10,
+  },
+  backButton: {
+    marginRight: 10,
   },
   searchBarWrapper: {
     flex: 1,
@@ -645,12 +741,30 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   categoryButton: {
+    position: "relative",
     width: 90,
     height: 90,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
+  },
+  redDot: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: ACCENT_RED,
+    borderWidth: 2.5,
+    borderColor: "white",
+    zIndex: 10,
+    shadowColor: ACCENT_RED,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
   },
   categoryText: {
     marginTop: 8,
@@ -760,7 +874,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
   },
-  // New styles for LoadMoreButton from the inspiration
   loadMoreContainer: {
     marginHorizontal: 16,
     marginTop: 20,
