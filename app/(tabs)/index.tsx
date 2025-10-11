@@ -540,7 +540,11 @@ export default function HomeScreen() {
             }}
             activeOpacity={0.7}
           >
-            <View style={styles.searchBar}>
+          <View style={[
+  styles.searchBar,
+  searchMode && styles.searchBarActive // ✅ stay green while in search mode
+]}>
+
               <Ionicons
                 name="search"
                 size={20}
@@ -648,6 +652,16 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
   },
+  searchBarActive: {
+  borderColor: PRIMARY_TEAL,
+  borderWidth: 2,
+  shadowColor: PRIMARY_TEAL,
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 4, // ✅ subtle glow effect for Android
+},
+
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
@@ -736,36 +750,42 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
   },
-  categoryScroll: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  categoryButton: {
-    position: "relative",
-    width: 90,
-    height: 90,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
+ categoryScroll: {
+  paddingHorizontal: 16,
+  marginBottom: 20,
+  paddingTop: 12, // ✅ give breathing room for red dots that stick out
+},
+
+ categoryButton: {
+  position: "relative",
+  width: 90,
+  height: 90,
+  borderRadius: 16,
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 12,
+  overflow: "visible", // ✅ allow red dot to go out of bounds
+},
+
   redDot: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: ACCENT_RED,
-    borderWidth: 2.5,
-    borderColor: "white",
-    zIndex: 10,
-    shadowColor: ACCENT_RED,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
-  },
+  position: "absolute",
+  top: -10, // pushed further outside the element
+  right: -10,
+  width: 28, // bigger circle
+  height: 28,
+  borderRadius: 14, // perfectly circular
+  backgroundColor: ACCENT_RED,
+  borderWidth: 3,
+  borderColor: "white",
+  zIndex: 20,
+  shadowColor: ACCENT_RED,
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.5,
+  shadowRadius: 6,
+  elevation: 8,
+  transform: [{ scale: 1.1 }], // slight pop-out effect
+},
+
   categoryText: {
     marginTop: 8,
     fontSize: 11,
