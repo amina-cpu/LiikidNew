@@ -102,17 +102,24 @@ const ProductCard: React.FC<{
     distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
   }
 
+  const getTagColor = () => {
+    switch (product.listing_type) {
+      case "rent":
+        return { bg: "#FFEDD5", text: "#C2410C" };
+      case "exchange":
+        return { bg: "#F3E8FF", text: "#7E22CE" };
+      default:
+        return { bg: "#DBEAFE", text: "#1D4ED8" };
+    }
+  };
+
+  const tagColors = getTagColor();
+
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
     if (product.listing_type === "rent")
-      return `${product.price.toLocaleString()} DA/day`;
+      return `${product.price.toLocaleString()} DA/month`;
     return `${product.price.toLocaleString()} DA`;
-  };
-
-  const getPriceColor = () => {
-    if (product.listing_type === "exchange") return "#9B59B6";
-    if (product.listing_type === "rent") return ORANGE;
-    return BLUE;
   };
 
   return (
@@ -131,31 +138,33 @@ const ProductCard: React.FC<{
             style={styles.cardImage}
           />
           {product.delivery && (
-            <View style={styles.deliveryBadge}>
+            <View style={styles.deliveryBadgeNew}>
               <MaterialCommunityIcons
-                name="truck-delivery"
+                name="truck-delivery-outline"
                 size={16}
-                color={PRIMARY_TEAL}
+                color="#008E74"
               />
             </View>
           )}
           <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
             <Ionicons
               name={liked ? "heart" : "heart-outline"}
-              size={24}
-              color={liked ? ACCENT_RED : "white"}
+              size={22}
+              color={liked ? "#FF5B5B" : "white"}
             />
           </TouchableOpacity>
         </View>
         <View style={styles.cardDetails}>
-          <Text style={[styles.cardPrice, { color: getPriceColor() }]}>
-            {formatPrice()}
-          </Text>
+          <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
+            <Text style={[styles.priceText, { color: tagColors.text }]}>
+              {formatPrice()}
+            </Text>
+          </View>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {product.name}
           </Text>
           <View style={styles.distanceContainer}>
-            <Ionicons name="location-outline" size={14} color={PRIMARY_TEAL} />
+            <Ionicons name="location-outline" size={14} color="#008E74" />
             <Text style={styles.cardDistance}>{distance}</Text>
           </View>
         </View>
@@ -254,12 +263,9 @@ export default function CategoryScreen() {
   const lastScrollY = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Reset filters when navigating away and coming back
   useFocusEffect(
     useCallback(() => {
-      // Reset navigation flag when coming back to this screen
       hasNavigatedRef.current = false;
-      
       return () => {
         if (!searchMode) {
           setSelectedFilter("All");
@@ -298,11 +304,7 @@ export default function CategoryScreen() {
   }, [categoryId]);
 
   useEffect(() => {
-    if (currentSearchQuery.trim()) {
-      applyFilters();
-    } else {
-      applyFilters();
-    }
+    applyFilters();
   }, [currentSearchQuery]);
 
   const applyFilters = () => {
@@ -326,23 +328,15 @@ export default function CategoryScreen() {
 
     setFilteredProducts(filtered);
 
-    // Update subcategories with results whenever filters change
     if (currentSearchQuery.trim()) {
       const subcategoryIds = [...new Set(filtered.map(p => p.subcategory_id).filter(Boolean))];
-      setSubcategories(prevSubs => {
-        const updatedSubs = prevSubs.map(sub => ({
+      setSubcategories(prevSubs => 
+        prevSubs.map(sub => ({
           ...sub,
           hasResults: subcategoryIds.includes(sub.id)
-        }));
-
-        // Auto-navigate if only one subcategory has results
-        const subsWithResults = updatedSubs.filter(sub => sub.hasResults);
-        
-
-        return updatedSubs;
-      });
+        }))
+      );
     } else {
-      // Reset hasResults when search is cleared
       setSubcategories(prevSubs => 
         prevSubs.map(sub => ({
           ...sub,
@@ -355,6 +349,22 @@ export default function CategoryScreen() {
   useEffect(() => {
     applyFilters();
   }, [selectedFilter, selectedSubcategory, products]);
+
+  // Auto-navigate when only one subcategory has results
+  useEffect(() => {
+    const subsWithResults = subcategories.filter(sub => sub.hasResults);
+    
+    if (
+      subsWithResults.length === 1 &&
+      currentSearchQuery.trim() &&
+      !hasNavigatedRef.current
+    ) {
+      hasNavigatedRef.current = true;
+      router.replace(
+        `/category/subcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(currentSearchQuery)}`
+      );
+    }
+  }, [subcategories, currentSearchQuery]);
 
   const fetchProducts = async (isInitialLoad: boolean) => {
     if (!categoryId) return;
@@ -414,18 +424,12 @@ export default function CategoryScreen() {
   const markSubcategoriesWithResults = async (products: Product[]) => {
     const subcategoryIds = [...new Set(products.map(p => p.subcategory_id).filter(Boolean))];
     
-    setSubcategories(prevSubs => {
-      const updatedSubs = prevSubs.map(sub => ({
+    setSubcategories(prevSubs => 
+      prevSubs.map(sub => ({
         ...sub,
         hasResults: subcategoryIds.includes(sub.id)
-      }));
-
-      // Auto-navigate if only one subcategory has results
-      const subsWithResults = updatedSubs.filter(sub => sub.hasResults);
-      
-
-      return updatedSubs;
-    });
+      }))
+    );
   };
 
   const fetchData = async (isInitialLoad: boolean) => {
@@ -517,22 +521,14 @@ export default function CategoryScreen() {
     Keyboard.dismiss();
   };
 
-useEffect(() => {
-  const subsWithResults = subcategories.filter(sub => sub.hasResults);
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
 
-  if (
-    subsWithResults.length === 1 &&
-    currentSearchQuery.trim() &&
-    !hasNavigatedRef.current
-  ) {
-    hasNavigatedRef.current = true; // prevent repeated redirects
-    router.replace(
-      `/category/subcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(currentSearchQuery)}`
-    );
-  }
-}, [subcategories, currentSearchQuery]);
-
-  // Filter subcategories to show only those with results when searching
   const visibleSubcategories = currentSearchQuery.trim() 
     ? subcategories.filter(sub => sub.hasResults)
     : subcategories;
@@ -548,7 +544,6 @@ useEffect(() => {
 
   return (
     <View style={styles.safeArea}>
-      {/* Fullscreen Search Overlay */}
       {isSearchActive && (
         <View style={styles.searchOverlay}>
           <View style={styles.searchOverlayHeader}>
@@ -585,7 +580,6 @@ useEffect(() => {
         </View>
       )}
 
-      {/* Normal Header */}
       {!isSearchActive && (
         <Animated.View
           style={[
@@ -600,7 +594,7 @@ useEffect(() => {
           ]}
         >
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
             </TouchableOpacity>
             <TouchableOpacity
@@ -633,20 +627,17 @@ useEffect(() => {
         </Animated.View>
       )}
 
-      {/* Main Content */}
       {!isSearchActive && (
         <Animated.ScrollView 
           contentContainerStyle={styles.contentContainer}
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          {/* Category Title */}
           <View style={styles.categoryTitleContainer}>
             <Ionicons name="phone-portrait-outline" size={24} color={PRIMARY_TEAL} />
             <Text style={styles.categoryTitle}>{category?.name || "Category"}</Text>
           </View>
 
-          {/* Subcategories */}
           {visibleSubcategories.length > 0 && (
             <ScrollView
               horizontal
@@ -679,7 +670,6 @@ useEffect(() => {
             </ScrollView>
           )}
 
-          {/* Filters */}
           <View style={styles.filterTabsWrapper}>
             <View style={styles.filterTabs}>
               {FILTER_TABS.map((tab) => (
@@ -710,7 +700,6 @@ useEffect(() => {
             </View>
           </View>
 
-          {/* Products */}
           {filteredProducts.length === 0 ? (
             <Text style={styles.emptyText}>
               {currentSearchQuery.trim() ? "No products found matching your search" : "No products available"}
@@ -728,7 +717,6 @@ useEffect(() => {
             </View>
           )}
 
-          {/* Load More Button */}
           {selectedFilter === "All" && 
            !selectedSubcategory && 
            !currentSearchQuery.trim() && 
@@ -738,7 +726,6 @@ useEffect(() => {
         </Animated.ScrollView>
       )}
 
-      {/* Floating Filter Button */}
       {!isSearchActive && (
         <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
           <View style={styles.filterIconContainer}>
@@ -874,6 +861,7 @@ const styles = StyleSheet.create({
   subcategoryScroll: {
     paddingHorizontal: 16,
     marginBottom: 20,
+    paddingTop: 12,
   },
   subcategoryPill: {
     position: "relative",
@@ -886,6 +874,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: "#D0D0D0",
+    overflow: "visible",
   },
   subcategoryPillActive: {
     backgroundColor: "white",
@@ -894,20 +883,21 @@ const styles = StyleSheet.create({
   },
   redDot: {
     position: "absolute",
-    top: -8,
-    right: -8,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: ACCENT_RED,
     borderWidth: 3,
     borderColor: "white",
-    zIndex: 10,
+    zIndex: 20,
     shadowColor: ACCENT_RED,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.5,
-    shadowRadius: 5,
-    elevation: 6,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }],
   },
   subcategoryIcon: {
     marginRight: 6,
@@ -942,15 +932,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "transparent",
   },
-  filterButtonActive: {
-    backgroundColor: DARK_GRAY,
-  },
-  filterText: {
-    fontWeight: "600",
-    fontSize: 14,
-    color: "#666",
-  },
-  filterTextActive: {
+ filterTextActive: {
     color: "white",
   },
   productGrid: {
@@ -986,14 +968,20 @@ const styles = StyleSheet.create({
     height: "100%",
     resizeMode: "cover",
   },
-  deliveryBadge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "white",
-    padding: 6,
-    borderRadius: 8,
-  },
+
+deliveryBadge: {
+  position: "absolute",
+  bottom: 10,
+  left: 10,
+  backgroundColor: "white",
+  padding: 6,
+  borderRadius: 8,
+  shadowColor: "#000",
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
   heartIcon: {
     position: "absolute",
     top: 10,

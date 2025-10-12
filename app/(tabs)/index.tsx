@@ -174,34 +174,37 @@ const ProductCard: React.FC<{
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
-  // Check if product's category accepts delivery
+  // Category and delivery check
   const category = categories.find((c) => c.id === product.category_id);
   const categoryAcceptsDelivery = category?.delivery || false;
 
   // Calculate distance
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
-    const dist = calculateDistance(
-      userLat,
-      userLon,
-      product.latitude,
-      product.longitude
-    );
+    const dist = calculateDistance(userLat, userLon, product.latitude, product.longitude);
     distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
   }
 
-  // Format price
+  // Define color scheme for listing type
+  const getTagColor = () => {
+    switch (product.listing_type) {
+      case "rent":
+        return { bg: "#FFEDD5", text: "#C2410C" }; // orange tones
+      case "exchange":
+        return { bg: "#F3E8FF", text: "#7E22CE" }; // purple tones
+      default:
+        return { bg: "#DBEAFE", text: "#1D4ED8" }; // blue tones for sell
+    }
+  };
+
+  const tagColors = getTagColor();
+
+  // Format price text
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
     if (product.listing_type === "rent")
       return `${product.price.toLocaleString()} DA/month`;
     return `${product.price.toLocaleString()} DA`;
-  };
-
-  const getPriceColor = () => {
-    if (product.listing_type === "exchange") return "#9B59B6";
-    if (product.listing_type === "rent") return ORANGE;
-    return BLUE;
   };
 
   return (
@@ -219,33 +222,54 @@ const ProductCard: React.FC<{
             }}
             style={styles.cardImage}
           />
-          {/* Show delivery badge only if category accepts delivery */}
+
+          {/* Delivery badge now bottom-left */}
           {categoryAcceptsDelivery && (
-            <View style={styles.deliveryBadge}>
+            <View style={styles.deliveryBadgeNew}>
               <MaterialCommunityIcons
-                name="truck-delivery"
+                name="truck-delivery-outline"
                 size={16}
-                color={PRIMARY_TEAL}
+                color="#008E74"
               />
             </View>
           )}
+
+          {/* Heart top-right */}
           <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
             <Ionicons
               name={liked ? "heart" : "heart-outline"}
-              size={24}
-              color={liked ? ACCENT_RED : "white"}
+              size={22}
+              color={liked ? "#FF5B5B" : "white"}
             />
           </TouchableOpacity>
         </View>
+
         <View style={styles.cardDetails}>
-          <Text style={[styles.cardPrice, { color: getPriceColor() }]}>
-            {formatPrice()}
-          </Text>
+          {/* Price pill */}
+          <View
+            style={[
+              styles.priceTag,
+              { backgroundColor: tagColors.bg },
+            ]}
+          >
+            <Text
+              style={[
+                styles.priceText,
+                { color: tagColors.text },
+              ]}
+            >
+              {formatPrice()}
+            </Text>
+          </View>
+
+          {/* Title */}
           <Text style={styles.cardTitle} numberOfLines={2}>
             {product.name}
           </Text>
+
+          {/* Distance */}
           <View style={styles.distanceContainer}>
-            <Ionicons name="location-outline" size={14} color={PRIMARY_TEAL} />
+            <Ionicons name="location-outline" size={14} color="#008E74" />
             <Text style={styles.cardDistance}>{distance}</Text>
           </View>
         </View>
@@ -652,6 +676,73 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
   },
+  cardContainer: {
+  width: CARD_WIDTH,
+  marginBottom: 16,
+  borderRadius: 16,
+  backgroundColor: "white",
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.08,
+  shadowRadius: 8,
+  elevation: 3,
+},
+
+imageWrapper: {
+  width: "100%",
+  aspectRatio: 1,
+  backgroundColor: "#F7F7F7",
+  borderTopLeftRadius: 16,
+  borderTopRightRadius: 16,
+  overflow: "hidden",
+},
+
+deliveryBadgeNew: {
+  position: "absolute",
+  bottom: 10,
+  left: 10,
+  backgroundColor: "white",
+  padding: 6,
+  borderRadius: 8,
+  shadowColor: "#000",
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 2,
+},
+
+priceTag: {
+  alignSelf: "flex-start",
+  borderRadius: 6,
+  paddingVertical: 4,
+  paddingHorizontal: 8,
+  marginBottom: 6,
+},
+
+priceText: {
+  fontSize: 13,
+  fontWeight: "700",
+},
+
+cardTitle: {
+  fontSize: 13,
+  fontWeight: "600",
+  color: "#333",
+  minHeight: 34,
+  marginBottom: 4,
+},
+
+distanceContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginTop: 2,
+},
+
+cardDistance: {
+  marginLeft: 4,
+  fontSize: 12,
+  color: "#666",
+},
+
   searchBarActive: {
   borderColor: PRIMARY_TEAL,
   borderWidth: 2,
@@ -685,6 +776,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     fontWeight: '600'
   },
+  
   contentContainer: {
     paddingBottom: TAB_BAR_HEIGHT + 20,
   },
@@ -829,28 +921,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
   },
-  cardContainer: {
-    width: CARD_WIDTH,
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: "white",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
+ 
   cardTouchable: {
     borderRadius: 16,
     overflow: "hidden",
   },
-  imageWrapper: {
-    width: "100%",
-    aspectRatio: 1,
-    backgroundColor: "#F7F7F7",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
+ 
   cardImage: {
     width: "100%",
     height: "100%",
@@ -878,22 +954,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 4,
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: DARK_GRAY,
-    minHeight: 36,
-  },
-  distanceContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  cardDistance: {
-    marginLeft: 4,
-    fontSize: 12,
-    color: "#666",
-  },
+ 
   loadMoreContainer: {
     marginHorizontal: 16,
     marginTop: 20,
