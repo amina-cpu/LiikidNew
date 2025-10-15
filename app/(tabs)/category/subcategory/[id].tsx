@@ -1,6 +1,6 @@
 import * as Location from "expo-location";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -29,7 +29,6 @@ const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
 
-// Pagination constants
 const INITIAL_PRODUCT_LIMIT = 8;
 const LOAD_MORE_INCREMENT = 6;
 
@@ -69,7 +68,6 @@ interface Subcategory {
   name: string;
 }
 
-// Helper for distance
 const calculateDistance = (
   lat1: number,
   lon1: number,
@@ -108,17 +106,24 @@ const ProductCard: React.FC<{
     distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
   }
 
+  const getTagColor = () => {
+    switch (product.listing_type) {
+      case "rent":
+        return { bg: "#FFEDD5", text: "#C2410C" };
+      case "exchange":
+        return { bg: "#F3E8FF", text: "#7E22CE" };
+      default:
+        return { bg: "#DBEAFE", text: "#1D4ED8" };
+    }
+  };
+
+  const tagColors = getTagColor();
+
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
     if (product.listing_type === "rent")
       return `${product.price.toLocaleString()} DA/month`;
     return `${product.price.toLocaleString()} DA`;
-  };
-
-  const getPriceColor = () => {
-    if (product.listing_type === "exchange") return "#9B59B6";
-    if (product.listing_type === "rent") return ORANGE;
-    return BLUE;
   };
 
   return (
@@ -137,31 +142,33 @@ const ProductCard: React.FC<{
             style={styles.cardImage}
           />
           {product.delivery && (
-            <View style={styles.deliveryBadge}>
+            <View style={styles.deliveryBadgeNew}>
               <MaterialCommunityIcons
-                name="truck-delivery"
+                name="truck-delivery-outline"
                 size={16}
-                color={PRIMARY_TEAL}
+                color="#008E74"
               />
             </View>
           )}
           <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
             <Ionicons
               name={liked ? "heart" : "heart-outline"}
-              size={24}
-              color={liked ? ACCENT_RED : "white"}
+              size={22}
+              color={liked ? "#FF5B5B" : "white"}
             />
           </TouchableOpacity>
         </View>
         <View style={styles.cardDetails}>
-          <Text style={[styles.cardPrice, { color: getPriceColor() }]}>
-            {formatPrice()}
-          </Text>
+          <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
+            <Text style={[styles.priceText, { color: tagColors.text }]}>
+              {formatPrice()}
+            </Text>
+          </View>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {product.name}
           </Text>
           <View style={styles.distanceContainer}>
-            <Ionicons name="location-outline" size={14} color={PRIMARY_TEAL} />
+            <Ionicons name="location-outline" size={14} color="#008E74" />
             <Text style={styles.cardDistance}>{distance}</Text>
           </View>
         </View>
@@ -170,7 +177,6 @@ const ProductCard: React.FC<{
   );
 };
 
-// Load More Button with Hover Animation and Loading Indicator
 const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
   onPress,
   loading,
@@ -237,8 +243,8 @@ export default function SubcategoryScreen() {
   const subcategoryId = params.id ? Number(params.id) : null;
   const searchMode = params.searchMode === 'true';
   const searchQueryParam = params.searchQuery as string || '';
+  
   const [selectedFilter, setSelectedFilter] = useState<string>("All");
-
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -256,6 +262,32 @@ export default function SubcategoryScreen() {
 
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategory, setSubcategory] = useState<Subcategory | null>(null);
+
+  // Clear search state when screen loses focus
+  useFocusEffect(
+    useCallback(() => {
+      hasNavigatedRef.current = false;
+      
+      // Only set search query if coming from search mode
+      if (searchMode && searchQueryParam) {
+        setSearchQuery(searchQueryParam);
+        setIsSearchActive(false); // Make sure search overlay isn't shown
+      } else {
+        // Clear search when not in search mode
+        setSearchQuery("");
+      }
+      
+      return () => {
+        // Only clear if not in search mode
+        if (!searchMode) {
+          setSelectedFilter("All");
+          setSelectedBrand(null);
+          setSearchQuery("");
+          setIsSearchActive(false);
+        }
+      };
+    }, [searchMode, searchQueryParam])
+  );
 
   useEffect(() => {
     (async () => {
@@ -281,35 +313,41 @@ export default function SubcategoryScreen() {
       fetchData(true);
     }
   }, [subcategoryId]);
-useEffect(() => {
-  if (subSubcategories.length > 0 && (searchQuery.trim() || searchMode)) {
-    const queryToUse = searchQuery.trim() || searchQueryParam;
-    const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
 
-    if (subsWithResults.length === 1 && !hasNavigatedRef.current && queryToUse) {
-      hasNavigatedRef.current = true;
-      router.push(`/category/subcategory/subsubcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(queryToUse)}`);
+  // Auto-navigate when only one sub-subcategory has results - DISABLED to prevent conflicts
+  // Users can manually click on the pill with the red dot
+  /*
+  useEffect(() => {
+    if (subSubcategories.length > 0 && searchQuery.trim() && products.length > 0) {
+      const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
+
+      if (subsWithResults.length === 1 && !hasNavigatedRef.current) {
+        hasNavigatedRef.current = true;
+        // Add a small delay to ensure state is settled
+        setTimeout(() => {
+          router.push(
+            `/category/subcategory/subsubcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(searchQuery)}`
+          );
+        }, 300);
+      }
     }
-  }
-}, [subSubcategories, searchQuery, searchMode]);
+  }, [subSubcategories, searchQuery, products]);
+  */
 
   // Filter products whenever products or filter state changes
   useEffect(() => {
     let filtered = products;
 
-    // Filter by brand
     if (selectedBrand) {
       filtered = filtered.filter(p => p.sub_subcategory_id === selectedBrand);
     }
 
-    // Filter by listing type
     if (selectedFilter !== "All") {
       filtered = filtered.filter(
         p => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
       );
     }
 
-    // Filter by search query
     if (searchQuery.trim()) {
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -319,32 +357,16 @@ useEffect(() => {
     setFilteredProducts(filtered);
 
     // Update sub-subcategories with results when searching
-    if (searchQuery.trim() || (searchMode && searchQueryParam)) {
-      const queryToUse = searchQuery.trim() || searchQueryParam;
+    if (searchQuery.trim()) {
       const subSubcategoryIds = [...new Set(filtered.map(p => p.sub_subcategory_id).filter(Boolean))];
       
-      setSubSubcategories(prevSubs => {
-        const updatedSubs = prevSubs.map(sub => ({
+      setSubSubcategories(prevSubs => 
+        prevSubs.map(sub => ({
           ...sub,
           hasResults: subSubcategoryIds.includes(sub.id)
-        }));
-
-        // Auto-navigate if only one sub-subcategory has results and we haven't navigated yet
-        const subsWithResults = updatedSubs.filter(sub => sub.hasResults);
-       // inside the filter effect, REMOVE the router.push call completely
-setSubSubcategories(prevSubs => {
-  const updatedSubs = prevSubs.map(sub => ({
-    ...sub,
-    hasResults: subSubcategoryIds.includes(sub.id)
-  }));
-  return updatedSubs;
-});
-
-
-        return updatedSubs;
-      });
+        }))
+      );
     } else {
-      // Reset hasResults when search is cleared
       setSubSubcategories(prevSubs => 
         prevSubs.map(sub => ({
           ...sub,
@@ -362,33 +384,33 @@ setSubSubcategories(prevSubs => {
     const to = from + limit - 1;
 
     if (!isInitialLoad) {
-        setLoadingMore(true);
+      setLoadingMore(true);
     }
 
     try {
-        const { data: productData, error: productError, count } = await supabase
-          .from("products")
-          .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery", { count: "exact" })
-          .eq("subcategory_id", subcategoryId)
-          .order("created_at", { ascending: false })
-          .range(from, to);
+      const { data: productData, error: productError, count } = await supabase
+        .from("products")
+        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery", { count: "exact" })
+        .eq("subcategory_id", subcategoryId)
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
-        if (productError) throw productError;
+      if (productError) throw productError;
 
-        const newProducts = productData || [];
+      const newProducts = productData || [];
 
-        setProducts(prevProducts =>
-            isInitialLoad ? newProducts : [...prevProducts, ...newProducts]
-        );
+      setProducts(prevProducts =>
+        isInitialLoad ? newProducts : [...prevProducts, ...newProducts]
+      );
 
-        setHasMoreProducts((count || 0) > (isInitialLoad ? newProducts.length : products.length + newProducts.length));
+      setHasMoreProducts((count || 0) > (isInitialLoad ? newProducts.length : products.length + newProducts.length));
 
     } catch (e: any) {
-        Alert.alert("Error", e.message);
+      Alert.alert("Error", e.message);
     } finally {
-        if (!isInitialLoad) {
-          setLoadingMore(false);
-        }
+      if (!isInitialLoad) {
+        setLoadingMore(false);
+      }
     }
   };
 
@@ -424,9 +446,9 @@ setSubSubcategories(prevSubs => {
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
 
-      // Check if there's only one sub-subcategory
-      if (brands && brands.length === 1) {
-        // Navigate to the only sub-subcategory
+      // ONLY auto-redirect if there's exactly one sub-subcategory AND we're NOT in search mode
+      // This prevents conflicts with search navigation
+      if (brands && brands.length === 1 && !searchMode && !searchQueryParam) {
         router.replace(`/category/subcategory/subsubcategory/${brands[0].id}`);
         return;
       }
@@ -466,10 +488,26 @@ setSubSubcategories(prevSubs => {
     setIsSearchActive(false);
     setSearchQuery("");
     Keyboard.dismiss();
+    hasNavigatedRef.current = false; // Reset navigation flag
+    
+    // Reset the URL to remove searchMode params
+    if (subcategoryId) {
+      router.replace(`/category/subcategory/${subcategoryId}`);
+    }
+  };
+
+  const handleBackPress = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (category?.id) {
+      router.replace(`/category?id=${category.id}`);
+    } else {
+      router.replace('/');
+    }
   };
 
   // Filter visible sub-subcategories when searching
-  const visibleSubSubcategories = (searchQuery.trim() || (searchMode && searchQueryParam))
+  const visibleSubSubcategories = searchQuery.trim()
     ? subSubcategories.filter(sub => sub.hasResults)
     : subSubcategories;
 
@@ -484,7 +522,6 @@ setSubSubcategories(prevSubs => {
 
   return (
     <View style={styles.safeArea}>
-      {/* Fullscreen Search Overlay */}
       {isSearchActive && (
         <View style={styles.searchOverlay}>
           <View style={styles.searchOverlayHeader}>
@@ -521,12 +558,10 @@ setSubSubcategories(prevSubs => {
         </View>
       )}
 
-      {/* Normal Content */}
       {!isSearchActive && (
         <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-          {/* Header with Search */}
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
             </TouchableOpacity>
             <TouchableOpacity
@@ -536,18 +571,16 @@ setSubSubcategories(prevSubs => {
             >
               <View style={[
                 styles.searchBar,
-                (searchQuery.trim() || (searchMode && searchQueryParam)) && styles.searchBarFocused
+                searchQuery.trim() && styles.searchBarFocused
               ]}>
                 <Ionicons
                   name="search"
                   size={20}
-                  color={(searchQuery.trim() || (searchMode && searchQueryParam)) ? SEARCH_GREEN : "#999"}
+                  color={searchQuery.trim() ? SEARCH_GREEN : "#999"}
                   style={styles.searchIcon}
                 />
                 <Text style={styles.searchPlaceholder} numberOfLines={1}>
-                  {(searchQuery.trim() || (searchMode && searchQueryParam))
-                    ? (searchQuery.trim() || searchQueryParam)
-                    : `Search in ${subcategory?.name}`}
+                  {searchQuery.trim() || `Search in ${subcategory?.name}`}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -557,9 +590,8 @@ setSubSubcategories(prevSubs => {
             </View>
           </View>
 
-          {/* Breadcrumb */}
           <View style={styles.breadcrumbContainer}>
-            <TouchableOpacity onPress={() => router.push(`/category/${category?.id}`)}>
+            <TouchableOpacity onPress={() => router.push(`/category?id=${category?.id}`)}>
               <Text style={styles.breadcrumbText}>
                 {category?.name || "Category"}
               </Text>
@@ -570,7 +602,6 @@ setSubSubcategories(prevSubs => {
             </Text>
           </View>
 
-          {/* Brand Pills (Sub-subcategories) */}
           {visibleSubSubcategories.length > 0 && (
             <ScrollView
               horizontal
@@ -598,9 +629,15 @@ setSubSubcategories(prevSubs => {
                     styles.brandPill,
                     selectedBrand === brand.id && styles.brandPillActive,
                   ]}
-                  onPress={() =>
-                    setSelectedBrand(selectedBrand === brand.id ? null : brand.id)
-                  }
+                  onPress={() => {
+                    if (searchQuery.trim()) {
+                      router.push(
+                        `/category/subcategory/subsubcategory/${brand.id}?searchMode=true&searchQuery=${encodeURIComponent(searchQuery)}`
+                      );
+                    } else {
+                      router.push(`/category/subcategory/subsubcategory/${brand.id}`);
+                    }
+                  }}
                 >
                   {brand.hasResults && (
                     <View style={styles.redDot} />
@@ -616,7 +653,6 @@ setSubSubcategories(prevSubs => {
             </ScrollView>
           )}
 
-          {/* Listing Type Filters */}
           <View style={styles.filterTabsWrapper}>
             <View style={styles.filterTabs}>
               {FILTER_TABS.map((tab) => (
@@ -647,7 +683,6 @@ setSubSubcategories(prevSubs => {
             </View>
           </View>
 
-          {/* Product Grid */}
           {filteredProducts.length === 0 ? (
             <Text style={styles.emptyText}>
               {searchQuery.trim() ? "No products found matching your search" : "No products found"}
@@ -665,15 +700,13 @@ setSubSubcategories(prevSubs => {
             </View>
           )}
 
-          {/* Load More Button */}
           {selectedBrand === null && selectedFilter === "All" && !searchQuery.trim() && hasMoreProducts && (
-              <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
+            <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
           )}
 
         </ScrollView>
       )}
 
-      {/* Floating Filter Button */}
       {!isSearchActive && (
         <TouchableOpacity style={styles.floatingFilterButton} onPress={openFilters}>
           <View style={styles.filterIconContainer}>
@@ -720,9 +753,9 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
-    height: 44,
+    height: 48,
     backgroundColor: LIGHT_GRAY,
-    borderRadius: 22,
+    borderRadius: 24,
     paddingHorizontal: 15,
     borderWidth: 2,
     borderColor: "transparent",
@@ -804,6 +837,7 @@ const styles = StyleSheet.create({
   brandScroll: {
     paddingHorizontal: 16,
     marginBottom: 16,
+    paddingTop: 12,
   },
   brandPill: {
     position: "relative",
@@ -813,6 +847,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: LIGHT_GRAY,
     borderWidth: 0,
+    overflow: "visible",
   },
   brandPillActive: {
     backgroundColor: PRIMARY_TEAL,
@@ -822,18 +857,19 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -10,
     right: -10,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: ACCENT_RED,
-    borderWidth: 3.5,
+    borderWidth: 3,
     borderColor: "white",
-    zIndex: 10,
+    zIndex: 20,
     shadowColor: ACCENT_RED,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
     shadowRadius: 6,
     elevation: 8,
+    transform: [{ scale: 1.1 }],
   },
   brandText: {
     fontSize: 14,
@@ -898,19 +934,26 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 1,
     backgroundColor: "#F7F7F7",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: "hidden",
   },
   cardImage: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
   },
-  deliveryBadge: {
+  deliveryBadgeNew: {
     position: "absolute",
-    top: 10,
+    bottom: 10,
     left: 10,
     backgroundColor: "white",
     padding: 6,
     borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   heartIcon: {
     position: "absolute",
@@ -921,21 +964,28 @@ const styles = StyleSheet.create({
   cardDetails: {
     padding: 12,
   },
-  cardPrice: {
-    fontSize: 16,
+  priceTag: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+  },
+  priceText: {
+    fontSize: 13,
     fontWeight: "700",
-    marginBottom: 4,
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: DARK_GRAY,
-    minHeight: 36,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+    minHeight: 34,
+    marginBottom: 4,
   },
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: 2,
   },
   cardDistance: {
     marginLeft: 4,
@@ -994,23 +1044,5 @@ const styles = StyleSheet.create({
     height: 28,
     resizeMode: "contain",
     tintColor: "white",
-  },
-  filterBadge: {
-    position: "absolute",
-    top: -8,
-    right: -8,
-    backgroundColor: ACCENT_RED,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "white",
-  },
-  filterBadgeText: {
-    color: "white",
-    fontSize: 11,
-    fontWeight: "700",
   },
 });

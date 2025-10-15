@@ -240,7 +240,17 @@ export default function CategoryScreen() {
   const searchMode = params.searchMode === 'true';
   const searchQuery = params.searchQuery as string || '';
 
-  const [selectedFilter, setSelectedFilter] = useState("All");
+  // Filter params from filters page
+  const filtersApplied = params.filtersApplied === "true";
+  const listingTypeParam = (params.listingType as string) || null;
+  const sortByParam = (params.sortBy as string) || "Best Match";
+  const locationParam = (params.location as string) || "";
+  const deliveryParam = (params.delivery as string) || "";
+  const conditionParam = (params.condition as string) || "";
+  const minPriceParam = params.minPrice ? Number(params.minPrice) : null;
+  const maxPriceParam = params.maxPrice ? Number(params.maxPrice) : null;
+
+  const [selectedFilter, setSelectedFilter] = useState(listingTypeParam || "All");
   const [selectedSubcategory, setSelectedSubcategory] = useState<number | null>(null);
   const [location, setLocation] = useState<string>("Loading...");
   const [userLat, setUserLat] = useState<number | null>(null);
@@ -252,7 +262,7 @@ export default function CategoryScreen() {
 
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -299,35 +309,124 @@ export default function CategoryScreen() {
 
   useEffect(() => {
     if (categoryId) {
-      fetchData(true);
+      fetchData();
     }
   }, [categoryId]);
 
+  // Apply listingType from params when filters are applied
   useEffect(() => {
-    applyFilters();
-  }, [currentSearchQuery]);
+    if (listingTypeParam && filtersApplied) {
+      setSelectedFilter(listingTypeParam);
+    }
+  }, [listingTypeParam, filtersApplied]);
 
-  const applyFilters = () => {
-    let filtered: Product[] = products;
+  // Apply all filters whenever any filter changes
+  useEffect(() => {
+    applyAllFilters();
+  }, [
+    allProducts,
+    selectedFilter,
+    selectedSubcategory,
+    currentSearchQuery,
+    filtersApplied,
+    sortByParam,
+    locationParam,
+    deliveryParam,
+    minPriceParam,
+    maxPriceParam,
+    userLat,
+    userLon
+  ]);
 
+  const applyAllFilters = () => {
+    let filtered = [...allProducts];
+
+    // 1. Apply subcategory filter (from clicking subcategory pills)
     if (selectedSubcategory) {
       filtered = filtered.filter((p) => p.subcategory_id === selectedSubcategory);
     }
 
+    // 2. Apply listing type filter (All/Sell/Rent/Exchange tabs)
     if (selectedFilter !== "All") {
       filtered = filtered.filter(
         (p) => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
       );
     }
 
+    // 3. Apply search query filter
     if (currentSearchQuery.trim()) {
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(currentSearchQuery.toLowerCase())
       );
     }
 
+    // 4. Apply filters from the filters page (if filtersApplied is true)
+    if (filtersApplied) {
+      // Location filter - check if product is near the selected city
+      if (locationParam && locationParam !== "All Locations" && userLat && userLon) {
+        // Define city coordinates (you can expand this)
+        const cityCoordinates: { [key: string]: { lat: number; lon: number } } = {
+          'Blida': { lat: 36.4706, lon: 2.8277 },
+          'Algiers': { lat: 36.7538, lon: 3.0588 },
+          'Oran': { lat: 35.6969, lon: -0.6331 },
+          'Constantine': { lat: 36.3650, lon: 6.6147 },
+          'Setif': { lat: 36.1905, lon: 5.4106 },
+          'Annaba': { lat: 36.9000, lon: 7.7667 }
+        };
+
+        const cityCoords = cityCoordinates[locationParam];
+        if (cityCoords) {
+          // Filter products within 50km of the city
+          filtered = filtered.filter(p => {
+            if (p.latitude && p.longitude) {
+              const distance = calculateDistance(cityCoords.lat, cityCoords.lon, p.latitude, p.longitude);
+              return distance <= 50; // Within 50km radius
+            }
+            return false;
+          });
+        }
+      }
+
+      // Delivery filter
+      if (deliveryParam && deliveryParam !== "All Methods") {
+        if (deliveryParam.toLowerCase() === "pickup") {
+          filtered = filtered.filter(p => p.delivery === false);
+        } else if (deliveryParam.toLowerCase() === "delivery" || deliveryParam.toLowerCase() === "shipping") {
+          filtered = filtered.filter(p => p.delivery === true);
+        }
+      }
+
+      // Price range filters
+      if (minPriceParam !== null) {
+        filtered = filtered.filter(p => p.price >= minPriceParam);
+      }
+      if (maxPriceParam !== null) {
+        filtered = filtered.filter(p => p.price <= maxPriceParam);
+      }
+
+      // Sorting
+      if (sortByParam === "Lowest Price") {
+        filtered.sort((a, b) => a.price - b.price);
+      } else if (sortByParam === "Highest Price") {
+        filtered.sort((a, b) => b.price - a.price);
+      } else if (sortByParam === "Most Recent") {
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      } else if (sortByParam === "Nearest" && userLat && userLon) {
+        filtered.sort((a, b) => {
+          const distA = (a.latitude && a.longitude) 
+            ? calculateDistance(userLat, userLon, a.latitude, a.longitude)
+            : Infinity;
+          const distB = (b.latitude && b.longitude)
+            ? calculateDistance(userLat, userLon, b.latitude, b.longitude)
+            : Infinity;
+          return distA - distB;
+        });
+      }
+    }
+
     setFilteredProducts(filtered);
 
+    // Update subcategories with hasResults for search
     if (currentSearchQuery.trim()) {
       const subcategoryIds = [...new Set(filtered.map(p => p.subcategory_id).filter(Boolean))];
       setSubcategories(prevSubs => 
@@ -346,10 +445,6 @@ export default function CategoryScreen() {
     }
   };
 
-  useEffect(() => {
-    applyFilters();
-  }, [selectedFilter, selectedSubcategory, products]);
-
   // Auto-navigate when only one subcategory has results
   useEffect(() => {
     const subsWithResults = subcategories.filter(sub => sub.hasResults);
@@ -366,73 +461,7 @@ export default function CategoryScreen() {
     }
   }, [subcategories, currentSearchQuery]);
 
-  const fetchProducts = async (isInitialLoad: boolean) => {
-    if (!categoryId) return;
-
-    if (!isInitialLoad) {
-      setLoadingMore(true);
-    }
-
-    try {
-      let query = supabase
-        .from("products")
-        .select(
-          "id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery",
-          { count: "exact" }
-        )
-        .eq("category_id", categoryId);
-
-      if (searchMode && searchQuery) {
-        query = query.ilike("name", `%${searchQuery}%`);
-      }
-
-      query = query.order("created_at", { ascending: false });
-
-      if (!searchMode || !searchQuery) {
-        const from = isInitialLoad ? 0 : products.length;
-        const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
-        const to = from + limit - 1;
-        query = query.range(from, to);
-      }
-
-      const { data: productsData, error: productsError, count } = await query;
-
-      if (productsError) throw productsError;
-
-      const newProducts = isInitialLoad ? productsData || [] : [...products, ...(productsData || [])];
-      setProducts(newProducts);
-      
-      if (searchMode && searchQuery) {
-        setHasMoreProducts(false);
-      } else {
-        setHasMoreProducts((count || 0) > newProducts.length);
-      }
-
-      if (searchMode && isInitialLoad && searchQuery) {
-        await markSubcategoriesWithResults(newProducts);
-      }
-    } catch (error: any) {
-      console.error("Error fetching products:", error);
-      Alert.alert("Error", "Failed to load products: " + error.message);
-    } finally {
-      if (!isInitialLoad) {
-        setLoadingMore(false);
-      }
-    }
-  };
-
-  const markSubcategoriesWithResults = async (products: Product[]) => {
-    const subcategoryIds = [...new Set(products.map(p => p.subcategory_id).filter(Boolean))];
-    
-    setSubcategories(prevSubs => 
-      prevSubs.map(sub => ({
-        ...sub,
-        hasResults: subcategoryIds.includes(sub.id)
-      }))
-    );
-  };
-
-  const fetchData = async (isInitialLoad: boolean) => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const { data: categoryData, error: categoryError } = await supabase
@@ -454,20 +483,24 @@ export default function CategoryScreen() {
       if (subcategoriesError) throw subcategoriesError;
       setSubcategories(subcategoriesData || []);
 
-      await fetchProducts(isInitialLoad);
+      // Fetch ALL products for this category (we'll filter client-side)
+      const { data: productsData, error: productsError } = await supabase
+        .from("products")
+        .select(
+          `id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery`
+        )
+        .eq("category_id", categoryId)
+        .order("created_at", { ascending: false });
+
+      if (productsError) throw productsError;
+      
+      setAllProducts(productsData || []);
+      setHasMoreProducts(false); // No pagination since we load all products
     } catch (error: any) {
       console.error("Error fetching data:", error);
       Alert.alert("Error", "Failed to load data: " + error.message);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLoadMore = () => {
-    if (selectedFilter === "All" && !selectedSubcategory && !currentSearchQuery.trim()) {
-      fetchProducts(false);
-    } else {
-      Alert.alert("Info", "Load More is available only when browsing all items without filters.");
     }
   };
 
@@ -505,7 +538,30 @@ export default function CategoryScreen() {
   );
 
   const openFilters = () => {
-    router.push("/filters");
+    const currentParams: any = {
+      categoryId: categoryId,
+    };
+    
+    // IMPORTANT: Preserve current listing type filter (Sell/Rent/Exchange)
+    if (selectedFilter !== "All") {
+      currentParams.listingType = selectedFilter;
+    }
+    
+    // Pass existing filter params if they exist
+    if (filtersApplied) {
+      if (sortByParam) currentParams.sortBy = sortByParam;
+      if (locationParam) currentParams.location = locationParam;
+      if (deliveryParam) currentParams.delivery = deliveryParam;
+      if (conditionParam) currentParams.condition = conditionParam;
+      if (minPriceParam) currentParams.minPrice = minPriceParam;
+      if (maxPriceParam) currentParams.maxPrice = maxPriceParam;
+    }
+    
+    const queryString = Object.entries(currentParams)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
+      .join("&");
+    
+    router.push(`/filters?${queryString}`);
   };
 
   const handleSearchBarPress = () => {
@@ -522,18 +578,15 @@ export default function CategoryScreen() {
   };
 
   const handleBackPress = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/');
-    }
+    // Always go back, don't replace with home
+    router.back();
   };
 
   const visibleSubcategories = currentSearchQuery.trim() 
     ? subcategories.filter(sub => sub.hasResults)
     : subcategories;
 
-  if (loading && products.length === 0) {
+  if (loading) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
@@ -715,13 +768,6 @@ export default function CategoryScreen() {
                 />
               ))}
             </View>
-          )}
-
-          {selectedFilter === "All" && 
-           !selectedSubcategory && 
-           !currentSearchQuery.trim() && 
-           hasMoreProducts && (
-            <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
           )}
         </Animated.ScrollView>
       )}
@@ -932,7 +978,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "transparent",
   },
- filterTextActive: {
+  filterButtonActive: {
+    backgroundColor: PRIMARY_TEAL,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: DARK_GRAY,
+  },
+  filterTextActive: {
     color: "white",
   },
   productGrid: {
@@ -968,20 +1022,18 @@ const styles = StyleSheet.create({
     height: "100%",
     resizeMode: "cover",
   },
-
-deliveryBadge: {
-  position: "absolute",
-  bottom: 10,
-  left: 10,
-  backgroundColor: "white",
-  padding: 6,
-  borderRadius: 8,
-  shadowColor: "#000",
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 2,
-},
-
+  deliveryBadgeNew: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    backgroundColor: "white",
+    padding: 6,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   heartIcon: {
     position: "absolute",
     top: 10,
@@ -991,10 +1043,16 @@ deliveryBadge: {
   cardDetails: {
     padding: 12,
   },
-  cardPrice: {
-    fontSize: 16,
+  priceTag: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  priceText: {
+    fontSize: 14,
     fontWeight: "700",
-    marginBottom: 4,
   },
   cardTitle: {
     fontSize: 14,

@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { supabase } from "../../lib/Supabase";
 
@@ -25,6 +25,7 @@ const WHITE = '#FFFFFF';
 const SORT_OPTIONS = ['Best Match', 'Most Recent', 'Lowest Price', 'Highest Price', 'Nearest'];
 const DELIVERY_METHODS = ['All Methods', 'Pickup', 'Delivery', 'Shipping'];
 const CONDITION_OPTIONS = ['All', 'New', 'Used'];
+const LOCATIONS = ['All Locations', 'Setif', 'Blida', 'Algiers', 'Oran', 'Constantine', 'Annaba'];
 
 interface Category {
     id: number;
@@ -33,16 +34,23 @@ interface Category {
 
 export default function FiltersScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams();
     
-    // Filter states
-    const [selectedCategory, setSelectedCategory] = useState('All');
-    const [selectedSortBy, setSelectedSortBy] = useState('Best Match');
-    const [selectedLocation, setSelectedLocation] = useState('Setif');
-    const [selectedDelivery, setSelectedDelivery] = useState('All Methods');
-    const [minPrice, setMinPrice] = useState('');
-    const [maxPrice, setMaxPrice] = useState('');
+    // Get the category ID from params if it exists
+    const categoryId = params.categoryId ? Number(params.categoryId) : null;
+    
+    // Get the listing type (Sell/Rent/Exchange filter from category page)
+    const listingType = params.listingType as string || null;
+    
+    // Filter states - initialize from params if available
+    const [selectedCategory, setSelectedCategory] = useState(params.category as string || 'All');
+    const [selectedSortBy, setSelectedSortBy] = useState(params.sortBy as string || 'Best Match');
+    const [selectedLocation, setSelectedLocation] = useState(params.location as string || 'All Locations');
+    const [selectedDelivery, setSelectedDelivery] = useState(params.delivery as string || 'All Methods');
+    const [minPrice, setMinPrice] = useState(params.minPrice as string || '');
+    const [maxPrice, setMaxPrice] = useState(params.maxPrice as string || '');
     const [currency, setCurrency] = useState('DA');
-    const [selectedCondition, setSelectedCondition] = useState('All');
+    const [selectedCondition, setSelectedCondition] = useState(params.condition as string || 'All');
     
     // Modal states
     const [modalVisible, setModalVisible] = useState(false);
@@ -119,7 +127,7 @@ export default function FiltersScreen() {
                 break;
             case 'location':
                 title = 'Location';
-                options = ['Setif', 'Algiers', 'Oran', 'Constantine', 'Annaba'];
+                options = LOCATIONS;
                 currentValue = selectedLocation;
                 break;
             case 'delivery':
@@ -151,11 +159,13 @@ export default function FiltersScreen() {
                             onPress={() => handleSelect(option)}
                         >
                             <Text style={modalStyles.rowText}>{option}</Text>
-                            <Ionicons
-                                name="chevron-forward"
-                                size={22}
-                                color={TEXT_LIGHT}
-                            />
+                            {currentValue === option && (
+                                <Ionicons
+                                    name="checkmark"
+                                    size={22}
+                                    color={PRIMARY_TEAL}
+                                />
+                            )}
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
@@ -166,7 +176,7 @@ export default function FiltersScreen() {
     const handleReset = () => {
         setSelectedCategory('All');
         setSelectedSortBy('Best Match');
-        setSelectedLocation('Setif');
+        setSelectedLocation('All Locations');
         setSelectedDelivery('All Methods');
         setMinPrice('');
         setMaxPrice('');
@@ -174,13 +184,60 @@ export default function FiltersScreen() {
     };
 
     const handleBack = () => {
-        // Simply use router.back() - it should work correctly
         router.back();
     };
 
     const handleSeeResults = () => {
-        // Apply filters and navigate back
-        router.back();
+        const filterParams: any = {
+            filtersApplied: "true",
+        };
+
+        // Add category ID if it exists
+        if (categoryId) {
+            filterParams.id = categoryId;
+        }
+
+        // IMPORTANT: Preserve the listing type filter (Sell/Rent/Exchange)
+        if (listingType && listingType !== "All") {
+            filterParams.listingType = listingType;
+        }
+
+        // Only add parameters if they're not default values
+        if (selectedSortBy !== 'Best Match') {
+            filterParams.sortBy = selectedSortBy;
+        }
+        
+        if (selectedLocation !== 'All Locations') {
+            filterParams.location = selectedLocation;
+        }
+        
+        if (selectedDelivery !== 'All Methods') {
+            filterParams.delivery = selectedDelivery;
+        }
+        
+        if (selectedCondition !== 'All') {
+            filterParams.condition = selectedCondition;
+        }
+        
+        if (minPrice) {
+            filterParams.minPrice = minPrice;
+        }
+        
+        if (maxPrice) {
+            filterParams.maxPrice = maxPrice;
+        }
+        
+        if (selectedCategory && selectedCategory !== "All") {
+            filterParams.category = selectedCategory;
+        }
+
+        // Build query string manually
+        const queryString = Object.entries(filterParams)
+            .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
+            .join("&");
+
+        // Navigate to category page with all filter params
+        router.push(`/category?${queryString}`);
     };
 
     return (
@@ -199,11 +256,6 @@ export default function FiltersScreen() {
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Main Filters Section */}
                 <View style={styles.section}>
-                    <FilterRow
-                        label="Category"
-                        value={selectedCategory}
-                        onPress={() => openModal('category')}
-                    />
                     <FilterRow
                         label="Sort By"
                         value={selectedSortBy}
