@@ -24,7 +24,7 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 16; // Changed from 24 to 16 (8px less on each side)
 const SAFE_AREA_PADDING = 40;
 const TAB_BAR_HEIGHT = 90;
 
@@ -49,8 +49,8 @@ interface Category {
   name: string;
   description: string | null;
   delivery: boolean;
-  hasResults?: boolean; // For search mode
-  productCount?: number; // For search mode
+  hasResults?: boolean;
+  productCount?: number;
 }
 
 interface Product {
@@ -68,7 +68,6 @@ interface Product {
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
-// Map category names to icons and colors
 const getCategoryIcon = (categoryName: string): IconName => {
   const name = categoryName.toLowerCase();
   if (name.includes("real estate") || name.includes("property")) return "home";
@@ -98,14 +97,13 @@ const getCategoryColor = (index: number): string => {
   return CATEGORY_COLORS[index % CATEGORY_COLORS.length];
 };
 
-// Calculate distance between two coordinates using Haversine formula
 const calculateDistance = (
   lat1: number,
   lon1: number,
   lat2: number,
   lon2: number
 ): number => {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -134,7 +132,6 @@ const CategoryButton: React.FC<{
 
   const handlePress = () => {
     if (searchMode) {
-      // Navigate to category with search query
       router.push({
         pathname: `/category`,
         params: {
@@ -144,7 +141,6 @@ const CategoryButton: React.FC<{
         },
       });
     } else {
-      // Normal navigation
       router.push(`/category?id=${category.id}`);
     }
   };
@@ -154,7 +150,6 @@ const CategoryButton: React.FC<{
       style={[styles.categoryButton, { backgroundColor: bgColor }]}
       onPress={handlePress}
     >
-      {/* Red dot indicator for categories with search results */}
       {searchMode && category.hasResults && (
         <View style={styles.redDot} />
       )}
@@ -174,36 +169,58 @@ const ProductCard: React.FC<{
   const [liked, setLiked] = useState(false);
   const toggleLike = () => setLiked(!liked);
 
-  // Category and delivery check
   const category = categories.find((c) => c.id === product.category_id);
   const categoryAcceptsDelivery = category?.delivery || false;
 
-  // Calculate distance
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
     const dist = calculateDistance(userLat, userLon, product.latitude, product.longitude);
     distance = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
   }
 
-  // Define color scheme for listing type
   const getTagColor = () => {
     switch (product.listing_type) {
       case "rent":
-        return { bg: "#FFEDD5", text: "#C2410C" }; // orange tones
+        return { bg: "#FFEDD5", text: "#C2410C" };
       case "exchange":
-        return { bg: "#F3E8FF", text: "#7E22CE" }; // purple tones
+        return { bg: "#F3E8FF", text: "#7E22CE" };
       default:
-        return { bg: "#DBEAFE", text: "#1D4ED8" }; // blue tones for sell
+        return { bg: "#DBEAFE", text: "#1D4ED8" };
     }
   };
 
   const tagColors = getTagColor();
 
-  // Format price text
+  // Updated price formatting function (10,000 DA = 1 million)
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
-    if (product.listing_type === "rent")
-      return `${product.price.toLocaleString()} DA/month`;
+    
+    // Format price in millions if >= 10,000 DA (since 10,000 DA = 1 million)
+    if (product.price >= 10000) {
+      const millions = product.price / 10000;
+      let formattedMillions;
+      
+      // If it's a whole million, don't show decimals
+      if (millions % 1 === 0) {
+        formattedMillions = millions.toString();
+      } else if (millions >= 10) {
+        // For 10+ million, no decimals
+        formattedMillions = Math.round(millions).toString();
+      } else {
+        // Show one decimal place for under 10 million
+        formattedMillions = millions.toFixed(1);
+      }
+      
+      if (product.listing_type === "rent") {
+        return `${formattedMillions} million DA/mo`;
+      }
+      return `${formattedMillions} million DA`;
+    }
+    
+    // Format normally for prices below 10,000 DA
+    if (product.listing_type === "rent") {
+      return `${product.price.toLocaleString()} DA/mo`;
+    }
     return `${product.price.toLocaleString()} DA`;
   };
 
@@ -223,7 +240,6 @@ const ProductCard: React.FC<{
             style={styles.cardImage}
           />
 
-          {/* Delivery badge now bottom-left */}
           {categoryAcceptsDelivery && (
             <View style={styles.deliveryBadgeNew}>
               <MaterialCommunityIcons
@@ -234,7 +250,6 @@ const ProductCard: React.FC<{
             </View>
           )}
 
-          {/* Heart top-right */}
           <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
             <Ionicons
               name={liked ? "heart" : "heart-outline"}
@@ -245,7 +260,6 @@ const ProductCard: React.FC<{
         </View>
 
         <View style={styles.cardDetails}>
-          {/* Price pill */}
           <View
             style={[
               styles.priceTag,
@@ -262,12 +276,10 @@ const ProductCard: React.FC<{
             </Text>
           </View>
 
-          {/* Title */}
           <Text style={styles.cardTitle} numberOfLines={2}>
             {product.name}
           </Text>
 
-          {/* Distance */}
           <View style={styles.distanceContainer}>
             <Ionicons name="location-outline" size={14} color="#008E74" />
             <Text style={styles.cardDistance}>{distance}</Text>
@@ -278,7 +290,6 @@ const ProductCard: React.FC<{
   );
 };
 
-// Load More Button using the inspirational style
 const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
   onPress,
   loading,
@@ -357,7 +368,6 @@ export default function HomeScreen() {
   const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
 
-  // Fetch user location
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -379,7 +389,6 @@ export default function HomeScreen() {
     })();
   }, []);
 
-  // Filter products when filter or products array changes
   useEffect(() => {
     let filtered: Product[];
     if (selectedFilter === "All") {
@@ -392,7 +401,6 @@ export default function HomeScreen() {
     setDisplayedProducts(filtered);
   }, [selectedFilter, products]);
 
-  // Combined fetch function for initial load and load more
   const fetchProducts = async (isInitialLoad: boolean) => {
     if (!isInitialLoad) {
       setLoadingMore(true);
@@ -409,12 +417,10 @@ export default function HomeScreen() {
         )
         .order("created_at", { ascending: false });
 
-      // Apply search filter if in search mode
       if (searchMode && searchQuery) {
         query = query.ilike("name", `%${searchQuery}%`);
       }
 
-      // Only apply pagination when NOT in search mode
       if (!searchMode) {
         const from = isInitialLoad ? 0 : products.length;
         const limit = isInitialLoad ? INITIAL_PRODUCT_LIMIT : LOAD_MORE_INCREMENT;
@@ -428,7 +434,6 @@ export default function HomeScreen() {
       const newProducts = isInitialLoad ? productsData || [] : [...products, ...(productsData || [])];
       setProducts(newProducts);
       
-      // In search mode, we load all products at once
       if (searchMode) {
         setHasMoreProducts(false);
       } else {
@@ -450,7 +455,6 @@ export default function HomeScreen() {
     if (!searchMode || !searchQuery) return;
 
     try {
-      // Get products matching search query
       const { data: productsData, error } = await supabase
         .from("products")
         .select("category_id")
@@ -461,7 +465,6 @@ export default function HomeScreen() {
       if (productsData) {
         const categoryIds = [...new Set(productsData.map(p => p.category_id))];
         
-        // Count products per category
         const categoryCounts = productsData.reduce((acc, p) => {
           acc[p.category_id] = (acc[p.category_id] || 0) + 1;
           return acc;
@@ -485,7 +488,6 @@ export default function HomeScreen() {
     try {
       console.log("=== HOME: Starting fetchData ===");
 
-      // Fetch categories first
       console.log("HOME: Fetching categories...");
       const { data: categoriesData, error: categoriesError } = await supabase
         .from("categories")
@@ -495,10 +497,8 @@ export default function HomeScreen() {
       if (categoriesError) throw categoriesError;
       setCategories(categoriesData || []);
 
-      // Fetch initial products
       await fetchProducts(true);
 
-      // Mark categories with results if in search mode
       if (searchMode && searchQuery) {
         await markCategoriesWithResults();
       }
@@ -513,7 +513,6 @@ export default function HomeScreen() {
     }
   };
 
-  // Initial data fetch - re-fetch when search query changes
   useEffect(() => {
     fetchData();
   }, [searchQuery]);
@@ -523,7 +522,6 @@ export default function HomeScreen() {
   };
 
   const handleBackToHome = () => {
-    // Navigate to homepage without search query
     router.push('/');
   };
 
@@ -540,7 +538,6 @@ export default function HomeScreen() {
     selectedFilter === 'All' || p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
   );
 
-  // Filter categories to show only those with results in search mode
   const displayCategories = searchMode 
     ? categories.filter(cat => cat.hasResults) 
     : categories;
@@ -548,9 +545,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.contentContainer}>
-        {/* Header */}
         <View style={styles.header}>
-          {/* Back arrow - only show in search mode */}
           {searchMode && (
             <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
@@ -564,11 +559,10 @@ export default function HomeScreen() {
             }}
             activeOpacity={0.7}
           >
-          <View style={[
-  styles.searchBar,
-  searchMode && styles.searchBarActive // ✅ stay green while in search mode
-]}>
-
+            <View style={[
+              styles.searchBar,
+              searchMode && styles.searchBarActive
+            ]}>
               <Ionicons
                 name="search"
                 size={20}
@@ -586,7 +580,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Categories */}
         <Text style={styles.sectionTitle}>Categories</Text>
         {displayCategories.length === 0 ? (
           <Text style={styles.emptyText}>No categories available</Text>
@@ -608,7 +601,6 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        {/* Filters */}
         <View style={styles.filterTabsWrapper}>
           <View style={styles.filterTabs}>
             {FILTER_TABS.map((tab) => (
@@ -639,7 +631,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Products */}
         {finalDisplayedProducts.length === 0 ? (
           <Text style={styles.emptyText}>
             {searchMode ? "No products found matching your search" : "No products available for this filter."}
@@ -658,7 +649,6 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Load More Button - Only in normal mode */}
         {!searchMode && selectedFilter === "All" && hasMoreProducts && (
           <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
         )}
@@ -677,82 +667,73 @@ const styles = StyleSheet.create({
     paddingTop: SAFE_AREA_PADDING,
   },
   cardContainer: {
-  width: CARD_WIDTH,
-  marginBottom: 16,
-  borderRadius: 16,
-  backgroundColor: "white",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.08,
-  shadowRadius: 8,
-  elevation: 3,
-},
-
-imageWrapper: {
-  width: "100%",
-  aspectRatio: 1,
-  backgroundColor: "#F7F7F7",
-  borderTopLeftRadius: 16,
-  borderTopRightRadius: 16,
-  overflow: "hidden",
-},
-
-deliveryBadgeNew: {
-  position: "absolute",
-  bottom: 10,
-  left: 10,
-  backgroundColor: "white",
-  padding: 6,
-  borderRadius: 8,
-  shadowColor: "#000",
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 2,
-},
-
-priceTag: {
-  alignSelf: "flex-start",
-  borderRadius: 6,
-  paddingVertical: 4,
-  paddingHorizontal: 8,
-  marginBottom: 6,
-},
-
-priceText: {
-  fontSize: 13,
-  fontWeight: "700",
-},
-
-cardTitle: {
-  fontSize: 13,
-  fontWeight: "600",
-  color: "#333",
-  minHeight: 34,
-  marginBottom: 4,
-},
-
-distanceContainer: {
-  flexDirection: "row",
-  alignItems: "center",
-  marginTop: 2,
-},
-
-cardDistance: {
-  marginLeft: 4,
-  fontSize: 12,
-  color: "#666",
-},
-
+    width: CARD_WIDTH,
+    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  imageWrapper: {
+    width: "100%",
+    aspectRatio: 1,
+    backgroundColor: "#F7F7F7",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: "hidden",
+  },
+  deliveryBadgeNew: {
+    position: "absolute",
+    bottom: 10,
+    left: 10,
+    backgroundColor: "white",
+    padding: 6,
+    borderRadius: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  priceTag: {
+    alignSelf: "flex-start",
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 6,
+  },
+  priceText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  cardTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+    minHeight: 34,
+    marginBottom: 4,
+  },
+  distanceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  cardDistance: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: "#666",
+  },
   searchBarActive: {
-  borderColor: PRIMARY_TEAL,
-  borderWidth: 2,
-  shadowColor: PRIMARY_TEAL,
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  elevation: 4, // ✅ subtle glow effect for Android
-},
-
+    borderColor: PRIMARY_TEAL,
+    borderWidth: 2,
+    shadowColor: PRIMARY_TEAL,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
@@ -776,7 +757,6 @@ cardDistance: {
     marginVertical: 20,
     fontWeight: '600'
   },
-  
   contentContainer: {
     paddingBottom: TAB_BAR_HEIGHT + 20,
   },
@@ -842,42 +822,39 @@ cardDistance: {
     marginTop: 10,
     marginBottom: 10,
   },
- categoryScroll: {
-  paddingHorizontal: 16,
-  marginBottom: 20,
-  paddingTop: 12, // ✅ give breathing room for red dots that stick out
-},
-
- categoryButton: {
-  position: "relative",
-  width: 90,
-  height: 90,
-  borderRadius: 16,
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight: 12,
-  overflow: "visible", // ✅ allow red dot to go out of bounds
-},
-
+  categoryScroll: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    paddingTop: 12,
+  },
+  categoryButton: {
+    position: "relative",
+    width: 90,
+    height: 90,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    overflow: "visible",
+  },
   redDot: {
-  position: "absolute",
-  top: -10, // pushed further outside the element
-  right: -10,
-  width: 28, // bigger circle
-  height: 28,
-  borderRadius: 14, // perfectly circular
-  backgroundColor: ACCENT_RED,
-  borderWidth: 3,
-  borderColor: "white",
-  zIndex: 20,
-  shadowColor: ACCENT_RED,
-  shadowOffset: { width: 0, height: 3 },
-  shadowOpacity: 0.5,
-  shadowRadius: 6,
-  elevation: 8,
-  transform: [{ scale: 1.1 }], // slight pop-out effect
-},
-
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: ACCENT_RED,
+    borderWidth: 3,
+    borderColor: "white",
+    zIndex: 20,
+    shadowColor: ACCENT_RED,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }],
+  },
   categoryText: {
     marginTop: 8,
     fontSize: 11,
@@ -919,14 +896,12 @@ cardDistance: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
- 
   cardTouchable: {
     borderRadius: 16,
     overflow: "hidden",
   },
- 
   cardImage: {
     width: "100%",
     height: "100%",
@@ -954,7 +929,6 @@ cardDistance: {
     fontWeight: "700",
     marginBottom: 4,
   },
- 
   loadMoreContainer: {
     marginHorizontal: 16,
     marginTop: 20,
