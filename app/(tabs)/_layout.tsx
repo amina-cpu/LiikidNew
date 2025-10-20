@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -8,7 +8,7 @@ const PRIMARY_COLOR = '#000000';
 const INACTIVE_COLOR = '#999999';
 const HOVER_COLOR = '#00C853'; // Green hover color
 
-const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }) => (
+const TwoChatsIcon = ({ color, size }: { color: string; size: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path
       d="M18 3C19.66 3 21 4.34 21 6V12C21 13.66 19.66 15 18 15H16V17L14 15H12"
@@ -28,22 +28,14 @@ const TwoChatsIcon: React.FC<{ color: string; size: number }> = ({ color, size }
   </Svg>
 );
 
-// Custom tab bar button for Home
-const HomeTabButton: React.FC<{ children: React.ReactNode; onPress: () => void }> = ({
-  children,
-  onPress,
-}) => {
+const HomeTabButton = ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => {
   const [isPressed, setIsPressed] = useState(false);
-
   return (
     <TouchableOpacity
       onPress={onPress}
       onPressIn={() => setIsPressed(true)}
       onPressOut={() => setIsPressed(false)}
-      style={[
-        styles.homeButton,
-        isPressed && styles.homeButtonHover, // green hover effect
-      ]}
+      style={[styles.homeButton, isPressed && styles.homeButtonHover]}
       activeOpacity={0.9}
     >
       {children}
@@ -65,12 +57,22 @@ export default function TabLayout() {
         tabBarInactiveTintColor: INACTIVE_COLOR,
         headerShown: false,
         tabBarStyle: {
+          position: 'relative',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 0,
           backgroundColor: 'white',
-          height: 100, // reduced height
+          borderRadius: 0,
+          height: Platform.OS === 'ios' ? 150 : 100,
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
-          paddingBottom: 10,
-          paddingTop: 5,
+          shadowColor: 'transparent',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0,
+          shadowRadius: 0,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+          paddingTop: 15,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -151,32 +153,12 @@ export default function TabLayout() {
         }}
       />
 
-      <Tabs.Screen
-        name="filters"
-        options={{
-          headerShown: false,
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          headerShown: false,
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="product_detail"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="category"
-        options={{
-          href: null,
-        }}
-      />
+      {/* Hidden screens */}
+      <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="filters" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="product_detail" options={{ href: null }} />
+      <Tabs.Screen name="category" options={{ href: null }} />
     </Tabs>
   );
 }
