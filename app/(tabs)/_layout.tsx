@@ -1,6 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
@@ -154,6 +154,7 @@ export default function TabLayout() {
       />
 
       {/* Hidden screens */}
+      <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="filters" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />

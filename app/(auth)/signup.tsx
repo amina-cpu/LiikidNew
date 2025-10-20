@@ -2,18 +2,18 @@ import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 
@@ -85,6 +85,7 @@ export default function SignUpScreen() {
 
       const hashedPassword = await hashPassword(password);
 
+      // Updated: Removed is_seller and is_verified
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([
@@ -93,8 +94,6 @@ export default function SignUpScreen() {
             email: email.trim().toLowerCase(),
             password_hash: hashedPassword,
             full_name: fullName.trim(),
-            is_seller: false,
-            is_verified: false,
           },
         ])
         .select()
@@ -109,7 +108,7 @@ export default function SignUpScreen() {
           {
             text: 'OK',
             onPress: () => {
-              router.push('/auth/login');
+              router.push('/(auth)/login');
             },
           },
         ]
@@ -292,7 +291,7 @@ export default function SignUpScreen() {
             <View style={styles.footer}>
               <Text style={styles.footerText}>Already have an account? </Text>
               <TouchableOpacity 
-                onPress={() => router.push('/auth/login')}
+                onPress={() => router.push('/(auth)/login')}
                 disabled={loading}
               >
                 <Text style={styles.footerLink}>Login</Text>

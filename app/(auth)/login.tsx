@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -17,22 +16,18 @@ import {
     View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
-// 1. IMPORT THE AUTH HOOK
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
 
-// Define the UserProfile interface to match your database query
+// Updated interface - removed is_seller and is_verified
 interface UserProfile {
     user_id: number;
     username: string;
     email: string;
     full_name: string;
     profile_image_url: string | null;
-    is_seller: boolean;
-    is_verified: boolean;
     bio: string | null;
     location: string | null;
 }
-
 
 const hashPassword = async (password: string): Promise<string> => {
     return await Crypto.digestStringAsync(
@@ -43,7 +38,6 @@ const hashPassword = async (password: string): Promise<string> => {
 
 export default function LoginScreen() {
     const router = useRouter();
-    // 2. GET THE CONTEXT FUNCTION
     const { updateUser } = useAuth();
     
     const [email, setEmail] = useState('');
@@ -61,9 +55,10 @@ export default function LoginScreen() {
         try {
             const hashedPassword = await hashPassword(password);
 
+            // Updated query - removed is_seller and is_verified
             const { data, error } = await supabase
                 .from('users')
-                .select('user_id, username, email, full_name, profile_image_url, is_seller, is_verified, bio, location')
+                .select('user_id, username, email, full_name, profile_image_url, bio, location')
                 .eq('email', email.trim().toLowerCase())
                 .eq('password_hash', hashedPassword)
                 .single();
@@ -74,28 +69,11 @@ export default function LoginScreen() {
                 return;
             }
             
-            // --- CRITICAL CHANGE START ---
-            
-            // Cast the fetched data to the UserProfile type
             const userData = data as UserProfile;
-
-            // 3. CALL THE CONTEXT FUNCTION: This is the key fix.
-            // It updates the state in AuthContext and AsyncStorage.
             await updateUser(userData); 
             
             console.log('✅ User logged in:', userData);
-
-            // 4. Navigate: The AuthProvider's useProtectedRoute will now see the 
-            // user state is NOT null and will automatically redirect to '/(tabs)'.
-            // Calling replace here simply makes the transition instant.
             router.replace('/(tabs)');
-
-            // --- CRITICAL CHANGE END ---
-
-            // NOTE: The previous AsyncStorage.multiSet block is now obsolete 
-            // because it is handled inside the updateUser function in AuthContext.
-            // If you still have that block, remove it to avoid redundancy/bugs.
-
 
         } catch (error: any) {
             Alert.alert('Login Failed', error.message || 'An error occurred during login');
@@ -106,7 +84,6 @@ export default function LoginScreen() {
     };
 
     return (
-        // ... (rest of the component remains the same)
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
             <KeyboardAvoidingView 
