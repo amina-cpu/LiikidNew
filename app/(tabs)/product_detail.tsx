@@ -2,17 +2,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
@@ -71,10 +71,10 @@ const ProductDetailScreen = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [likesCount, setLikesCount] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const router = useRouter();
 
-  // Get current user
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
@@ -90,7 +90,22 @@ const ProductDetailScreen = () => {
     getCurrentUser();
   }, []);
 
-  // Check if product is liked
+  const fetchLikesCount = async () => {
+    if (!productId) return;
+
+    try {
+      const { count, error } = await supabase
+        .from('likes')
+        .select('*', { count: 'exact', head: true })
+        .eq('product_id', productId);
+
+      if (error) throw error;
+      setLikesCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching likes count:', error);
+    }
+  };
+
   useEffect(() => {
     const checkIfLiked = async () => {
       if (!currentUserId || !productId) return;
@@ -107,7 +122,7 @@ const ProductDetailScreen = () => {
           setIsFavorite(true);
         }
       } catch (error) {
-        // Product not liked
+        console.log('Product not liked');
       }
     };
     checkIfLiked();
@@ -162,7 +177,6 @@ const ProductDetailScreen = () => {
             user_id: data.user_id,
           });
 
-          // Fetch user info
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('user_id, username, profile_image_url, bio, created_at')
@@ -171,6 +185,8 @@ const ProductDetailScreen = () => {
 
           if (userError) throw userError;
           setUserInfo(userData);
+
+          await fetchLikesCount();
         } else {
           setError("Product not found.");
         }
@@ -198,7 +214,6 @@ const ProductDetailScreen = () => {
 
     try {
       if (isFavorite) {
-        // Unlike
         const { error } = await supabase
           .from('likes')
           .delete()
@@ -207,8 +222,8 @@ const ProductDetailScreen = () => {
 
         if (error) throw error;
         setIsFavorite(false);
+        setLikesCount(prev => Math.max(0, prev - 1));
       } else {
-        // Like
         const { error } = await supabase
           .from('likes')
           .insert({
@@ -219,6 +234,7 @@ const ProductDetailScreen = () => {
 
         if (error) throw error;
         setIsFavorite(true);
+        setLikesCount(prev => prev + 1);
       }
     } catch (error: any) {
       console.error('Error toggling like:', error);
@@ -230,9 +246,7 @@ const ProductDetailScreen = () => {
     return (
       <View style={styles.flexCenter}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 10, color: COLORS.secondary }}>
-          Loading product details...
-        </Text>
+        <Text style={styles.loadingText}>Loading product details...</Text>
       </View>
     );
   }
@@ -241,9 +255,7 @@ const ProductDetailScreen = () => {
     return (
       <View style={styles.flexCenter}>
         <Ionicons name="alert-circle-outline" size={40} color={COLORS.textLight} />
-        <Text style={{ marginTop: 10, fontSize: 16, color: COLORS.textLight }}>
-          {error || "Product not found."}
-        </Text>
+        <Text style={styles.errorText}>{error || "Product not found."}</Text>
       </View>
     );
   }
@@ -283,7 +295,6 @@ const ProductDetailScreen = () => {
 
   return (
     <SafeAreaView style={styles.flexContainer}>
-      {/* Sticky Header */}
       <View style={styles.stickyHeader}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={COLORS.secondary} />
@@ -303,7 +314,6 @@ const ProductDetailScreen = () => {
       </View>
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        {/* --- IMAGE SECTION --- */}
         <View style={styles.imageSection}>
           <ScrollView
             ref={scrollRef}
@@ -324,7 +334,6 @@ const ProductDetailScreen = () => {
             ))}
           </ScrollView>
 
-          {/* Pagination dots */}
           {allImages.length > 1 && (
             <View style={styles.paginationContainer}>
               {allImages.map((_, index) => (
@@ -340,7 +349,6 @@ const ProductDetailScreen = () => {
           )}
         </View>
 
-        {/* --- DETAILS CARD --- */}
         <View style={styles.detailsCard}>
           <Text style={styles.title}>{product.name}</Text>
           <Text style={styles.condition}>Used - Good</Text>
@@ -363,7 +371,6 @@ const ProductDetailScreen = () => {
           )}
         </View>
 
-        {/* --- DESCRIPTION CARD --- */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Description</Text>
           <Text style={styles.descriptionText}>
@@ -378,12 +385,11 @@ const ProductDetailScreen = () => {
             <Text style={styles.postedDate}>Posted on {product.created_at}</Text>
             <View style={styles.likesContainer}>
               <Ionicons name="heart" size={16} color="#FF3B30" />
-              <Text style={styles.likesText}>55</Text>
+              <Text style={styles.likesText}>{likesCount}</Text>
             </View>
           </View>
         </View>
 
-        {/* --- POSTED BY CARD --- */}
         {userInfo && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionHeader}>Posted by</Text>
@@ -410,7 +416,6 @@ const ProductDetailScreen = () => {
           </View>
         )}
 
-        {/* --- MAP CARD --- */}
         <View style={styles.sectionCard}>
           <Image
             source={{ uri: "https://api.mapbox.com/styles/v1/mapbox/dark-v10/static/3.39,36.76,11,0/400x300@2x?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw" }}
@@ -419,11 +424,9 @@ const ProductDetailScreen = () => {
           <Text style={styles.mapCaption}>Map is approximate to keep seller's location private.</Text>
         </View>
 
-        {/* Bottom padding */}
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* --- FIXED BOTTOM BUTTONS --- */}
       <View style={styles.bottomButtons}>
         <TouchableOpacity style={styles.callButton}>
           <Text style={styles.callButtonText}>Call</Text>
@@ -433,7 +436,6 @@ const ProductDetailScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* --- BOTTOM SHEET MENU --- */}
       <Modal
         animationType="slide"
         transparent
@@ -469,6 +471,8 @@ const styles = StyleSheet.create({
   flexContainer: { flex: 1, backgroundColor: COLORS.background },
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
+  loadingText: { marginTop: 10, color: COLORS.secondary },
+  errorText: { marginTop: 10, fontSize: 16, color: COLORS.textLight },
   
   stickyHeader: {
     position: 'absolute',
@@ -618,6 +622,7 @@ const styles = StyleSheet.create({
   likesText: {
     fontSize: 13,
     color: COLORS.textLight,
+    fontWeight: "600",
   },
 
   userContainer: {

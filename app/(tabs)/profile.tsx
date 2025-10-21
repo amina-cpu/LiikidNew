@@ -1,13 +1,14 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter, useFocusEffect } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     Image,
+    RefreshControl,
     SafeAreaView,
     ScrollView,
     StatusBar,
@@ -15,7 +16,6 @@ import {
     Text,
     TouchableOpacity,
     View,
-    RefreshControl,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
@@ -435,6 +435,10 @@ const ProfileScreen = () => {
 
                         <View style={styles.statsRow}>
                             <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{products.length}</Text>
+                                <Text style={styles.statName}>Posts</Text>
+                            </View>
+                            <View style={styles.statBox}>
                                 <Text style={styles.statValue}>{followingCount}</Text>
                                 <Text style={styles.statName}>Following</Text>
                             </View>
@@ -658,7 +662,7 @@ const styles = StyleSheet.create({
     tabBar: {
         flexDirection: 'row',
         marginHorizontal: 14,
-        marginBottom: 20,
+        marginBottom: 8,
         borderBottomWidth: 1,
         borderBottomColor: '#E0E0E0',
     },
@@ -682,7 +686,7 @@ const styles = StyleSheet.create({
     },
     productsBackground: {
         minHeight: 300,
-        paddingTop: 8,
+        paddingTop: 0,
     },
     loadingContainer: {
         paddingVertical: 40,
@@ -744,12 +748,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        paddingHorizontal: 4,
+        paddingHorizontal: 8,
         paddingTop: 14,
     },
     cardContainer: {
         width: CARD_WIDTH,
-        marginBottom: 12,
+        marginBottom: 8,
         borderRadius: 16,
         backgroundColor: "white",
         shadowColor: "#000",
