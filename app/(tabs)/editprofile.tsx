@@ -57,7 +57,7 @@ const ProfileSettingsScreen = () => {
             if (userJson) {
                 const user = JSON.parse(userJson);
                 setUserData(user);
-                setFullName(user.full_name || '');
+                setFullName(user.username || '');
                 setBio(user.bio || '');
                 setPhoneNumber(user.phone_number || '');
             }
@@ -130,8 +130,6 @@ const ProfileSettingsScreen = () => {
             const updatedUser = { ...userData, profile_image_url: publicUrl };
             setUserData(updatedUser as UserProfile);
             await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-
-            Alert.alert('Success', 'Profile photo updated successfully!');
         } catch (error: any) {
             console.error('Error uploading photo:', error);
             Alert.alert('Upload Failed', error.message || 'Failed to upload profile photo');
@@ -139,8 +137,7 @@ const ProfileSettingsScreen = () => {
             setUploadingPhoto(false);
         }
     };
-
-    const handleSave = async () => {
+const handleSave = async () => {
         try {
             setSaving(true);
 
@@ -153,7 +150,7 @@ const ProfileSettingsScreen = () => {
             const { error } = await supabase
                 .from('users')
                 .update({
-                    full_name: fullName.trim(),
+                    username: fullName.trim(),
                     bio: bio.trim() || null,
                     phone_number: phoneNumber.trim() || null,
                 })
@@ -163,7 +160,7 @@ const ProfileSettingsScreen = () => {
 
             const updatedUser = {
                 ...userData,
-                full_name: fullName.trim(),
+                username: fullName.trim(),
                 bio: bio.trim() || null,
                 phone_number: phoneNumber.trim() || null,
             };
@@ -171,8 +168,8 @@ const ProfileSettingsScreen = () => {
             setUserData(updatedUser as UserProfile);
             await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
-            Alert.alert('Success', 'Profile updated successfully!');
-            router.back();
+            Alert.alert('Success', 'Profile updated successfully');
+            router.push('/(tabs)/profile');
         } catch (error: any) {
             console.error('Error saving profile:', error);
             Alert.alert('Save Failed', error.message || 'Failed to save profile');

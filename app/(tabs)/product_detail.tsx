@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -35,6 +36,15 @@ interface ProductDetail {
   created_at: string;
   hasShipping: boolean;
   product_images?: ProductImage[];
+  user_id: number;
+}
+
+interface UserInfo {
+  user_id: number;
+  username: string;
+  profile_image_url: string | null;
+  bio: string | null;
+  created_at: string;
 }
 
 const { width } = Dimensions.get("window");
@@ -54,21 +64,54 @@ const COLORS = {
 const ProductDetailScreen = () => {
   const { id: productId } = useLocalSearchParams();
   const [product, setProduct] = useState<ProductDetail | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const router = useRouter();
 
-  // Mock data for user
-  const mockUser = {
-    name: "Andrea Laxir",
-    avatar: "https://i.pravatar.cc/150?img=12",
-    joinedDate: "December 2025",
-    lastActive: "yesterday",
-  };
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          setCurrentUserId(user.user_id);
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
+  // Check if product is liked
+  useEffect(() => {
+    const checkIfLiked = async () => {
+      if (!currentUserId || !productId) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('likes')
+          .select('like_id')
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId)
+          .single();
+
+        if (data) {
+          setIsFavorite(true);
+        }
+      } catch (error) {
+        // Product not liked
+      }
+    };
+    checkIfLiked();
+  }, [currentUserId, productId]);
 
   useEffect(() => {
     if (!productId || Array.isArray(productId)) {
@@ -93,6 +136,7 @@ const ProductDetailScreen = () => {
             latitude,
             longitude,
             created_at,
+            user_id,
             category:categories (delivery),
             product_images (image_url, order)
           `)
@@ -115,7 +159,18 @@ const ProductDetailScreen = () => {
             created_at: new Date(data.created_at).toLocaleDateString(),
             hasShipping: data.category?.delivery === true,
             product_images: data.product_images || [],
+            user_id: data.user_id,
           });
+
+          // Fetch user info
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('user_id, username, profile_image_url, bio, created_at')
+            .eq('user_id', data.user_id)
+            .single();
+
+          if (userError) throw userError;
+          setUserInfo(userData);
         } else {
           setError("Product not found.");
         }
@@ -135,7 +190,41 @@ const ProductDetailScreen = () => {
     setActiveIndex(index);
   };
 
-  const toggleFavorite = () => setIsFavorite((prev) => !prev);
+  const toggleFavorite = async () => {
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please login to like products');
+      return;
+    }
+
+    try {
+      if (isFavorite) {
+        // Unlike
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId);
+
+        if (error) throw error;
+        setIsFavorite(false);
+      } else {
+        // Like
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id: currentUserId,
+            product_id: productId,
+            post_id: null
+          });
+
+        if (error) throw error;
+        setIsFavorite(true);
+      }
+    } catch (error: any) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like status');
+    }
+  };
 
   if (loading) {
     return (
@@ -177,8 +266,42 @@ const ProductDetailScreen = () => {
     return `${product.price} DA`;
   };
 
+  const getInitials = () => {
+    if (userInfo?.username) {
+      return userInfo.username.charAt(0).toUpperCase();
+    }
+    return 'U';
+  };
+
+  const getJoinedDate = () => {
+    if (userInfo?.created_at) {
+      const date = new Date(userInfo.created_at);
+      return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    return 'Recently';
+  };
+
   return (
     <SafeAreaView style={styles.flexContainer}>
+      {/* Sticky Header */}
+      <View style={styles.stickyHeader}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.secondary} />
+        </TouchableOpacity>
+        <View style={styles.rightIcons}>
+          <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
+            <Ionicons
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={22}
+              color={isFavorite ? "#FF5B5B" : COLORS.secondary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => setShowMenu(true)}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.secondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         {/* --- IMAGE SECTION --- */}
         <View style={styles.imageSection}>
@@ -202,36 +325,19 @@ const ProductDetailScreen = () => {
           </ScrollView>
 
           {/* Pagination dots */}
-          <View style={styles.paginationContainer}>
-            {allImages.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  { backgroundColor: index === activeIndex ? COLORS.white : "rgba(255,255,255,0.4)" },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Header buttons */}
-          <View style={styles.headerOverlay}>
-            <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={22} color={COLORS.white} />
-            </TouchableOpacity>
-            <View style={styles.rightIcons}>
-              <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
-                <Ionicons
-                  name={isFavorite ? "heart" : "heart-outline"}
-                  size={22}
-                  color={COLORS.white}
+          {allImages.length > 1 && (
+            <View style={styles.paginationContainer}>
+              {allImages.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.dot,
+                    { backgroundColor: index === activeIndex ? COLORS.white : "rgba(255,255,255,0.4)" },
+                  ]}
                 />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.headerBtn} onPress={() => setShowMenu(true)}>
-                <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.white} />
-              </TouchableOpacity>
+              ))}
             </View>
-          </View>
+          )}
         </View>
 
         {/* --- DETAILS CARD --- */}
@@ -278,21 +384,31 @@ const ProductDetailScreen = () => {
         </View>
 
         {/* --- POSTED BY CARD --- */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeader}>Posted by</Text>
-          <TouchableOpacity style={styles.userContainer}>
-            <Image 
-              source={{ uri: mockUser.avatar }} 
-              style={styles.userAvatar}
-            />
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{mockUser.name}</Text>
-              <Text style={styles.userMeta}>Joined {mockUser.joinedDate}</Text>
-              <Text style={styles.userMeta}>Last active {mockUser.lastActive}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
-          </TouchableOpacity>
-        </View>
+        {userInfo && (
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionHeader}>Posted by</Text>
+            <TouchableOpacity style={styles.userContainer}>
+              {userInfo.profile_image_url ? (
+                <Image 
+                  source={{ uri: userInfo.profile_image_url }} 
+                  style={styles.userAvatar}
+                />
+              ) : (
+                <View style={styles.userAvatarPlaceholder}>
+                  <Text style={styles.userAvatarText}>{getInitials()}</Text>
+                </View>
+              )}
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>{userInfo.username}</Text>
+                {userInfo.bio && (
+                  <Text style={styles.userBio} numberOfLines={2}>{userInfo.bio}</Text>
+                )}
+                <Text style={styles.userMeta}>Joined {getJoinedDate()}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* --- MAP CARD --- */}
         <View style={styles.sectionCard}>
@@ -353,24 +469,34 @@ const styles = StyleSheet.create({
   flexContainer: { flex: 1, backgroundColor: COLORS.background },
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
+  
+  stickyHeader: {
+    position: 'absolute',
+    top: 45,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    zIndex: 1000,
+    backgroundColor: 'transparent',
+  },
+  
   imageSection: { width, height: PRODUCT_IMAGE_HEIGHT },
   productImage: { width, height: "100%" },
 
-  headerOverlay: {
-    position: "absolute",
-    top: 50,
-    left: 15,
-    right: 15,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
   headerBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: COLORS.white,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   rightIcons: { flexDirection: "row", gap: 10 },
 
@@ -505,6 +631,22 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     marginRight: 12,
   },
+
+  userAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#B695C0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  userAvatarText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+  },
   
   userInfo: {
     flex: 1,
@@ -514,6 +656,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: COLORS.secondary,
+    marginBottom: 2,
+  },
+
+  userBio: {
+    fontSize: 13,
+    color: COLORS.textLight,
     marginBottom: 2,
   },
   

@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -24,7 +25,7 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 16; // Changed from 24 to 16 (8px less on each side)
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 16;
 const SAFE_AREA_PADDING = 40;
 const TAB_BAR_HEIGHT = 90;
 
@@ -164,10 +165,18 @@ const ProductCard: React.FC<{
   userLat: number | null;
   userLon: number | null;
   categories: Category[];
-}> = ({ product, userLat, userLon, categories }) => {
+  isLiked: boolean;
+  onToggleLike: (productId: number) => void;
+}> = ({ product, userLat, userLon, categories, isLiked, onToggleLike }) => {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const toggleLike = () => setLiked(!liked);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const toggleLike = async () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    await onToggleLike(product.id);
+    setTimeout(() => setIsAnimating(false), 300);
+  };
 
   const category = categories.find((c) => c.id === product.category_id);
   const categoryAcceptsDelivery = category?.delivery || false;
@@ -191,23 +200,18 @@ const ProductCard: React.FC<{
 
   const tagColors = getTagColor();
 
-  // Updated price formatting function (10,000 DA = 1 million)
   const formatPrice = () => {
     if (product.listing_type === "exchange") return "Exchange";
     
-    // Format price in millions if >= 10,000 DA (since 10,000 DA = 1 million)
     if (product.price >= 10000) {
       const millions = product.price / 10000;
       let formattedMillions;
       
-      // If it's a whole million, don't show decimals
       if (millions % 1 === 0) {
         formattedMillions = millions.toString();
       } else if (millions >= 10) {
-        // For 10+ million, no decimals
         formattedMillions = Math.round(millions).toString();
       } else {
-        // Show one decimal place for under 10 million
         formattedMillions = millions.toFixed(1);
       }
       
@@ -217,7 +221,6 @@ const ProductCard: React.FC<{
       return `${formattedMillions} million DA`;
     }
     
-    // Format normally for prices below 10,000 DA
     if (product.listing_type === "rent") {
       return `${product.price.toLocaleString()} DA/mo`;
     }
@@ -250,11 +253,15 @@ const ProductCard: React.FC<{
             </View>
           )}
 
-          <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
+          <TouchableOpacity 
+            onPress={toggleLike} 
+            style={styles.heartIcon}
+            disabled={isAnimating}
+          >
             <Ionicons
-              name={liked ? "heart" : "heart-outline"}
+              name={isLiked ? "heart" : "heart-outline"}
               size={22}
-              color={liked ? "#FF5B5B" : "white"}
+              color={isLiked ? "#FF5B5B" : "white"}
             />
           </TouchableOpacity>
         </View>
@@ -354,6 +361,8 @@ export default function HomeScreen() {
   const [location, setLocation] = useState<string>("Loading...");
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [likedProducts, setLikedProducts] = useState<Set<number>>(new Set());
   const router = useRouter();
   const params = useLocalSearchParams();
   const searchQuery = params.query as string || '';
@@ -367,6 +376,95 @@ export default function HomeScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          setCurrentUserId(user.user_id);
+        }
+      } catch (error) {
+        console.error('Error getting current user:', error);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
+  // Fetch user's liked products
+  const fetchUserLikes = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('likes')
+        .select('product_id')
+        .eq('user_id', currentUserId)
+        .not('product_id', 'is', null);
+
+      if (error) throw error;
+
+      const likedProductIds = new Set(data?.map(like => like.product_id) || []);
+      setLikedProducts(likedProductIds);
+    } catch (error: any) {
+      console.error('Error fetching likes:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserLikes();
+    }
+  }, [currentUserId]);
+
+  // Toggle like functionality
+  const handleToggleLike = async (productId: number) => {
+    if (!currentUserId) {
+      Alert.alert('Login Required', 'Please login to like products');
+      return;
+    }
+
+    const isCurrentlyLiked = likedProducts.has(productId);
+
+    try {
+      if (isCurrentlyLiked) {
+        // Unlike: Delete from likes table
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId);
+
+        if (error) throw error;
+
+        // Update local state
+        setLikedProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      } else {
+        // Like: Insert into likes table
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            user_id: currentUserId,
+            product_id: productId,
+            post_id: null
+          });
+
+        if (error) throw error;
+
+        // Update local state
+        setLikedProducts(prev => new Set([...prev, productId]));
+      }
+    } catch (error: any) {
+      console.error('Error toggling like:', error);
+      Alert.alert('Error', 'Failed to update like status');
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -644,6 +742,8 @@ export default function HomeScreen() {
                 userLat={userLat}
                 userLon={userLon}
                 categories={categories}
+                isLiked={likedProducts.has(product.id)}
+                onToggleLike={handleToggleLike}
               />
             ))}
           </View>
