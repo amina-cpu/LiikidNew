@@ -242,6 +242,26 @@ const ProductDetailScreen = () => {
     }
   };
 
+  const navigateToSellerProfile = () => {
+    if (!userInfo?.user_id) {
+      Alert.alert("Error", "Seller information is not available.");
+      return;
+    }
+    
+    const sellerId = userInfo.user_id;
+
+    if (currentUserId === sellerId) { 
+      router.push("/profile"); 
+      console.log("Navigating to personal profile: /profile");
+    } else {
+      router.push({
+        pathname: "/someonesProfile",
+        params: { userId: sellerId },
+      });
+      console.log(`Navigating to external profile: /someonesProfile?userId=${sellerId}`);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.flexCenter}>
@@ -351,15 +371,16 @@ const ProductDetailScreen = () => {
 
         <View style={styles.detailsCard}>
           <Text style={styles.title}>{product.name}</Text>
-          <Text style={styles.condition}>Used - Good</Text>
+          <Text style={styles.condition}>Used Good</Text>
 
           <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
-            <Text style={[styles.priceText, { color: typeColor }]}>
-              {product.listing_type === "exchange" ? "Exchange" : `${product.price} DA`}
-            </Text>
-            <Text style={styles.separator}>–</Text>
-            <Text style={[styles.typeText, { color: typeColor }]}>
-              {product.listing_type.charAt(0).toUpperCase() + product.listing_type.slice(1)}
+            <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
+              {product.listing_type === "exchange"
+                ? "Exchange"
+                : `${product.price} DA`}
+              {" - "}
+              {product.listing_type.charAt(0).toUpperCase() +
+                product.listing_type.slice(1)}
             </Text>
           </View>
 
@@ -374,13 +395,14 @@ const ProductDetailScreen = () => {
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>Description</Text>
           <Text style={styles.descriptionText}>
-            {product.description.length > 150 
-              ? `${product.description.substring(0, 150)}... ` 
+            {product.description.length > 150
+              ? product.description.substring(0, 150)
               : product.description}
             {product.description.length > 150 && (
-              <Text style={styles.seeMore}>See more</Text>
+              <Text style={styles.seeMore}>... See more</Text>
             )}
           </Text>
+
           <View style={styles.postedRow}>
             <Text style={styles.postedDate}>Posted on {product.created_at}</Text>
             <View style={styles.likesContainer}>
@@ -393,7 +415,11 @@ const ProductDetailScreen = () => {
         {userInfo && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionHeader}>Posted by</Text>
-            <TouchableOpacity style={styles.userContainer}>
+           
+            <TouchableOpacity 
+              style={styles.userContainer}
+              onPress={navigateToSellerProfile} 
+            >
               {userInfo.profile_image_url ? (
                 <Image 
                   source={{ uri: userInfo.profile_image_url }} 

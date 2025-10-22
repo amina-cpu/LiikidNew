@@ -433,20 +433,26 @@ const ProfileScreen = () => {
 
                         <Text style={styles.displayName}>{userData.username}</Text>
 
-                        <View style={styles.statsRow}>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{products.length}</Text>
-                                <Text style={styles.statName}>Posts</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{followingCount}</Text>
-                                <Text style={styles.statName}>Following</Text>
-                            </View>
-                            <View style={styles.statBox}>
-                                <Text style={styles.statValue}>{followersCount}</Text>
-                                <Text style={styles.statName}>Followers</Text>
-                            </View>
-                        </View>
+                       <View style={styles.statsRow}>
+    <View style={styles.statBox}>
+        <Text style={styles.statValue}>{products.length}</Text>
+        <Text style={styles.statName}>Posts</Text>
+    </View>
+    <TouchableOpacity 
+        style={styles.statBox}
+        onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
+    >
+        <Text style={styles.statValue}>{followingCount}</Text>
+        <Text style={styles.statName}>Following</Text>
+    </TouchableOpacity>
+    <TouchableOpacity 
+        style={styles.statBox}
+        onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
+    >
+        <Text style={styles.statValue}>{followersCount}</Text>
+        <Text style={styles.statName}>Followers</Text>
+    </TouchableOpacity>
+</View>
                     </View>
 
                     <TouchableOpacity 

@@ -1,6 +1,7 @@
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -17,7 +18,7 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
-
+import { useLocalSearchParams, useRouter } from "expo-router";
 interface Category {
   id: number;
   name: string;
@@ -25,6 +26,7 @@ interface Category {
   delivery?: boolean;
 }
 
+ 
 interface Subcategory {
   id: number;
   category_id: number;
@@ -38,10 +40,10 @@ interface SubSubcategory {
   name: string;
   description: string | null;
 }
-
+const PRIMARY_TEAL = "#000000ff";
 const AddListingForm = () => {
   const { user } = useAuth();
-  
+  const router = useRouter();
   const [photos, setPhotos] = useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
   const [title, setTitle] = useState('');
@@ -72,7 +74,36 @@ const AddListingForm = () => {
   const [loadingCategories, setLoadingCategories] = useState(true);
 
   const scrollViewRef = useRef<ScrollView>(null);
+const handleBackPress = () => {
+    if (uploading) {
+      Alert.alert(
+        'Upload in Progress',
+        'Please wait for the upload to complete before going back.'
+      );
+      return;
+    }
 
+    // Check if user has made any changes
+    const hasChanges = photos.length > 0 || title.trim() !== '' || description.trim() !== '' || 
+                       price.trim() !== '' || selectedCategory !== null;
+
+    if (hasChanges) {
+      Alert.alert(
+        'Discard Changes?',
+        'You have unsaved changes. Are you sure you want to go back?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Discard', 
+            style: 'destructive',
+            onPress: () => router.back()
+          }
+        ]
+      );
+    } else {
+      router.back();
+    }
+  };
   useEffect(() => {
     fetchCategories();
   }, []);
@@ -298,7 +329,37 @@ const AddListingForm = () => {
       if (!user || !user.user_id) {
         throw new Error('User not authenticated');
       }
+const router = useRouter();
+const handleBackPress = () => {
+  if (uploading) {
+    Alert.alert(
+      'Upload in Progress',
+      'Please wait for the upload to complete before going back.'
+    );
+    return;
+  }
 
+  // Check if user has made any changes
+  const hasChanges = photos.length > 0 || title.trim() !== '' || description.trim() !== '' || 
+                     price.trim() !== '' || selectedCategory !== null;
+
+  if (hasChanges) {
+    Alert.alert(
+      'Discard Changes?',
+      'You have unsaved changes. Are you sure you want to go back?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Discard', 
+          style: 'destructive',
+          onPress: () => router.back()
+        }
+      ]
+    );
+  } else {
+    router.back();
+  }
+};
       const productData: any = {
         name: title.trim(),
         description: description.trim() || null,
@@ -494,12 +555,15 @@ const AddListingForm = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
+      <View style={styles.topBar}>
+  <TouchableOpacity style={styles.backCircle} onPress={handleBackPress}>
+          <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Listing</Text>
-      </View>
+
+  <Text style={styles.topBarTitle}>Add Listing</Text>
+  <View style={{ width: 32 }} /> 
+</View>
+
 
       <ScrollView ref={scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* <View style={styles.userInfoSection}>
@@ -535,12 +599,17 @@ const AddListingForm = () => {
             <TextInput
               style={styles.input}
               placeholder="What are you selling?"
+              placeholderTextColor="#9CA3AF"
               value={title}
               onChangeText={setTitle}
               maxLength={200}
               editable={!uploading}
             />
-            {errors.title && <Text style={styles.errorIcon}>▲</Text>}
+            {errors.title && (
+              <View style={styles.errorIconContainer}>
+                <Text style={styles.errorIcon}>▲</Text>
+              </View>
+            )}
           </View>
           {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
         </View>
@@ -551,6 +620,7 @@ const AddListingForm = () => {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Describe your item in detail..."
+              placeholderTextColor="#9CA3AF"
               value={description}
               onChangeText={setDescription}
               multiline
@@ -558,7 +628,11 @@ const AddListingForm = () => {
               maxLength={2000}
               editable={!uploading}
             />
-            {errors.description && <Text style={styles.errorIconTextArea}>▲</Text>}
+            {errors.description && (
+              <View style={styles.errorIconContainerTextArea}>
+                <Text style={styles.errorIcon}>▲</Text>
+              </View>
+            )}
           </View>
           {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
         </View>
@@ -626,12 +700,17 @@ const AddListingForm = () => {
                 <TextInput
                   style={styles.input}
                   placeholder="Price"
+                  placeholderTextColor="#9CA3AF"
                   value={price}
                   onChangeText={setPrice}
                   keyboardType="numeric"
                   editable={!uploading}
                 />
-                {errors.price && <Text style={styles.errorIcon}>▲</Text>}
+                {errors.price && (
+                  <View style={styles.errorIconContainer}>
+                    <Text style={styles.errorIcon}>▲</Text>
+                  </View>
+                )}
               </View>
               <View style={styles.currencyContainer}>
                 <Text style={styles.currencyText}>DA</Text>
@@ -647,6 +726,7 @@ const AddListingForm = () => {
             <TextInput
               style={styles.input}
               placeholder="e.g. 0777770707"
+              placeholderTextColor="#9CA3AF"
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
@@ -692,11 +772,12 @@ const AddListingForm = () => {
           </View>
         )}
 
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location</Text>
           <TextInput
             style={styles.input}
             placeholder="Address (optional)"
+            placeholderTextColor="#9CA3AF"
             value={locationAddress}
             onChangeText={setLocationAddress}
             editable={!uploading}
@@ -709,7 +790,7 @@ const AddListingForm = () => {
             </View>
             <Text style={styles.mapLabel}>Tap to set location</Text>
           </View>
-        </View>
+        </View> */}
 
         <TouchableOpacity 
           style={[styles.publishButton, uploading && styles.publishButtonDisabled]} 
@@ -737,15 +818,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  backButton: { marginRight: 16 },
-  backButtonText: { fontSize: 24, color: '#111' },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#111' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#fff' },
+  
+  headerTitle: { fontSize: 20, fontWeight: '600', color: '#111' },
   scrollView: { flex: 1 },
   userInfoSection: { padding: 16, backgroundColor: '#F0FDF4', borderBottomWidth: 1, borderBottomColor: '#D1FAE5' },
   userInfoText: { fontSize: 14, color: '#059669', fontWeight: '500' },
   section: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#111', marginBottom: 12 },
+  sectionTitle: { fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 10 },
   photosScroll: { flexDirection: 'row' },
   addPhotoBox: { width: 90, height: 90, borderWidth: 2, borderColor: '#D1D5DB', borderStyle: 'dashed', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
   addPhotoPlus: { fontSize: 32, color: '#9CA3AF', marginBottom: 4 },
@@ -756,17 +836,18 @@ const styles = StyleSheet.create({
   photoDeleteText: { color: '#fff', fontSize: 18, fontWeight: '600' },
   photoStar: { position: 'absolute', bottom: 4, right: 4, width: 24, height: 24, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   photoStarText: { color: '#FBBF24', fontSize: 16 },
-  inputContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', paddingRight: 12 },
-  input: { flex: 1, padding: 12, fontSize: 14, color: '#111' },
-  textArea: { minHeight: 100, textAlignVertical: 'top' },
-  inputError: { borderColor: '#EF4444' },
-  errorIcon: { color: '#EF4444', fontSize: 12 },
-  errorIconTextArea: { color: '#EF4444', fontSize: 12, position: 'absolute', right: 12, top: 12 },
-  errorText: { color: '#EF4444', fontSize: 12, marginTop: 4 },
+  inputContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
+  input: { flex: 1, padding: 12, fontSize: 15, color: '#111' },
+  textArea: { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 },
+  inputError: { borderColor: '#EF4444', borderWidth: 1.5 },
+  errorIconContainer: { paddingRight: 12, justifyContent: 'center', alignItems: 'center' },
+  errorIconContainerTextArea: { position: 'absolute', right: 12, top: 12 },
+  errorIcon: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
+  errorText: { color: '#EF4444', fontSize: 13, marginTop: 6, marginLeft: 2 },
   placeholderText: { color: '#9CA3AF' },
-  selectContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  selectText: { fontSize: 14, color: '#111' },
-  selectArrow: { fontSize: 20, color: '#9CA3AF' },
+  selectContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' },
+  selectText: { fontSize: 15, color: '#111' },
+  selectArrow: { fontSize: 24, color: '#9CA3AF', fontWeight: '300' },
   dealTypeContainer: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   dealTypeButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center' },
   dealTypeSell: { backgroundColor: '#1D4ED8' },
@@ -777,7 +858,7 @@ const styles = StyleSheet.create({
   switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchLabel: { fontSize: 14, color: '#111' },
   priceRow: { flexDirection: 'row', gap: 8 },
-  priceInputContainer: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', paddingRight: 12 },
+  priceInputContainer: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
   currencyContainer: { width: 60, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
   currencyText: { fontSize: 14, color: '#111', fontWeight: '500' },
   conditionContainer: { flexDirection: 'row', gap: 8 },
@@ -801,6 +882,39 @@ const styles = StyleSheet.create({
   modalScroll: { maxHeight: 400 },
   modalOption: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   modalOptionText: { fontSize: 16, color: '#111' },
+ topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
+    marginTop:30,
+  },
+  backCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F4F4F4",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  topBarTitle:{ 
+    fontSize: 20,
+   fontWeight: '600',
+    color: "#000",
+    textAlign: "center",
+    flex: 1,},
+  title: {
+    fontSize: 18,
+   fontWeight: 'bold',
+    color: "#000",
+    textAlign: "center",
+    flex: 1,
+  },
+
   modalClose: { marginTop: 16, padding: 16, backgroundColor: '#F3F4F6', borderRadius: 8, alignItems: 'center' },
   modalCloseText: { fontSize: 16, fontWeight: '600', color: '#111' },
 });

@@ -155,11 +155,14 @@ export default function TabLayout() {
 
       {/* Hidden screens */}
       <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="someonesProfile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="filters" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="product_detail" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
+      <Tabs.Screen name="followers_list" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
     </Tabs>
   );
 }
