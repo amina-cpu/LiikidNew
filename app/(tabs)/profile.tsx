@@ -438,20 +438,22 @@ const ProfileScreen = () => {
         <Text style={styles.statValue}>{products.length}</Text>
         <Text style={styles.statName}>Posts</Text>
     </View>
-    <TouchableOpacity 
-        style={styles.statBox}
-        onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
-    >
-        <Text style={styles.statValue}>{followingCount}</Text>
-        <Text style={styles.statName}>Following</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-        style={styles.statBox}
-        onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
-    >
-        <Text style={styles.statValue}>{followersCount}</Text>
-        <Text style={styles.statName}>Followers</Text>
-    </TouchableOpacity>
+  <TouchableOpacity 
+    style={styles.statBox}
+    onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
+>
+    <Text style={styles.statValue}>{followingCount}</Text>
+    <Text style={styles.statName}>Following</Text>
+</TouchableOpacity>
+
+
+<TouchableOpacity 
+    style={styles.statBox}
+    onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
+>
+    <Text style={styles.statValue}>{followersCount}</Text>
+    <Text style={styles.statName}>Followers</Text>
+</TouchableOpacity>
 </View>
                     </View>
 

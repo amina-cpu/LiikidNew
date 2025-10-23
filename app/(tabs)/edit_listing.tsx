@@ -43,9 +43,11 @@ interface SubSubcategory {
 
 const PRIMARY_TEAL = "#000000ff";
 
-const AddListingForm = () => {
+const EditListingForm = () => {
   const { user } = useAuth();
   const router = useRouter();
+  const { productId } = useLocalSearchParams();
+  
   const [photos, setPhotos] = useState<string[]>([]);
   const [mainPhotoIndex, setMainPhotoIndex] = useState(0);
   const [title, setTitle] = useState('');
@@ -74,6 +76,8 @@ const AddListingForm = () => {
   const [categoryStep, setCategoryStep] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingProduct, setLoadingProduct] = useState(true);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -86,26 +90,85 @@ const AddListingForm = () => {
       return;
     }
 
-    const hasChanges = photos.length > 0 || title.trim() !== '' || description.trim() !== '' || 
-                       price.trim() !== '' || selectedCategory !== null;
-
-    if (hasChanges) {
-      Alert.alert(
-        'Discard Changes?',
-        'You have unsaved changes. Are you sure you want to go back?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Discard', 
-            style: 'destructive',
-            onPress: () => router.back()
-          }
-        ]
-      );
-    } else {
-      router.back();
-    }
+    Alert.alert(
+      'Discard Changes?',
+      'Are you sure you want to go back without saving?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Discard', 
+          style: 'destructive',
+          onPress: () => router.back()
+        }
+      ]
+    );
   };
+
+  // Fetch existing product data
+  useEffect(() => {
+    const fetchProductData = async () => {
+      if (!productId) return;
+
+      try {
+        setLoadingProduct(true);
+        
+        const { data, error } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:categories(id, name, delivery),
+            subcategory:subcategories(id, name),
+            sub_subcategory:sub_subcategories(id, name),
+            product_images(image_url, order)
+          `)
+          .eq('id', productId)
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          // Set basic fields
+          setTitle(data.name || '');
+          setDescription(data.description || '');
+          setDealType(data.listing_type || 'sell');
+          setPrice(data.price?.toString() || '');
+          setLocationAddress(data.location_address || '');
+          setLatitude(data.latitude?.toString() || '');
+          setLongitude(data.longitude?.toString() || '');
+          
+          // Set delivery method
+          if (data.delivery) {
+            setDeliveryMethod('Delivery');
+          } else {
+            setDeliveryMethod('In-person');
+          }
+
+          // Set images
+          const allImages = [data.image_url, ...(data.product_images?.map((img: any) => img.image_url) || [])].filter(Boolean);
+          setPhotos(allImages);
+          setExistingImageUrls(allImages);
+
+          // Set category
+          if (data.category) {
+            setSelectedCategory(data.category);
+          }
+          if (data.subcategory) {
+            setSelectedSubcategory(data.subcategory);
+          }
+          if (data.sub_subcategory) {
+            setSelectedSubSubcategory(data.sub_subcategory);
+          }
+        }
+      } catch (error: any) {
+        console.error('Error fetching product:', error);
+        Alert.alert('Error', 'Failed to load product data');
+      } finally {
+        setLoadingProduct(false);
+      }
+    };
+
+    fetchProductData();
+  }, [productId]);
 
   useEffect(() => {
     fetchCategories();
@@ -231,6 +294,11 @@ const AddListingForm = () => {
   };
 
   const uploadImage = async (uri: string): Promise<string | null> => {
+    // If it's an existing URL, return it as-is
+    if (uri.startsWith('http')) {
+      return uri;
+    }
+
     try {
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -268,7 +336,7 @@ const AddListingForm = () => {
     const newErrors: any = {};
     
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to create a listing.');
+      Alert.alert('Error', 'You must be logged in to edit a listing.');
       return false;
     }
     
@@ -288,7 +356,7 @@ const AddListingForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handlePublish = async () => {
+  const handleUpdate = async () => {
     if (uploading) return;
 
     if (!validateForm()) {
@@ -307,10 +375,8 @@ const AddListingForm = () => {
       }
 
       if (uploadedUrls.length === 0) {
-        Alert.alert('Image Upload Failed', 'All image uploads failed.', [
-          { text: 'Cancel', style: 'cancel', onPress: () => setUploading(false) },
-          { text: 'Continue', onPress: () => insertProduct([]) }
-        ]);
+        Alert.alert('Error', 'No images available');
+        setUploading(false);
         return;
       }
 
@@ -318,16 +384,16 @@ const AddListingForm = () => {
       const otherUrls = uploadedUrls.filter((_, idx) => idx !== mainPhotoIndex);
       const orderedUrls = [mainUrl, ...otherUrls];
 
-      await insertProduct(orderedUrls);
+      await updateProduct(orderedUrls);
 
     } catch (error: any) {
-      console.error('Error in handlePublish:', error);
+      console.error('Error in handleUpdate:', error);
       Alert.alert('Error', 'An error occurred: ' + (error.message || 'Unknown error'));
       setUploading(false);
     }
   };
 
-  const insertProduct = async (imageUrls: string[]) => {
+  const updateProduct = async (imageUrls: string[]) => {
     try {
       if (!user || !user.user_id) {
         throw new Error('User not authenticated');
@@ -341,8 +407,6 @@ const AddListingForm = () => {
         category_id: selectedCategory?.id || null,
         image_url: imageUrls.length > 0 ? imageUrls[0] : null,
         delivery: deliveryMethod === 'Delivery' || deliveryMethod === 'Both',
-        user_id: user.user_id,
-        state: 'active',
       };
 
       if (selectedSubcategory) productData.subcategory_id = selectedSubcategory.id;
@@ -351,18 +415,23 @@ const AddListingForm = () => {
       if (latitude && !isNaN(parseFloat(latitude))) productData.latitude = parseFloat(latitude);
       if (longitude && !isNaN(parseFloat(longitude))) productData.longitude = parseFloat(longitude);
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('products')
-        .insert([productData])
-        .select();
+        .update(productData)
+        .eq('id', productId);
 
       if (error) throw error;
 
-      const productId = data[0]?.id;
+      // Delete old additional images
+      await supabase
+        .from('product_images')
+        .delete()
+        .eq('product_id', productId);
 
-      if (imageUrls.length > 1 && productId) {
+      // Insert new additional images
+      if (imageUrls.length > 1) {
         const imageRecords = imageUrls.slice(1).map((url, index) => ({
-          product_id: productId,
+          product_id: parseInt(productId as string),
           image_url: url,
           order: index + 2,
         }));
@@ -370,38 +439,19 @@ const AddListingForm = () => {
         await supabase.from('product_images').insert(imageRecords);
       }
 
-      Alert.alert('✅ Success', 'Listing published successfully!', [
+      Alert.alert('✅ Success', 'Product updated successfully!', [
         {
           text: 'OK',
-          onPress: () => {
-            setPhotos([]);
-            setMainPhotoIndex(0);
-            setTitle('');
-            setDescription('');
-            setPrice('');
-            setDealType('sell');
-            setAlsoExchange(false);
-            setCondition('new');
-            setDeliveryMethod(null);
-            setLocationAddress('');
-            setLatitude('');
-            setLongitude('');
-            setSelectedCategory(null);
-            setSelectedSubcategory(null);
-            setSelectedSubSubcategory(null);
-            setErrors({});
-            router.push('/(tabs)');
-          }
+          onPress: () => router.back()
         }
       ]);
 
     } catch (error: any) {
-      console.error('Error in insertProduct:', error);
+      console.error('Error in updateProduct:', error);
       
-      let errorMessage = 'Unable to add product';
+      let errorMessage = 'Unable to update product';
       if (error.code === '23503') errorMessage = 'Invalid category or user reference.';
-      else if (error.code === '42501') errorMessage = 'You do not have permission to add products';
-      else if (error.code === '23505') errorMessage = 'This product already exists';
+      else if (error.code === '42501') errorMessage = 'You do not have permission to update products';
       else if (error.message) errorMessage = error.message;
       
       Alert.alert('Error', errorMessage);
@@ -508,11 +558,11 @@ const AddListingForm = () => {
     </Modal>
   );
 
-  if (loadingCategories) {
+  if (loadingCategories || loadingProduct) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#10B981" />
-        <Text style={styles.loadingText}>Loading categories...</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -520,7 +570,7 @@ const AddListingForm = () => {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorTextMain}>Please log in to create a listing</Text>
+        <Text style={styles.errorText}>Please log in to edit a listing</Text>
       </View>
     );
   }
@@ -534,7 +584,7 @@ const AddListingForm = () => {
           <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle}>Add Listing</Text>
+        <Text style={styles.topBarTitle}>Edit Listing</Text>
         <View style={{ width: 32 }} /> 
       </View>
 
@@ -743,16 +793,16 @@ const AddListingForm = () => {
 
         <TouchableOpacity 
           style={[styles.publishButton, uploading && styles.publishButtonDisabled]} 
-          onPress={handlePublish}
+          onPress={handleUpdate}
           disabled={uploading}
         >
           {uploading ? (
             <View style={styles.uploadingRow}>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.uploadingText}>Uploading {photos.length} photo{photos.length > 1 ? 's' : ''}...</Text>
+              <Text style={styles.uploadingText}>Updating...</Text>
             </View>
           ) : (
-            <Text style={styles.publishButtonText}>Publish Listing</Text>
+            <Text style={styles.publishButtonText}>Update Listing</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -767,7 +817,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  errorTextMain: { fontSize: 16, color: '#EF4444' },
+  errorText: { color: '#EF4444', fontSize: 13, marginTop: 6, marginLeft: 2 },
   scrollView: { flex: 1 },
   section: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   sectionTitle: { fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 10 },
@@ -788,7 +838,6 @@ const styles = StyleSheet.create({
   errorIconContainer: { paddingRight: 12, justifyContent: 'center', alignItems: 'center' },
   errorIconContainerTextArea: { position: 'absolute', right: 12, top: 12 },
   errorIcon: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
-  errorText: { color: '#EF4444', fontSize: 13, marginTop: 6, marginLeft: 2 },
   placeholderText: { color: '#9CA3AF' },
   selectContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' },
   selectText: { fontSize: 15, color: '#111' },
@@ -852,4 +901,4 @@ const styles = StyleSheet.create({
   modalCloseText: { fontSize: 16, fontWeight: '600', color: '#111' },
 });
 
-export default AddListingForm;
+export default EditListingForm;

@@ -268,7 +268,10 @@ export default function CategoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
 
+  // Sticky header state
+  const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
   const scrollY = useRef(new Animated.Value(0)).current;
+  const [isSticky, setIsSticky] = useState(false);
   const headerHeight = useRef(new Animated.Value(1)).current;
   const lastScrollY = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -511,6 +514,9 @@ export default function CategoryScreen() {
       listener: (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
         
+        // Update sticky state
+        setIsSticky(currentScrollY >= filterTabsLayout.y);
+        
         if (scrollTimeout.current) {
           clearTimeout(scrollTimeout.current);
         }
@@ -633,6 +639,38 @@ export default function CategoryScreen() {
         </View>
       )}
 
+      {!isSearchActive && isSticky && (
+        <View style={styles.stickyFilterTabsWrapper}>
+          <View style={styles.filterTabs}>
+            {FILTER_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === tab && styles.filterButtonActive,
+                  selectedFilter === tab &&
+                    tab === "Sell" && { backgroundColor: BLUE },
+                  selectedFilter === tab &&
+                    tab === "Rent" && { backgroundColor: ORANGE },
+                  selectedFilter === tab &&
+                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                ]}
+                onPress={() => setSelectedFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selectedFilter === tab && styles.filterTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {!isSearchActive && (
         <Animated.View
           style={[
@@ -723,7 +761,13 @@ export default function CategoryScreen() {
             </ScrollView>
           )}
 
-          <View style={styles.filterTabsWrapper}>
+          <View 
+            style={styles.filterTabsWrapper}
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              setFilterTabsLayout({ y, height });
+            }}
+          >
             <View style={styles.filterTabs}>
               {FILTER_TABS.map((tab) => (
                 <TouchableOpacity
@@ -962,6 +1006,21 @@ const styles = StyleSheet.create({
   filterTabsWrapper: {
     paddingHorizontal: 16,
     marginBottom: 20,
+  },
+  stickyFilterTabsWrapper: {
+    position: "absolute",
+    top: SAFE_AREA_PADDING ,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 100,
   },
   filterTabs: {
     flexDirection: "row",

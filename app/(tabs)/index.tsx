@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Animated,
   Dimensions,
   Image,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -374,8 +375,14 @@ export default function HomeScreen() {
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
+
+  // Sticky header state
+  const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [isSticky, setIsSticky] = useState(false);
 
   // Get current user
   useEffect(() => {
@@ -430,7 +437,6 @@ export default function HomeScreen() {
 
     try {
       if (isCurrentlyLiked) {
-        // Unlike: Delete from likes table
         const { error } = await supabase
           .from('likes')
           .delete()
@@ -439,14 +445,12 @@ export default function HomeScreen() {
 
         if (error) throw error;
 
-        // Update local state
         setLikedProducts(prev => {
           const newSet = new Set(prev);
           newSet.delete(productId);
           return newSet;
         });
       } else {
-        // Like: Insert into likes table
         const { error } = await supabase
           .from('likes')
           .insert({
@@ -457,7 +461,6 @@ export default function HomeScreen() {
 
         if (error) throw error;
 
-        // Update local state
         setLikedProducts(prev => new Set([...prev, productId]));
       }
     } catch (error: any) {
@@ -623,7 +626,42 @@ export default function HomeScreen() {
     router.push('/');
   };
 
-  if (loading && products.length === 0) {
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: any) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        setIsSticky(offsetY >= filterTabsLayout.y);
+      },
+    }
+  );
+
+  // Pull to refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Reset to initial state
+      setProducts([]);
+      setDisplayedProducts([]);
+      setHasMoreProducts(true);
+      setSelectedFilter("All");
+      
+      // Fetch fresh data
+      await fetchData();
+      
+      // Refresh user likes
+      if (currentUserId) {
+        await fetchUserLikes();
+      }
+    } catch (error) {
+      console.error('Error refreshing:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [currentUserId]);
+
+  if (loading && products.length === 0 && !refreshing) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
@@ -642,7 +680,53 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.contentContainer}>
+      {isSticky && (
+        <View style={styles.stickyFilterTabsWrapper}>
+          <View style={styles.filterTabs}>
+            {FILTER_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === tab && styles.filterButtonActive,
+                  selectedFilter === tab &&
+                    tab === "Sell" && { backgroundColor: BLUE },
+                  selectedFilter === tab &&
+                    tab === "Rent" && { backgroundColor: ORANGE },
+                  selectedFilter === tab &&
+                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                ]}
+                onPress={() => setSelectedFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selectedFilter === tab && styles.filterTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      <ScrollView 
+        contentContainerStyle={styles.contentContainer}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[PRIMARY_TEAL]}
+            tintColor={PRIMARY_TEAL}
+            title="Pull to refresh"
+            titleColor={DARK_GRAY}
+          />
+        }
+      >
         <View style={styles.header}>
           {searchMode && (
             <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
@@ -699,7 +783,13 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        <View style={styles.filterTabsWrapper}>
+        <View 
+          style={styles.filterTabsWrapper}
+          onLayout={(event) => {
+            const { y, height } = event.nativeEvent.layout;
+            setFilterTabsLayout({ y, height });
+          }}
+        >
           <View style={styles.filterTabs}>
             {FILTER_TABS.map((tab) => (
               <TouchableOpacity
@@ -965,6 +1055,21 @@ const styles = StyleSheet.create({
   filterTabsWrapper: {
     paddingHorizontal: 16,
     marginBottom: 20,
+  },
+  stickyFilterTabsWrapper: {
+    position: "absolute",
+    top: SAFE_AREA_PADDING,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 100,
   },
   filterTabs: {
     flexDirection: "row",

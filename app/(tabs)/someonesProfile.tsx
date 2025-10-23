@@ -16,12 +16,10 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { supabase } from '../../lib/Supabase'; // Ensure this path is correct
+import { supabase } from '../../lib/Supabase';
 
-// --- Constants ---
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
 
-// --- Interfaces ---
 interface UserProfile {
     user_id: number;
     username: string;
@@ -51,15 +49,11 @@ interface Category {
     delivery: boolean;
 }
 
-// ---------------------------------------------------
-// ProductCard Component
-// ---------------------------------------------------
 const ProductCard: React.FC<{
     product: Product;
     categories: Category[];
 }> = ({ product, categories }) => {
     const router = useRouter();
-
     const category = categories.find((c) => c.id === product.category_id);
     const categoryAcceptsDelivery = category?.delivery || false;
 
@@ -76,13 +70,10 @@ const ProductCard: React.FC<{
 
     const getPriceLabel = (price: number, type: "sell" | "rent" | "exchange") => {
         if (type === "exchange") return "Exchange";
-
         const suffix = type === "rent" ? "/mo" : "";
-
         if (price >= 10000) {
             const millions = price / 10000;
             let formattedMillions;
-
             if (millions % 1 === 0) {
                 formattedMillions = millions.toString();
             } else if (millions >= 10) {
@@ -92,7 +83,6 @@ const ProductCard: React.FC<{
             }
             return `${formattedMillions} million DA${suffix}`;
         }
-
         return `${price.toLocaleString()} DA${suffix}`;
     };
 
@@ -111,7 +101,6 @@ const ProductCard: React.FC<{
                         }}
                         style={styles.cardImage}
                     />
-
                     {categoryAcceptsDelivery && (
                         <View style={styles.deliveryBadgeNew}>
                             <MaterialCommunityIcons
@@ -121,19 +110,16 @@ const ProductCard: React.FC<{
                             />
                         </View>
                     )}
-
                     <TouchableOpacity style={styles.threeDotsMenu}>
                         <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                     </TouchableOpacity>
                 </View>
-
                 <View style={styles.cardDetails}>
                     <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
                         <Text style={[styles.priceText, { color: tagColors.text }]}>
                             {getPriceLabel(product.price, product.listing_type)}
                         </Text>
                     </View>
-
                     <Text style={styles.cardTitle} numberOfLines={2}>
                         {product.name}
                     </Text>
@@ -143,9 +129,6 @@ const ProductCard: React.FC<{
     );
 };
 
-// ---------------------------------------------------
-// SomeonesProfileScreen Component (Main Export)
-// ---------------------------------------------------
 const SomeonesProfileScreen = () => {
     const { userId } = useLocalSearchParams();
     const targetUserId = typeof userId === 'string' ? parseInt(userId) : null;
@@ -157,14 +140,13 @@ const SomeonesProfileScreen = () => {
     const [refreshing, setRefreshing] = useState(false);
     
     const [isFollowing, setIsFollowing] = useState(false);
+    const [isMutualFollow, setIsMutualFollow] = useState(false);
     const [followingCount, setFollowingCount] = useState(0);
     const [followersCount, setFollowersCount] = useState(0);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
-
-    // --- Data Fetching Functions ---
 
     const fetchUserProducts = useCallback(async (userId: number) => {
         try {
@@ -185,14 +167,14 @@ const SomeonesProfileScreen = () => {
     }, []);
 
     const loadProfileData = useCallback(async (isRefreshing = false) => {
-        if (!targetUserId) return; 
+        if (!targetUserId) return;
 
         try {
             if (!isRefreshing) {
                 setLoading(true);
             }
 
-            // 1. Fetch target user's profile data
+            // 1. Fetch target user's profile
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .select('user_id, username, bio, profile_image_url, location, created_at')
@@ -202,7 +184,7 @@ const SomeonesProfileScreen = () => {
             if (profileError) throw profileError;
             setProfileData(profile);
 
-            // 2. Fetch categories for product card
+            // 2. Fetch categories
             const { data: categoriesData, error: categoriesError } = await supabase
                 .from('categories')
                 .select('id, name, description, delivery');
@@ -210,37 +192,46 @@ const SomeonesProfileScreen = () => {
             if (categoriesError) throw categoriesError;
             setCategories(categoriesData || []);
 
-            // 3. Fetch counts (Follower/Following)
-            const [
-                { count: targetFollowingCount },
-                { count: targetFollowersCount }
-            ] = await Promise.all([
-                supabase.from('user_follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetUserId),
-                supabase.from('user_follows').select('*', { count: 'exact', head: true }).eq('following_id', targetUserId)
-            ]);
+            // 3. Fetch TARGET USER'S follower/following counts
+            const { count: targetFollowingCount } = await supabase
+                .from('user_follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('follower_id', targetUserId);
+
+            const { count: targetFollowersCount } = await supabase
+                .from('user_follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('following_id', targetUserId);
             
             setFollowingCount(targetFollowingCount || 0);
             setFollowersCount(targetFollowersCount || 0);
 
-            // 4. Fetch follow status (only if currentUserId is known)
-            let isUserFollowing = false;
+            // 4. Check follow relationship with current user
             if (currentUserId) {
-                const { data: followStatus, error: followError } = await supabase
+                // Does current user follow target user?
+                const { data: followStatus } = await supabase
                     .from('user_follows')
                     .select('follow_id')
                     .eq('follower_id', currentUserId)
                     .eq('following_id', targetUserId)
-                    .single();
+                    .maybeSingle();
                 
-                // PGRST116 is the code for "No rows found"
-                if (followError && followError.code !== 'PGRST116') { 
-                    throw followError;
-                }
-                isUserFollowing = !!followStatus;
-            }
-            setIsFollowing(isUserFollowing);
+                const userFollowsTarget = !!followStatus;
+                setIsFollowing(userFollowsTarget);
 
-            // 5. Fetch user's posted products
+                // Does target user follow current user back?
+                const { data: followBackStatus } = await supabase
+                    .from('user_follows')
+                    .select('follow_id')
+                    .eq('follower_id', targetUserId)
+                    .eq('following_id', currentUserId)
+                    .maybeSingle();
+                
+                const targetFollowsUser = !!followBackStatus;
+                setIsMutualFollow(userFollowsTarget && targetFollowsUser);
+            }
+
+            // 5. Fetch user's products
             await fetchUserProducts(targetUserId);
 
         } catch (error: any) {
@@ -254,21 +245,21 @@ const SomeonesProfileScreen = () => {
         }
     }, [targetUserId, currentUserId, fetchUserProducts]);
 
-    // --- Follow Toggle Logic ---
     const handleFollowToggle = useCallback(async () => {
         if (!currentUserId) {
             Alert.alert('Login Required', 'You must be logged in to follow users.');
             return;
         }
-        if (currentUserId === targetUserId) return; // Self-following check
+        if (currentUserId === targetUserId) return;
 
         try {
-            // Optimistic UI Update
-            setIsFollowing(prev => !prev);
-            setFollowersCount(prev => isFollowing ? Math.max(0, prev - 1) : prev + 1);
+            const wasFollowing = isFollowing;
+            
+            // Optimistic update
+            setIsFollowing(!wasFollowing);
+            setFollowersCount(prev => wasFollowing ? Math.max(0, prev - 1) : prev + 1);
 
-            if (isFollowing) {
-                // UNFOLLOW action: Delete the relationship
+            if (wasFollowing) {
                 const { error } = await supabase
                     .from('user_follows')
                     .delete()
@@ -276,25 +267,34 @@ const SomeonesProfileScreen = () => {
                     .eq('following_id', targetUserId);
                 
                 if (error) throw error;
+                setIsMutualFollow(false);
             } else {
-                // FOLLOW action: Insert the new relationship
                 const { error } = await supabase
                     .from('user_follows')
                     .insert({ follower_id: currentUserId, following_id: targetUserId });
 
                 if (error) throw error;
+
+                // Check if it's now mutual
+                const { data: followBackStatus } = await supabase
+                    .from('user_follows')
+                    .select('follow_id')
+                    .eq('follower_id', targetUserId)
+                    .eq('following_id', currentUserId)
+                    .maybeSingle();
+                
+                setIsMutualFollow(!!followBackStatus);
             }
         } catch (error: any) {
             console.error('Error toggling follow:', error);
             Alert.alert('Error', 'Failed to update follow status.');
             
-            // Revert optimistic UI update on error
-            setIsFollowing(prev => !prev);
+            // Revert
+            setIsFollowing(isFollowing);
             setFollowersCount(prev => isFollowing ? prev + 1 : Math.max(0, prev - 1));
         }
     }, [currentUserId, targetUserId, isFollowing]);
 
-    // --- Initial Load & Redirect Check ---
     useEffect(() => {
         const fetchAndCheckUser = async () => {
             if (!targetUserId) {
@@ -303,38 +303,34 @@ const SomeonesProfileScreen = () => {
                 return;
             }
 
-            let user = null;
             try {
                 const userJson = await AsyncStorage.getItem('user');
                 if (userJson) {
-                    user = JSON.parse(userJson);
+                    const user = JSON.parse(userJson);
                     const loggedInUserId = user.user_id;
                     setCurrentUserId(loggedInUserId);
 
-                    // ** REDIRECT CHECK: If viewing own profile, redirect to main profile screen **
                     if (loggedInUserId === targetUserId) {
+                        // Redirect to the current user's profile screen
                         router.replace('/profile'); 
-                        return; // Stop execution
+                        return;
                     }
                 }
             } catch (error) {
                 console.error('Error fetching current user ID:', error);
             }
 
-            // Load external profile data
-            loadProfileData(); 
+            loadProfileData();
         };
 
         fetchAndCheckUser();
-    }, [targetUserId, router, loadProfileData]);
+    }, [targetUserId]);
     
-    // --- Refresh Handler ---
     const onRefresh = useCallback(() => {
         setRefreshing(true);
         loadProfileData(true);
     }, [loadProfileData]);
     
-    // --- Helper for UI ---
     const getInitials = () => {
         return profileData?.username?.charAt(0).toUpperCase() || 'U';
     };
@@ -345,7 +341,6 @@ const SomeonesProfileScreen = () => {
         </View>
     );
 
-    // --- Loading & Error States ---
     if (loading) {
         return (
             <View style={[styles.container, styles.centerContent]}>
@@ -361,16 +356,23 @@ const SomeonesProfileScreen = () => {
             </View>
         );
     }
-    
-    // Check again, should be false due to redirect check above
-    const isCurrentUserProfile = currentUserId === targetUserId; 
 
-    // --- Render JSX ---
+    const getFollowButtonText = () => {
+        if (isMutualFollow) return 'Friends';
+        if (isFollowing) return 'Following';
+        return 'Follow';
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
             
             <View style={styles.header}>
+                {/* VERIFIED: This is the correct way to navigate back. 
+                    If this goes to the homepage, it means the page you 
+                    came from was cleared from the stack, usually by 
+                    a bottom tab navigation or router.replace() elsewhere.
+                */}
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
@@ -410,42 +412,52 @@ const SomeonesProfileScreen = () => {
                         <Text style={styles.displayName}>{profileData.username}</Text>
 
                         <View style={styles.statsRow}>
-    <View style={styles.statBox}>
-        <Text style={styles.statValue}>{products.length}</Text>
-        <Text style={styles.statName}>Posts</Text>
-    </View>
-    <TouchableOpacity 
-        style={styles.statBox}
-        onPress={() => router.push(`/following_list?userId=${targetUserId}`)}
-    >
-        <Text style={styles.statValue}>{followingCount}</Text>
-        <Text style={styles.statName}>Following</Text>
-    </TouchableOpacity>
-    <TouchableOpacity 
-        style={styles.statBox}
-        onPress={() => router.push(`/followers_list?userId=${targetUserId}`)}
-    >
-        <Text style={styles.statValue}>{followersCount}</Text>
-        <Text style={styles.statName}>Followers</Text>
-    </TouchableOpacity>
-</View>
-                        
-                        {/* Action Buttons for external profiles, including FOLLOW */}
-                        {!isCurrentUserProfile && (
-                            <View style={styles.actionButtonsRow}>
-                                <TouchableOpacity 
-                                    style={[styles.followButton, isFollowing && styles.unfollowButton]}
-                                    onPress={handleFollowToggle}
-                                >
-                                    <Text style={[styles.followButtonText, isFollowing && styles.unfollowButtonText]}>
-                                        {isFollowing ? 'Following' : 'Follow'}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.chatButton} onPress={() => Alert.alert("Chat", `Starting chat with ${profileData.username}`)}>
-                                    <Text style={styles.chatButtonText}>Chat</Text>
-                                </TouchableOpacity>
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{products.length}</Text>
+                                <Text style={styles.statName}>Posts</Text>
                             </View>
-                        )}
+                            
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => router.push(`/following_list?userId=${targetUserId}`)}
+                            >
+                                <Text style={styles.statValue}>{followingCount}</Text>
+                                <Text style={styles.statName}>Following</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => router.push(`/followers_list?userId=${targetUserId}`)}
+                            >
+                                <Text style={styles.statValue}>{followersCount}</Text>
+                                <Text style={styles.statName}>Followers</Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.actionButtonsRow}>
+                            <TouchableOpacity 
+                                style={[
+                                    styles.followButton,
+                                    isFollowing && !isMutualFollow && styles.unfollowButton,
+                                    isMutualFollow && styles.friendsButton
+                                ]}
+                                onPress={handleFollowToggle}
+                            >
+                                <Text style={[
+                                    styles.followButtonText,
+                                    isFollowing && !isMutualFollow && styles.unfollowButtonText,
+                                    isMutualFollow && styles.friendsButtonText
+                                ]}>
+                                    {getFollowButtonText()}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={styles.chatButton} 
+                                onPress={() => Alert.alert("Chat", `Starting chat with ${profileData.username}`)}
+                            >
+                                <Text style={styles.chatButtonText}>Chat</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
 
@@ -455,7 +467,6 @@ const SomeonesProfileScreen = () => {
                     </View>
                 )}
 
-                {/* Single Tab for Posted Items */}
                 <View style={styles.tabBarSingle}>
                     <View style={styles.activeTabSingle}>
                         <Text style={styles.tabTextActive}>Posted Items ({products.length})</Text>
@@ -493,9 +504,6 @@ const SomeonesProfileScreen = () => {
     );
 };
 
-// ---------------------------------------------------
-// Styles
-// ---------------------------------------------------
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -529,9 +537,9 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: '700',
         color: '#000',
-        flex: 1, 
+        flex: 1,
         textAlign: 'center',
-        marginLeft: -24, 
+        marginLeft: -24,
     },
     headerRight: {
         flexDirection: 'row',
@@ -628,6 +636,14 @@ const styles = StyleSheet.create({
     unfollowButtonText: {
         color: '#16A085',
     },
+    friendsButton: {
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#C8E853',
+    },
+    friendsButtonText: {
+        color: '#000',
+    },
     chatButton: {
         backgroundColor: '#fff',
         paddingHorizontal: 25,
@@ -713,7 +729,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingTop: 14,
     },
-    // --- ProductCard Styles ---
     cardContainer: {
         width: CARD_WIDTH,
         marginBottom: 8,

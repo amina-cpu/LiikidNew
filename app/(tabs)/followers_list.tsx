@@ -1,303 +1,275 @@
+// app/followers_list.tsx
+
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    RefreshControl,
     SafeAreaView,
-    StatusBar,
+    ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View,
+    TouchableOpacity,
+    Alert,
+    Image,
+    RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/Supabase';
 
-interface Follower {
+interface FollowUser {
     user_id: number;
     username: string;
-    bio: string | null;
     profile_image_url: string | null;
-    currentUserFollowsThis: boolean; // Does the logged-in user follow this person?
-    isFollowingProfileOwnerBack: boolean; // Does this follower follow the profile owner back?
+    isFollowing?: boolean; // NEW: Track if the logged-in user follows this person
 }
 
-const FollowersListScreen = () => {
+const FollowersList = () => {
     const { userId } = useLocalSearchParams();
-    const profileOwnerId = typeof userId === 'string' ? parseInt(userId) : null;
-    
+    const targetUserId = typeof userId === 'string' ? parseInt(userId) : null;
+
     const router = useRouter();
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [followers, setFollowers] = useState<Follower[]>([]);
+    const [followers, setFollowers] = useState<FollowUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [followersCount, setFollowersCount] = useState(0);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-    useEffect(() => {
-        loadCurrentUser();
-    }, []);
-
-    const loadCurrentUser = async () => {
+    // --- Utility to get current user ID from storage ---
+    const getLoggedInUserId = async () => {
         try {
             const userJson = await AsyncStorage.getItem('user');
             if (userJson) {
                 const user = JSON.parse(userJson);
                 setCurrentUserId(user.user_id);
+                return user.user_id;
             }
-        } catch (error) {
-            console.error('Error loading current user:', error);
-        } finally {
-            loadFollowers();
+        } catch (e) {
+            console.error('Failed to load current user ID:', e);
+            setCurrentUserId(null);
+            return null;
         }
     };
+    // ----------------------------------------------------
 
-    const loadFollowers = async (isRefreshing = false) => {
-        if (!profileOwnerId) return;
+    // --- NEW: Function to check follow status for a list of users ---
+    const checkFollowStatus = async (loggedInUserId: number, userIds: number[]): Promise<Set<number>> => {
+        if (userIds.length === 0) return new Set();
 
-        try {
-            if (!isRefreshing) {
-                setLoading(true);
-            }
+        const { data, error } = await supabase
+            .from('user_follows')
+            .select('following_id')
+            .eq('follower_id', loggedInUserId)
+            .in('following_id', userIds);
 
-            // Get who follows the PROFILE OWNER
-            const { data: followData, error: followError } = await supabase
-                .from('user_follows')
-                .select('follower_id')
-                .eq('following_id', profileOwnerId);
+        if (error) {
+            console.error('Error checking follow status:', error);
+            return new Set();
+        }
 
-            if (followError) throw followError;
+        return new Set(data?.map(item => item.following_id) || []);
+    };
+    // ----------------------------------------------------------------
 
-            if (!followData || followData.length === 0) {
-                setFollowers([]);
-                setFollowersCount(0);
-                return;
-            }
-
-            const followerIds = followData.map(f => f.follower_id);
-            setFollowersCount(followerIds.length);
-
-            // Get follower user details
-            const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('user_id, username, bio, profile_image_url')
-                .in('user_id', followerIds);
-
-            if (usersError) throw usersError;
-
-            // Check which of these followers the CURRENT USER is following
-            let currentUserFollowingIds: number[] = [];
-            if (currentUserId) {
-                const { data: currentUserFollowing, error: followingError } = await supabase
-                    .from('user_follows')
-                    .select('following_id')
-                    .eq('follower_id', currentUserId);
-
-                if (followingError) throw followingError;
-                currentUserFollowingIds = currentUserFollowing?.map(f => f.following_id) || [];
-            }
-
-            // Check which followers the PROFILE OWNER follows back (mutual with profile owner)
-            const { data: mutualData, error: mutualError } = await supabase
-                .from('user_follows')
-                .select('following_id')
-                .eq('follower_id', profileOwnerId)
-                .in('following_id', followerIds);
-
-            if (mutualError) throw mutualError;
-            
-            const profileOwnerFollowingBackIds = mutualData?.map(f => f.following_id) || [];
-
-            // Map followers with following status
-            const followersWithStatus: Follower[] = usersData?.map(user => ({
-                ...user,
-                currentUserFollowsThis: currentUserFollowingIds.includes(user.user_id),
-                isFollowingProfileOwnerBack: profileOwnerFollowingBackIds.includes(user.user_id)
-            })) || [];
-
-            setFollowers(followersWithStatus);
-        } catch (error: any) {
-            console.error('Error loading followers:', error);
-            Alert.alert('Error', 'Failed to load followers');
-        } finally {
+    const fetchFollowers = useCallback(async (isRefreshing = false) => {
+        if (!targetUserId) {
             setLoading(false);
-            if (isRefreshing) {
-                setRefreshing(false);
-            }
-        }
-    };
-
-    const handleFollowToggle = async (followerUserId: number, isCurrentlyFollowing: boolean) => {
-        if (!currentUserId) {
-            Alert.alert('Login Required', 'You must be logged in to follow users.');
             return;
         }
 
-        if (currentUserId === followerUserId) return;
+        const loggedInUserId = await getLoggedInUserId();
 
         try {
-            // Optimistic update
-            setFollowers(prev => 
-                prev.map(follower => 
-                    follower.user_id === followerUserId 
-                        ? { ...follower, currentUserFollowsThis: !isCurrentlyFollowing }
-                        : follower
-                )
-            );
+            if (!isRefreshing) setLoading(true);
 
+            // 1. Fetch followers
+            const { data, error } = await supabase
+                .from('user_follows')
+                .select('follower_id, users:follower_id(user_id, username, profile_image_url)')
+                .eq('following_id', targetUserId);
+
+            if (error) throw error;
+
+            const fetchedFollowers: FollowUser[] = (data || [])
+                .map(item => item.users)
+                .filter(user => user !== null) as FollowUser[];
+
+            let finalFollowers: FollowUser[] = fetchedFollowers;
+
+            // 2. Check follow status only if a user is logged in
+            if (loggedInUserId) {
+                const followerIds = fetchedFollowers.map(f => f.user_id);
+                const followedByCurrentUser = await checkFollowStatus(loggedInUserId, followerIds);
+
+                finalFollowers = fetchedFollowers.map(follower => ({
+                    ...follower,
+                    isFollowing: followedByCurrentUser.has(follower.user_id),
+                }));
+            }
+
+            setFollowers(finalFollowers);
+
+        } catch (error: any) {
+            console.error('Error fetching followers:', error);
+            Alert.alert('Error', 'Failed to load followers list.');
+        } finally {
+            setLoading(false);
+            if (isRefreshing) setRefreshing(false);
+        }
+    }, [targetUserId]);
+
+    // --- NEW: Follow/Unfollow handler ---
+    const handleFollowToggle = async (userToToggle: FollowUser) => {
+        if (!currentUserId) {
+            Alert.alert('Login Required', 'Please log in to follow/unfollow users.');
+            return;
+        }
+
+        // Optimistic UI update
+        const isCurrentlyFollowing = userToToggle.isFollowing;
+        setFollowers(prev => 
+            prev.map(f => 
+                f.user_id === userToToggle.user_id 
+                ? { ...f, isFollowing: !isCurrentlyFollowing } 
+                : f
+            )
+        );
+
+        try {
             if (isCurrentlyFollowing) {
+                // Unfollow (Remove)
                 const { error } = await supabase
                     .from('user_follows')
                     .delete()
                     .eq('follower_id', currentUserId)
-                    .eq('following_id', followerUserId);
-                
+                    .eq('following_id', userToToggle.user_id);
+
                 if (error) throw error;
             } else {
+                // Follow
                 const { error } = await supabase
                     .from('user_follows')
-                    .insert({ follower_id: currentUserId, following_id: followerUserId });
+                    .insert({ follower_id: currentUserId, following_id: userToToggle.user_id });
 
                 if (error) throw error;
             }
-        } catch (error: any) {
-            console.error('Error toggling follow:', error);
-            Alert.alert('Error', 'Failed to update follow status');
-            
-            // Revert on error
+        } catch (error) {
+            console.error('Follow/Unfollow failed:', error);
+            Alert.alert('Error', `Failed to ${isCurrentlyFollowing ? 'unfollow' : 'follow'}.`);
+            // Rollback optimistic update on failure
             setFollowers(prev => 
-                prev.map(follower => 
-                    follower.user_id === followerUserId 
-                        ? { ...follower, currentUserFollowsThis: isCurrentlyFollowing }
-                        : follower
+                prev.map(f => 
+                    f.user_id === userToToggle.user_id 
+                    ? { ...f, isFollowing: isCurrentlyFollowing } 
+                    : f
                 )
             );
         }
     };
+    // ------------------------------------
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchFollowers();
+        }, [fetchFollowers])
+    );
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        loadFollowers(true);
-    }, []);
+        fetchFollowers(true);
+    }, [fetchFollowers]);
 
-    const navigateToProfile = (userId: number) => {
-        if (userId === currentUserId) {
-            router.push('/profile');
+    const handleProfilePress = (id: number) => {
+        if (id === currentUserId) {
+            // Navigate to the main tab-based profile screen
+            router.push('/(tabs)/profile');
         } else {
-            router.push(`/someonesProfile?userId=${userId}`);
+            // Navigate to another user's profile screen
+            router.push(`/someonesProfile?userId=${id}`);
         }
     };
 
-    const getInitials = (username: string) => {
-        return username?.charAt(0).toUpperCase() || 'U';
-    };
-
-    const renderFollower = ({ item }: { item: Follower }) => {
-        const isCurrentUser = item.user_id === currentUserId;
+    const FollowerItem: React.FC<{ user: FollowUser }> = ({ user }) => {
+        const isCurrentUser = user.user_id === currentUserId;
+        const buttonText = user.isFollowing ? 'Remove' : 'Follow';
+        const buttonStyle = user.isFollowing ? styles.removeButton : styles.followButton;
+        const textStyle = user.isFollowing ? styles.removeButtonText : styles.followButtonText;
 
         return (
-            <TouchableOpacity 
-                style={styles.followerItem}
-                onPress={() => navigateToProfile(item.user_id)}
-                activeOpacity={0.7}
+            <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => handleProfilePress(user.user_id)}
             >
-                <View style={styles.followerLeft}>
-                    {item.profile_image_url ? (
-                        <Image 
-                            source={{ uri: item.profile_image_url }} 
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>{getInitials(item.username)}</Text>
-                        </View>
-                    )}
-                    <View style={styles.followerInfo}>
-                        <Text style={styles.username}>{item.username}</Text>
-                        {item.isFollowingProfileOwnerBack && (
-                            <Text style={styles.mutualText}>Friends with profile owner</Text>
-                        )}
-                        {item.bio && (
-                            <Text style={styles.bio} numberOfLines={2}>
-                                {item.bio}
-                            </Text>
-                        )}
+                {user.profile_image_url ? (
+                    <Image source={{ uri: user.profile_image_url }} style={styles.avatar} />
+                ) : (
+                    <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarInitial}>{user.username.charAt(0).toUpperCase()}</Text>
                     </View>
-                </View>
-
-                {!isCurrentUser && (
-                    <TouchableOpacity
-                        style={[
-                            styles.followButton,
-                            item.currentUserFollowsThis && styles.followingButton
-                        ]}
-                        onPress={() => handleFollowToggle(item.user_id, item.currentUserFollowsThis)}
-                    >
-                        <Text style={[
-                            styles.followButtonText,
-                            item.currentUserFollowsThis && styles.followingButtonText
-                        ]}>
-                            {item.currentUserFollowsThis ? 'Following' : '+ Follow'}
-                        </Text>
-                    </TouchableOpacity>
                 )}
+                <Text style={styles.username} numberOfLines={1}>{user.username}</Text>
+
+                <View style={styles.buttonContainer}>
+                    {!isCurrentUser && (
+                        <>
+                            <TouchableOpacity style={styles.friendsButton} onPress={() => Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')}>
+                                <Text style={styles.friendsButtonText}>Friends</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={buttonStyle}
+                                onPress={() => handleFollowToggle(user)}
+                            >
+                                <Text style={textStyle}>{buttonText}</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                </View>
             </TouchableOpacity>
         );
     };
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#000" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Followers</Text>
-                    <View style={{ width: 24 }} />
-                </View>
-                <View style={styles.centerContent}>
-                    <ActivityIndicator size="large" color="#16A085" />
-                </View>
+            <SafeAreaView style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color="#16A085" />
+            </SafeAreaView>
+        );
+    }
+
+    if (!targetUserId) {
+        return (
+            <SafeAreaView style={[styles.container, styles.center]}>
+                <Text style={styles.emptyText}>Invalid user profile link.</Text>
             </SafeAreaView>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{followersCount} Followers</Text>
-                <View style={{ width: 24 }} />
+                <Text style={styles.headerTitle}>Followers ({followers.length})</Text>
             </View>
 
-            <FlatList
-                data={followers}
-                renderItem={renderFollower}
-                keyExtractor={(item) => item.user_id.toString()}
-                contentContainerStyle={styles.listContent}
+            <ScrollView
+                contentContainerStyle={followers.length === 0 ? styles.centerContent : styles.scrollContent}
                 refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                        tintColor="#16A085"
-                        colors={["#16A085"]}
-                    />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16A085" />
                 }
-                ListEmptyComponent={
+            >
+                {followers.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="people-outline" size={64} color="#ccc" />
-                        <Text style={styles.emptyText}>No followers yet</Text>
+                        <Ionicons name="people-outline" size={60} color="#888" />
+                        <Text style={styles.emptyText}>No followers yet.</Text>
                     </View>
-                }
-            />
+                ) : (
+                    followers.map((user) => (
+                        <FollowerItem key={user.user_id} user={user} />
+                    ))
+                )}
+            </ScrollView>
         </SafeAreaView>
     );
 };
@@ -307,112 +279,133 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
-    centerContent: {
-        flex: 1,
+    center: {
         justifyContent: 'center',
         alignItems: 'center',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 14,
+        marginTop: 35,
         backgroundColor: '#fff',
         borderBottomWidth: 0.5,
         borderBottomColor: '#e5e5e5',
-        marginTop: 35,
+    },
+    backButton: {
+        marginRight: 10,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
         color: '#000',
     },
-    listContent: {
-        paddingTop: 8,
-        flexGrow: 1,
-    },
-    followerItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
+    scrollContent: {
         paddingHorizontal: 16,
-        backgroundColor: '#fff',
-        marginBottom: 1,
+        paddingVertical: 10,
     },
-    followerLeft: {
+    centerContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    listItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
-        marginRight: 12,
+        backgroundColor: '#fff',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 45,
+        height: 45,
+        borderRadius: 22.5,
+        marginRight: 12,
+    },
+    avatarPlaceholder: {
+        width: 45,
+        height: 45,
+        borderRadius: 22.5,
         backgroundColor: '#B695C0',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
-    avatarText: {
-        fontSize: 20,
+    avatarInitial: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    username: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        flex: 1,
+        marginRight: 10, // Added margin to separate name from buttons
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        gap: 8,
+        minWidth: 140, // Ensure buttons don't shrink too much
+        justifyContent: 'flex-end',
+    },
+    friendsButton: {
+        backgroundColor: '#E0E0E0',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 6,
+        minWidth: 55,
+        alignItems: 'center',
+    },
+    friendsButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#333',
+    },
+    followButton: {
+        backgroundColor: '#16A085', // Green for Follow
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        minWidth: 65,
+        alignItems: 'center',
+    },
+    followButtonText: {
+        fontSize: 13,
         fontWeight: '600',
         color: '#fff',
     },
-    followerInfo: {
-        flex: 1,
-    },
-    username: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#000',
-        marginBottom: 2,
-    },
-    mutualText: {
-        fontSize: 12,
-        color: '#16A085',
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    bio: {
-        fontSize: 13,
-        color: '#666',
-        lineHeight: 18,
-    },
-    followButton: {
-        backgroundColor: '#C8E853',
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-        minWidth: 100,
+    removeButton: {
+        backgroundColor: '#E9E9E9', // Light gray for Remove
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        minWidth: 65,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#C8C8C8',
     },
-    followingButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1.5,
-        borderColor: '#16A085',
-    },
-    followButtonText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#000',
-    },
-    followingButtonText: {
-        color: '#16A085',
+    removeButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#333',
     },
     emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 100,
+        justifyContent: 'center',
+        paddingTop: 50,
     },
     emptyText: {
+        marginTop: 10,
         fontSize: 16,
-        color: '#999',
-        marginTop: 16,
+        color: '#666',
     },
 });
 
-export default FollowersListScreen;
+export default FollowersList;

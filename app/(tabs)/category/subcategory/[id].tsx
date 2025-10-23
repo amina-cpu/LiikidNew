@@ -28,6 +28,7 @@ const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+const SAFE_AREA_PADDING = 40;
 
 const INITIAL_PRODUCT_LIMIT = 8;
 const LOAD_MORE_INCREMENT = 6;
@@ -263,6 +264,11 @@ export default function SubcategoryScreen() {
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategory, setSubcategory] = useState<Subcategory | null>(null);
 
+  // Sticky header state
+  const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [isSticky, setIsSticky] = useState(false);
+
   // Clear search state when screen loses focus
   useFocusEffect(
     useCallback(() => {
@@ -313,26 +319,6 @@ export default function SubcategoryScreen() {
       fetchData(true);
     }
   }, [subcategoryId]);
-
-  // Auto-navigate when only one sub-subcategory has results - DISABLED to prevent conflicts
-  // Users can manually click on the pill with the red dot
-  /*
-  useEffect(() => {
-    if (subSubcategories.length > 0 && searchQuery.trim() && products.length > 0) {
-      const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
-
-      if (subsWithResults.length === 1 && !hasNavigatedRef.current) {
-        hasNavigatedRef.current = true;
-        // Add a small delay to ensure state is settled
-        setTimeout(() => {
-          router.push(
-            `/category/subcategory/subsubcategory/${subsWithResults[0].id}?searchMode=true&searchQuery=${encodeURIComponent(searchQuery)}`
-          );
-        }, 300);
-      }
-    }
-  }, [subSubcategories, searchQuery, products]);
-  */
 
   // Filter products whenever products or filter state changes
   useEffect(() => {
@@ -488,9 +474,8 @@ export default function SubcategoryScreen() {
     setIsSearchActive(false);
     setSearchQuery("");
     Keyboard.dismiss();
-    hasNavigatedRef.current = false; // Reset navigation flag
+    hasNavigatedRef.current = false;
     
-    // Reset the URL to remove searchMode params
     if (subcategoryId) {
       router.replace(`/category/subcategory/${subcategoryId}`);
     }
@@ -506,7 +491,17 @@ export default function SubcategoryScreen() {
     }
   };
 
-  // Filter visible sub-subcategories when searching
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: false,
+      listener: (event: any) => {
+        const offsetY = event.nativeEvent.contentOffset.y;
+        setIsSticky(offsetY >= filterTabsLayout.y);
+      },
+    }
+  );
+
   const visibleSubSubcategories = searchQuery.trim()
     ? subSubcategories.filter(sub => sub.hasResults)
     : subSubcategories;
@@ -558,8 +553,44 @@ export default function SubcategoryScreen() {
         </View>
       )}
 
+      {!isSearchActive && isSticky && (
+        <View style={styles.stickyFilterTabsWrapper}>
+          <View style={styles.filterTabs}>
+            {FILTER_TABS.map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={[
+                  styles.filterButton,
+                  selectedFilter === tab && styles.filterButtonActive,
+                  selectedFilter === tab &&
+                    tab === "Sell" && { backgroundColor: BLUE },
+                  selectedFilter === tab &&
+                    tab === "Rent" && { backgroundColor: ORANGE },
+                  selectedFilter === tab &&
+                    tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                ]}
+                onPress={() => setSelectedFilter(tab)}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    selectedFilter === tab && styles.filterTextActive,
+                  ]}
+                >
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {!isSearchActive && (
-        <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: 100 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
@@ -653,7 +684,13 @@ export default function SubcategoryScreen() {
             </ScrollView>
           )}
 
-          <View style={styles.filterTabsWrapper}>
+          <View 
+            style={styles.filterTabsWrapper}
+            onLayout={(event) => {
+              const { y, height } = event.nativeEvent.layout;
+              setFilterTabsLayout({ y, height });
+            }}
+          >
             <View style={styles.filterTabs}>
               {FILTER_TABS.map((tab) => (
                 <TouchableOpacity
@@ -725,7 +762,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "white",
-    paddingTop: 40,
+    paddingTop: SAFE_AREA_PADDING,
   },
   loadingContainer: {
     justifyContent: "center",
@@ -790,7 +827,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "white",
     zIndex: 1000,
-    paddingTop: 40,
+    paddingTop: SAFE_AREA_PADDING,
   },
   searchOverlayHeader: {
     flexDirection: "row",
@@ -882,6 +919,21 @@ const styles = StyleSheet.create({
   filterTabsWrapper: {
     paddingHorizontal: 16,
     marginBottom: 20,
+  },
+  stickyFilterTabsWrapper: {
+    position: "absolute",
+    top: SAFE_AREA_PADDING + 68,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "white",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 5,
+    zIndex: 100,
   },
   filterTabs: {
     flexDirection: "row",

@@ -1,366 +1,252 @@
+// app/following_list.tsx
+
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
-    FlatList,
-    Image,
-    RefreshControl,
     SafeAreaView,
-    StatusBar,
+    ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View,
+    TouchableOpacity,
+    Alert,
+    RefreshControl,
+    Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/Supabase';
 
-interface Following {
+interface FollowingUser {
     user_id: number;
     username: string;
-    bio: string | null;
     profile_image_url: string | null;
-    currentUserFollowsThis: boolean;
-    isFollowingProfileOwnerBack: boolean;
+    isFollowing?: boolean; // Always true for this list, but maintained for consistency/toggling
 }
 
-const FollowingListScreen = () => {
+const FollowingList = () => {
     const { userId } = useLocalSearchParams();
-    const profileOwnerId = typeof userId === 'string' ? parseInt(userId) : null;
-    
+    const targetUserId = typeof userId === 'string' ? parseInt(userId) : null;
+
     const router = useRouter();
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [following, setFollowing] = useState<Following[]>([]);
+    const [following, setFollowing] = useState<FollowingUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [followingCount, setFollowingCount] = useState(0);
-    const [isOwnProfile, setIsOwnProfile] = useState(false);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-    useEffect(() => {
-        loadCurrentUser();
-    }, []);
-
-    const loadCurrentUser = async () => {
+    // --- Utility to get current user ID from storage ---
+    const getLoggedInUserId = async () => {
         try {
             const userJson = await AsyncStorage.getItem('user');
             if (userJson) {
                 const user = JSON.parse(userJson);
                 setCurrentUserId(user.user_id);
-                setIsOwnProfile(user.user_id === profileOwnerId);
+                return user.user_id;
             }
-        } catch (error) {
-            console.error('Error loading current user:', error);
-        } finally {
-            loadFollowing();
+        } catch (e) {
+            console.error('Failed to load current user ID:', e);
+            setCurrentUserId(null);
+            return null;
         }
     };
+    // ----------------------------------------------------
 
-    const loadFollowing = async (isRefreshing = false) => {
-        if (!profileOwnerId) return;
-
-        try {
-            if (!isRefreshing) {
-                setLoading(true);
-            }
-
-            // Get who the PROFILE OWNER is following
-            const { data: followData, error: followError } = await supabase
-                .from('user_follows')
-                .select('following_id')
-                .eq('follower_id', profileOwnerId);
-
-            if (followError) throw followError;
-
-            if (!followData || followData.length === 0) {
-                setFollowing([]);
-                setFollowingCount(0);
-                return;
-            }
-
-            const followingIds = followData.map(f => f.following_id);
-            setFollowingCount(followingIds.length);
-
-            // Get following user details
-            const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('user_id, username, bio, profile_image_url')
-                .in('user_id', followingIds);
-
-            if (usersError) throw usersError;
-
-            // Check which of these people the CURRENT USER is following
-            let currentUserFollowingIds: number[] = [];
-            if (currentUserId) {
-                const { data: currentUserFollowing, error: followingError } = await supabase
-                    .from('user_follows')
-                    .select('following_id')
-                    .eq('follower_id', currentUserId);
-
-                if (followingError) throw followingError;
-                currentUserFollowingIds = currentUserFollowing?.map(f => f.following_id) || [];
-            }
-
-            // Check which of the people the profile owner follows are following them back (mutual)
-            const { data: mutualData, error: mutualError } = await supabase
-                .from('user_follows')
-                .select('follower_id')
-                .in('follower_id', followingIds)
-                .eq('following_id', profileOwnerId);
-
-            if (mutualError) throw mutualError;
-            
-            const followingBackIds = mutualData?.map(f => f.follower_id) || [];
-
-            // Map following with status
-            const followingWithStatus: Following[] = usersData?.map(user => ({
-                ...user,
-                currentUserFollowsThis: currentUserFollowingIds.includes(user.user_id),
-                isFollowingProfileOwnerBack: followingBackIds.includes(user.user_id)
-            })) || [];
-
-            setFollowing(followingWithStatus);
-        } catch (error: any) {
-            console.error('Error loading following:', error);
-            Alert.alert('Error', 'Failed to load following');
-        } finally {
+    const fetchFollowing = useCallback(async (isRefreshing = false) => {
+        if (!targetUserId) {
             setLoading(false);
-            if (isRefreshing) {
-                setRefreshing(false);
-            }
-        }
-    };
-
-    const handleFollowToggle = async (followingUserId: number, isCurrentlyFollowing: boolean) => {
-        if (!currentUserId) {
-            Alert.alert('Login Required', 'You must be logged in to follow users.');
             return;
         }
 
-        if (currentUserId === followingUserId) return;
+        await getLoggedInUserId();
 
         try {
-            // Optimistic update
-            setFollowing(prev => 
-                prev.map(user => 
-                    user.user_id === followingUserId 
-                        ? { ...user, currentUserFollowsThis: !isCurrentlyFollowing }
-                        : user
-                )
-            );
+            if (!isRefreshing) setLoading(true);
 
+            // Fetch following list
+            const { data, error } = await supabase
+                .from('user_follows')
+                .select('following_id, users:following_id(user_id, username, profile_image_url)')
+                .eq('follower_id', targetUserId);
+
+            if (error) throw error;
+
+            // Map the results. Since this is the FOLLOWING list, all users are currently followed
+            const followingUsers: FollowingUser[] = (data || [])
+                .map(item => item.users)
+                .filter(user => user !== null)
+                .map(user => ({ ...user, isFollowing: true })) as FollowingUser[];
+
+            setFollowing(followingUsers);
+
+        } catch (error: any) {
+            console.error('Error fetching following list:', error);
+            Alert.alert('Error', 'Failed to load following list.');
+        } finally {
+            setLoading(false);
+            if (isRefreshing) setRefreshing(false);
+        }
+    }, [targetUserId]);
+
+    // --- NEW: Follow/Unfollow handler ---
+    const handleFollowToggle = async (userToToggle: FollowingUser) => {
+        if (!currentUserId) {
+            Alert.alert('Login Required', 'Please log in to manage your follow list.');
+            return;
+        }
+        
+        // This button will always be 'Remove' on the following page, 
+        // but we use the isFollowing flag to guide the logic.
+        const isCurrentlyFollowing = userToToggle.isFollowing; 
+        
+        // Optimistic UI update: Remove the user from the list on unfollow
+        if (isCurrentlyFollowing) {
+            setFollowing(prev => prev.filter(f => f.user_id !== userToToggle.user_id));
+        }
+
+        try {
             if (isCurrentlyFollowing) {
+                // Unfollow (Remove)
                 const { error } = await supabase
                     .from('user_follows')
                     .delete()
                     .eq('follower_id', currentUserId)
-                    .eq('following_id', followingUserId);
-                
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from('user_follows')
-                    .insert({ follower_id: currentUserId, following_id: followingUserId });
+                    .eq('following_id', userToToggle.user_id);
 
                 if (error) throw error;
+                Alert.alert('Unfollowed', `You have unfollowed ${userToToggle.username}.`);
             }
-        } catch (error: any) {
-            console.error('Error toggling follow:', error);
-            Alert.alert('Error', 'Failed to update follow status');
-            
-            // Revert on error
-            setFollowing(prev => 
-                prev.map(user => 
-                    user.user_id === followingUserId 
-                        ? { ...user, currentUserFollowsThis: isCurrentlyFollowing }
-                        : user
-                )
-            );
+            // Note: We don't need a 'Follow' action on the Following list itself.
+
+        } catch (error) {
+            console.error('Unfollow failed:', error);
+            Alert.alert('Error', 'Failed to unfollow.');
+            // Rollback optimistic update on failure (requires a full re-fetch to restore the list)
+            fetchFollowing(true);
         }
     };
+    // ------------------------------------
 
-    const handleUnfollow = async (followingUserId: number) => {
-        if (!currentUserId || !isOwnProfile) return;
-
-        Alert.alert(
-            'Unfollow',
-            'Are you sure you want to unfollow this user?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Unfollow',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            // Optimistically remove from list
-                            setFollowing(prev => prev.filter(user => user.user_id !== followingUserId));
-                            setFollowingCount(prev => prev - 1);
-
-                            const { error } = await supabase
-                                .from('user_follows')
-                                .delete()
-                                .eq('follower_id', currentUserId)
-                                .eq('following_id', followingUserId);
-                            
-                            if (error) throw error;
-                        } catch (error: any) {
-                            console.error('Error unfollowing:', error);
-                            Alert.alert('Error', 'Failed to unfollow user');
-                            loadFollowing();
-                        }
-                    }
-                }
-            ]
-        );
-    };
+    useFocusEffect(
+        useCallback(() => {
+            fetchFollowing();
+        }, [fetchFollowing])
+    );
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
-        loadFollowing(true);
-    }, []);
+        fetchFollowing(true);
+    }, [fetchFollowing]);
 
-    // Navigate to user's profile - takes you to their profile page
-    const navigateToProfile = (userId: number) => {
-        if (userId === currentUserId) {
-            router.push('/profile');
+    const handleProfilePress = (id: number) => {
+        if (id === currentUserId) {
+            // Navigate to the main tab-based profile screen
+            router.push('/(tabs)/profile');
         } else {
-            router.push(`/someonesProfile?userId=${userId}`);
+            // Navigate to another user's profile screen
+            router.push(`/someonesProfile?userId=${id}`);
         }
     };
 
-    const getInitials = (username: string) => {
-        return username?.charAt(0).toUpperCase() || 'U';
-    };
-
-    const renderFollowing = ({ item }: { item: Following }) => {
-        const isCurrentUser = item.user_id === currentUserId;
-        const showUnfollowButton = isOwnProfile && !isCurrentUser;
-        const showFollowButton = !isOwnProfile && !isCurrentUser;
+    const FollowingItem: React.FC<{ user: FollowingUser }> = ({ user }) => {
+        const isCurrentUser = user.user_id === currentUserId;
 
         return (
-            <TouchableOpacity 
-                style={styles.followingItem}
-                onPress={() => navigateToProfile(item.user_id)}
-                activeOpacity={0.7}
+            <TouchableOpacity
+                style={styles.listItem}
+                onPress={() => handleProfilePress(user.user_id)}
             >
-                <View style={styles.followingLeft}>
-                    {item.profile_image_url ? (
-                        <Image 
-                            source={{ uri: item.profile_image_url }} 
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>{getInitials(item.username)}</Text>
-                        </View>
-                    )}
-                    <View style={styles.followingInfo}>
-                        <Text style={styles.username}>{item.username}</Text>
-                        {item.isFollowingProfileOwnerBack && (
-                            <Text style={styles.mutualText}>Friends with profile owner</Text>
-                        )}
-                        {item.bio && (
-                            <Text style={styles.bio} numberOfLines={2}>
-                                {item.bio}
-                            </Text>
-                        )}
+                {user.profile_image_url ? (
+                    <Image source={{ uri: user.profile_image_url }} style={styles.avatar} />
+                ) : (
+                    <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarInitial}>{user.username.charAt(0).toUpperCase()}</Text>
                     </View>
+                )}
+                <Text style={styles.username} numberOfLines={1}>{user.username}</Text>
+
+                <View style={styles.buttonContainer}>
+                    {/* The logged-in user's following list shows ONLY REMOVE and FRIENDS */}
+                    {!isCurrentUser && targetUserId === currentUserId && (
+                        <>
+                            <TouchableOpacity style={styles.friendsButton} onPress={() => Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')}>
+                                <Text style={styles.friendsButtonText}>Friends</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.removeButton} // Always 'Remove' style
+                                onPress={() => handleFollowToggle(user)}
+                            >
+                                <Text style={styles.removeButtonText}>Remove</Text> {/* Always 'Remove' text */}
+                            </TouchableOpacity>
+                        </>
+                    )}
+                    
+                    {/* If viewing someone else's following list, show the appropriate action */}
+                    {!isCurrentUser && targetUserId !== currentUserId && (
+                        <>
+                            {/* NOTE: You'd need complex logic here to check if CURRENT_USER follows THIS_USER if needed */}
+                            <TouchableOpacity style={styles.friendsButton} onPress={() => Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')}>
+                                <Text style={styles.friendsButtonText}>Friends</Text>
+                            </TouchableOpacity>
+                             <TouchableOpacity 
+                                style={styles.followButton}
+                                onPress={() => Alert.alert('Action', 'Implement follow/unfollow logic relative to the current user')}
+                            >
+                                <Text style={styles.followButtonText}>Follow</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
-
-                {showUnfollowButton && (
-                    <TouchableOpacity
-                        style={[
-                            styles.followButton,
-                            item.isFollowingProfileOwnerBack && styles.friendsButton
-                        ]}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            handleUnfollow(item.user_id);
-                        }}
-                    >
-                        <Text style={[
-                            styles.followButtonText,
-                            item.isFollowingProfileOwnerBack && styles.friendsButtonText
-                        ]}>
-                            {item.isFollowingProfileOwnerBack ? 'Friends' : 'Following'}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                {showFollowButton && (
-                    <TouchableOpacity
-                        style={[
-                            styles.followButton,
-                            item.currentUserFollowsThis && styles.followingButton
-                        ]}
-                        onPress={(e) => {
-                            e.stopPropagation();
-                            handleFollowToggle(item.user_id, item.currentUserFollowsThis);
-                        }}
-                    >
-                        <Text style={[
-                            styles.followButtonText,
-                            item.currentUserFollowsThis && styles.followingButtonText
-                        ]}>
-                            {item.currentUserFollowsThis ? 'Following' : '+ Follow'}
-                        </Text>
-                    </TouchableOpacity>
-                )}
             </TouchableOpacity>
         );
     };
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" />
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#000" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Following</Text>
-                    <View style={{ width: 24 }} />
-                </View>
-                <View style={styles.centerContent}>
-                    <ActivityIndicator size="large" color="#16A085" />
-                </View>
+            <SafeAreaView style={[styles.container, styles.center]}>
+                <ActivityIndicator size="large" color="#16A085" />
             </SafeAreaView>
         );
     }
 
+    if (!targetUserId) {
+        return (
+            <SafeAreaView style={[styles.container, styles.center]}>
+                <Text style={styles.emptyText}>Invalid user profile link.</Text>
+            </SafeAreaView>
+        );
+    }
+
+    // Determine the title based on whose list it is
+    const isCurrentUserList = targetUserId === currentUserId;
+    const listTitle = isCurrentUserList ? `Following (${following.length})` : `User is Following (${following.length})`;
+
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
-            
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{followingCount} Following</Text>
-                <View style={{ width: 24 }} />
+                <Text style={styles.headerTitle}>{listTitle}</Text>
             </View>
 
-            <FlatList
-                data={following}
-                renderItem={renderFollowing}
-                keyExtractor={(item) => item.user_id.toString()}
-                contentContainerStyle={styles.listContent}
+            <ScrollView
+                contentContainerStyle={following.length === 0 ? styles.centerContent : styles.scrollContent}
                 refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                        tintColor="#16A085"
-                        colors={["#16A085"]}
-                    />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16A085" />
                 }
-                ListEmptyComponent={
+            >
+                {following.length === 0 ? (
                     <View style={styles.emptyContainer}>
-                        <Ionicons name="people-outline" size={64} color="#ccc" />
-                        <Text style={styles.emptyText}>Not following anyone yet</Text>
+                        <Ionicons name="people-outline" size={60} color="#888" />
+                        <Text style={styles.emptyText}>This user isn't following anyone yet.</Text>
                     </View>
-                }
-            />
+                ) : (
+                    following.map((user) => (
+                        <FollowingItem key={user.user_id} user={user} />
+                    ))
+                )}
+            </ScrollView>
         </SafeAreaView>
     );
 };
@@ -370,120 +256,133 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
-    centerContent: {
-        flex: 1,
+    center: {
         justifyContent: 'center',
         alignItems: 'center',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 14,
+        marginTop: 35,
         backgroundColor: '#fff',
         borderBottomWidth: 0.5,
         borderBottomColor: '#e5e5e5',
-        marginTop: 35,
+    },
+    backButton: {
+        marginRight: 10,
     },
     headerTitle: {
         fontSize: 20,
         fontWeight: '700',
         color: '#000',
     },
-    listContent: {
-        paddingTop: 8,
-        flexGrow: 1,
-    },
-    followingItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
+    scrollContent: {
         paddingHorizontal: 16,
-        backgroundColor: '#fff',
-        marginBottom: 1,
+        paddingVertical: 10,
     },
-    followingLeft: {
+    centerContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    listItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
-        marginRight: 12,
+        backgroundColor: '#fff',
+        padding: 12,
+        borderRadius: 8,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     avatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 45,
+        height: 45,
+        borderRadius: 22.5,
+        marginRight: 12,
+    },
+    avatarPlaceholder: {
+        width: 45,
+        height: 45,
+        borderRadius: 22.5,
         backgroundColor: '#B695C0',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
     },
-    avatarText: {
-        fontSize: 20,
+    avatarInitial: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#fff',
+    },
+    username: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#333',
+        flex: 1,
+        marginRight: 10,
+    },
+    buttonContainer: {
+        flexDirection: 'row',
+        gap: 8,
+        minWidth: 140, // Ensure buttons don't shrink too much
+        justifyContent: 'flex-end',
+    },
+    friendsButton: {
+        backgroundColor: '#E0E0E0',
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 6,
+        minWidth: 55,
+        alignItems: 'center',
+    },
+    friendsButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#333',
+    },
+    followButton: {
+        backgroundColor: '#16A085', // Green for Follow
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        minWidth: 65,
+        alignItems: 'center',
+    },
+    followButtonText: {
+        fontSize: 13,
         fontWeight: '600',
         color: '#fff',
     },
-    followingInfo: {
-        flex: 1,
-    },
-    username: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#000',
-        marginBottom: 2,
-    },
-    mutualText: {
-        fontSize: 12,
-        color: '#16A085',
-        fontWeight: '600',
-        marginBottom: 2,
-    },
-    bio: {
-        fontSize: 13,
-        color: '#666',
-        lineHeight: 18,
-    },
-    followButton: {
-        backgroundColor: '#C8E853',
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-        minWidth: 100,
+    removeButton: {
+        backgroundColor: '#E9E9E9', // Light gray for Remove
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 6,
+        minWidth: 65,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#C8C8C8',
     },
-    followingButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1.5,
-        borderColor: '#16A085',
-    },
-    friendsButton: {
-        backgroundColor: '#fff',
-        borderWidth: 1.5,
-        borderColor: '#C8E853',
-    },
-    followButtonText: {
-        fontSize: 14,
-        fontWeight: '700',
-        color: '#000',
-    },
-    followingButtonText: {
-        color: '#16A085',
-    },
-    friendsButtonText: {
-        color: '#000',
+    removeButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#333',
     },
     emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
-        paddingTop: 100,
+        justifyContent: 'center',
+        paddingTop: 50,
     },
     emptyText: {
+        marginTop: 10,
         fontSize: 16,
-        color: '#999',
-        marginTop: 16,
+        color: '#666',
     },
 });
 
-export default FollowingListScreen;
+export default FollowingList;

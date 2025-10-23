@@ -75,6 +75,9 @@ const ProductDetailScreen = () => {
   const scrollRef = useRef<ScrollView>(null);
   const router = useRouter();
 
+  // Check if current user is the owner of this product
+  const isOwner = currentUserId && product && currentUserId === product.user_id;
+
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
@@ -262,6 +265,53 @@ const ProductDetailScreen = () => {
     }
   };
 
+  const handleEditProduct = () => {
+    if (!product) return;
+    
+    // Navigate to edit page with product ID
+    router.push({
+      pathname: "/edit_listing",
+      params: { productId: product.id }
+    });
+  };
+
+  const handleDeleteProduct = () => {
+    Alert.alert(
+      'Delete Product',
+      'Are you sure you want to delete this product? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', productId);
+
+              if (error) throw error;
+
+              Alert.alert('Success', 'Product deleted successfully', [
+                {
+                  text: 'OK',
+                  onPress: () => router.back()
+                }
+              ]);
+            } catch (error: any) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Error', 'Failed to delete product');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.flexCenter}>
@@ -320,16 +370,25 @@ const ProductDetailScreen = () => {
           <Ionicons name="arrow-back" size={22} color={COLORS.secondary} />
         </TouchableOpacity>
         <View style={styles.rightIcons}>
-          <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
-            <Ionicons
-              name={isFavorite ? "heart" : "heart-outline"}
-              size={22}
-              color={isFavorite ? "#FF5B5B" : COLORS.secondary}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerBtn} onPress={() => setShowMenu(true)}>
-            <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.secondary} />
-          </TouchableOpacity>
+          {!isOwner && (
+            <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={22}
+                color={isFavorite ? "#FF5B5B" : COLORS.secondary}
+              />
+            </TouchableOpacity>
+          )}
+          
+          {isOwner ? (
+            <TouchableOpacity style={styles.headerBtn} onPress={handleEditProduct}>
+              <Ionicons name="create-outline" size={22} color={COLORS.secondary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.headerBtn} onPress={() => setShowMenu(true)}>
+              <Ionicons name="ellipsis-horizontal" size={22} color={COLORS.secondary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -453,19 +512,36 @@ const ProductDetailScreen = () => {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      <View style={styles.bottomButtons}>
-        <TouchableOpacity style={styles.callButton}>
-          <Text style={styles.callButtonText}>Call</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.chatButton}>
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
+      {!isOwner && (
+        <View style={styles.bottomButtons}>
+          <TouchableOpacity style={styles.callButton}>
+            <Text style={styles.callButtonText}>Call</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.chatButton}>
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
+      {/* Owner's action buttons */}
+      {isOwner && (
+        <View style={styles.bottomButtons}>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteProduct}>
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+            <Text style={styles.deleteButtonText}>Delete</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.editButton} onPress={handleEditProduct}>
+            <Ionicons name="create-outline" size={20} color="#fff" />
+            <Text style={styles.editButtonText}>Edit Product</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Menu for non-owners */}
       <Modal
         animationType="slide"
         transparent
-        visible={showMenu}
+        visible={showMenu && !isOwner}
         onRequestClose={() => setShowMenu(false)}
       >
         <TouchableOpacity
@@ -751,6 +827,41 @@ const styles = StyleSheet.create({
   },
   
   chatButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  deleteButton: {
+    flex: 1,
+    flexDirection: 'row',
+    borderWidth: 2,
+    borderColor: "#EF4444",
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  
+  deleteButtonText: {
+    color: "#EF4444",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  
+  editButton: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: COLORS.primary,
+    borderRadius: 25,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  
+  editButtonText: {
     color: COLORS.white,
     fontSize: 16,
     fontWeight: "700",
