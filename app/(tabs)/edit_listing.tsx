@@ -1,7 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,13 +19,13 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
-import { useLocalSearchParams, useRouter } from "expo-router";
 
 interface Category {
   id: number;
   name: string;
   description: string | null;
   delivery?: boolean;
+  also_exchange?: boolean;
 }
 
 interface Subcategory {
@@ -104,7 +105,6 @@ const EditListingForm = () => {
     );
   };
 
-  // Fetch existing product data
   useEffect(() => {
     const fetchProductData = async () => {
       if (!productId) return;
@@ -116,7 +116,7 @@ const EditListingForm = () => {
           .from('products')
           .select(`
             *,
-            category:categories(id, name, delivery),
+            category:categories(id, name, delivery, also_exchange),
             subcategory:subcategories(id, name),
             sub_subcategory:sub_subcategories(id, name),
             product_images(image_url, order)
@@ -127,7 +127,6 @@ const EditListingForm = () => {
         if (error) throw error;
 
         if (data) {
-          // Set basic fields
           setTitle(data.name || '');
           setDescription(data.description || '');
           setDealType(data.listing_type || 'sell');
@@ -135,20 +134,19 @@ const EditListingForm = () => {
           setLocationAddress(data.location_address || '');
           setLatitude(data.latitude?.toString() || '');
           setLongitude(data.longitude?.toString() || '');
+          setCondition(data.condition || 'new');
+          setAlsoExchange(data.also_exchange || false);
           
-          // Set delivery method
           if (data.delivery) {
             setDeliveryMethod('Delivery');
           } else {
             setDeliveryMethod('In-person');
           }
 
-          // Set images
           const allImages = [data.image_url, ...(data.product_images?.map((img: any) => img.image_url) || [])].filter(Boolean);
           setPhotos(allImages);
           setExistingImageUrls(allImages);
 
-          // Set category
           if (data.category) {
             setSelectedCategory(data.category);
           }
@@ -189,6 +187,13 @@ const EditListingForm = () => {
       setSubSubcategories([]);
       setSelectedSubSubcategory(null);
     }
+    
+    if (selectedCategory && !selectedCategory.also_exchange) {
+      if (dealType === 'rent' || dealType === 'exchange') {
+        setDealType('sell');
+      }
+      setAlsoExchange(false);
+    }
   }, [selectedCategory]);
 
   useEffect(() => {
@@ -200,12 +205,18 @@ const EditListingForm = () => {
     }
   }, [selectedSubcategory]);
 
+  useEffect(() => {
+    if (dealType === 'exchange') {
+      setAlsoExchange(false);
+    }
+  }, [dealType]);
+
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true);
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, description, delivery')
+        .select('id, name, description, delivery, also_exchange')
         .order('name');
 
       if (error) throw error;
@@ -294,7 +305,6 @@ const EditListingForm = () => {
   };
 
   const uploadImage = async (uri: string): Promise<string | null> => {
-    // If it's an existing URL, return it as-is
     if (uri.startsWith('http')) {
       return uri;
     }
@@ -399,6 +409,9 @@ const EditListingForm = () => {
         throw new Error('User not authenticated');
       }
 
+      console.log('Condition value:', condition);
+      console.log('Also Exchange value:', alsoExchange);
+
       const productData: any = {
         name: title.trim(),
         description: description.trim() || null,
@@ -407,13 +420,19 @@ const EditListingForm = () => {
         category_id: selectedCategory?.id || null,
         image_url: imageUrls.length > 0 ? imageUrls[0] : null,
         delivery: deliveryMethod === 'Delivery' || deliveryMethod === 'Both',
+        condition: condition,
+        also_exchange: alsoExchange,
       };
+
+      console.log('Product data before update:', productData);
 
       if (selectedSubcategory) productData.subcategory_id = selectedSubcategory.id;
       if (selectedSubSubcategory) productData.sub_subcategory_id = selectedSubSubcategory.id;
       if (locationAddress.trim()) productData.location_address = locationAddress.trim();
       if (latitude && !isNaN(parseFloat(latitude))) productData.latitude = parseFloat(latitude);
       if (longitude && !isNaN(parseFloat(longitude))) productData.longitude = parseFloat(longitude);
+
+      console.log('Final product data:', productData);
 
       const { error } = await supabase
         .from('products')
@@ -422,13 +441,11 @@ const EditListingForm = () => {
 
       if (error) throw error;
 
-      // Delete old additional images
       await supabase
         .from('product_images')
         .delete()
         .eq('product_id', productId);
 
-      // Insert new additional images
       if (imageUrls.length > 1) {
         const imageRecords = imageUrls.slice(1).map((url, index) => ({
           product_id: parseInt(productId as string),
@@ -478,6 +495,9 @@ const EditListingForm = () => {
                   setSelectedSubcategory(null);
                   setSelectedSubSubcategory(null);
                   if (cat.delivery === false) setDeliveryMethod(null);
+                  if (!cat.also_exchange) {
+                    setAlsoExchange(false);
+                  }
                   if (subcategories.length > 0 || cat.id !== selectedCategory?.id) {
                     setCategoryStep(2);
                   } else {
@@ -570,12 +590,13 @@ const EditListingForm = () => {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Please log in to edit a listing</Text>
+        <Text style={styles.errorTextMain}>Please log in to edit a listing</Text>
       </View>
     );
   }
 
   const categoryAllowsDelivery = selectedCategory?.delivery !== false;
+  const categoryAllowsExchange = selectedCategory?.also_exchange === true;
 
   return (
     <View style={styles.container}>
@@ -682,33 +703,39 @@ const EditListingForm = () => {
               <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>Sell</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity
-              style={[styles.dealTypeButton, dealType === 'rent' && styles.dealTypeRent]}
-              onPress={() => setDealType('rent')}
-              disabled={uploading}
-            >
-              <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>Rent</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.dealTypeButton, dealType === 'exchange' && styles.dealTypeExchange]}
-              onPress={() => setDealType('exchange')}
-              disabled={uploading}
-            >
-              <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>Exchange</Text>
-            </TouchableOpacity>
+            {categoryAllowsExchange && (
+              <>
+                <TouchableOpacity
+                  style={[styles.dealTypeButton, dealType === 'rent' && styles.dealTypeRent]}
+                  onPress={() => setDealType('rent')}
+                  disabled={uploading}
+                >
+                  <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>Rent</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.dealTypeButton, dealType === 'exchange' && styles.dealTypeExchange]}
+                  onPress={() => setDealType('exchange')}
+                  disabled={uploading}
+                >
+                  <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>Exchange</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
           
-          <View style={styles.switchContainer}>
-            <Text style={styles.switchLabel}>Also available for exchange</Text>
-            <Switch
-              value={alsoExchange}
-              onValueChange={setAlsoExchange}
-              trackColor={{ false: '#E5E7EB', true: '#10B981' }}
-              thumbColor="#fff"
-              disabled={uploading}
-            />
-          </View>
+          {categoryAllowsExchange && dealType !== 'exchange' && (
+            <View style={styles.switchContainer}>
+              <Text style={styles.switchLabel}>Also available for exchange</Text>
+              <Switch
+                value={alsoExchange}
+                onValueChange={setAlsoExchange}
+                trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+                thumbColor="#fff"
+                disabled={uploading}
+              />
+            </View>
+          )}
         </View>
 
         {dealType !== 'exchange' && (
@@ -818,6 +845,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   errorText: { color: '#EF4444', fontSize: 13, marginTop: 6, marginLeft: 2 },
+  errorTextMain: { fontSize: 16, color: '#EF4444' },
   scrollView: { flex: 1 },
   section: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   sectionTitle: { fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 10 },

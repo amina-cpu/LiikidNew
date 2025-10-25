@@ -1,17 +1,19 @@
 {
   "expo": {
-    "name": "MarketplaceApp",
-    "slug": "MarketplaceApp",
+    "name": "Liikid",
+    "slug": "liikid",
+    "scheme": "liikid",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "marketplaceapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -23,7 +25,11 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["NOTIFICATIONS"]
+      "permissions": [
+        "NOTIFICATIONS",
+        "NOTIFICATIONS"
+      ],
+      "package": "com.anonymous.liikid"
     },
     "web": {
       "output": "static",
@@ -55,6 +61,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b3826744-b1ec-4068-8202-21f6f1d79231"
+      }
     }
   }
 }

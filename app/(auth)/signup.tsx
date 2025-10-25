@@ -1,5 +1,5 @@
-import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,113 +11,184 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 
-const hashPassword = async (password: string): Promise<string> => {
-  return await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    password
-  );
-};
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSignUp = async () => {
-    if (!fullName || !username || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      const { data: existingEmail } = await supabase
-        .from('users')
-        .select('email')
-        .eq('email', email.trim().toLowerCase())
-        .single();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          skipBrowserRedirect: true,
+        },
+      });
 
-      if (existingEmail) {
-        Alert.alert('Error', 'This email is already registered');
-        setLoading(false);
-        return;
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          'liikid://'
+        );
+
+        if (result.type === 'success') {
+          const url = result.url;
+          const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) throw sessionError;
+
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+              const { data: existingUser } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', user.email)
+                .single();
+
+              if (!existingUser) {
+                const { error: insertError } = await supabase
+                  .from('users')
+                  .insert([
+                    {
+                      username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`,
+                      email: user.email?.toLowerCase(),
+                      full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+                      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+                      auth_provider: 'google',
+                      auth_provider_id: user.id,
+                    },
+                  ]);
+
+                if (insertError) {
+                  console.error('Error creating user profile:', insertError);
+                }
+              }
+
+              Alert.alert(
+                'Success',
+                'Signed in successfully!',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      router.replace('/(tabs)');
+                    },
+                  },
+                ]
+              );
+            }
+          }
+        } else if (result.type === 'cancel') {
+          Alert.alert('Cancelled', 'Sign in was cancelled');
+        }
       }
-
-      const { data: existingUsername } = await supabase
-        .from('users')
-        .select('username')
-        .eq('username', username.trim())
-        .single();
-
-      if (existingUsername) {
-        Alert.alert('Error', 'This username is already taken');
-        setLoading(false);
-        return;
-      }
-
-      const hashedPassword = await hashPassword(password);
-
-      // Updated: Removed is_seller and is_verified
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([
-          {
-            username: username.trim(),
-            email: email.trim().toLowerCase(),
-            password_hash: hashedPassword,
-            full_name: fullName.trim(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      Alert.alert(
-        'Success',
-        'Account created successfully! Please login.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.push('/(auth)/login');
-            },
-          },
-        ]
-      );
-
-      console.log('New user created:', newUser);
     } catch (error: any) {
-      Alert.alert('Sign Up Failed', error.message || 'An error occurred during sign up');
-      console.error('Sign up error:', error);
+      Alert.alert('Sign In Failed', error.message || 'An error occurred during sign in');
+      console.error('Google sign in error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookSignIn = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'facebook',
+        options: {
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          'liikid://'
+        );
+
+        if (result.type === 'success') {
+          const url = result.url;
+          const params = new URLSearchParams(url.split('#')[1] || url.split('?')[1]);
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (sessionError) throw sessionError;
+
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+              const { data: existingUser } = await supabase
+                .from('users')
+                .select('*')
+                .eq('email', user.email)
+                .single();
+
+              if (!existingUser) {
+                const { error: insertError } = await supabase
+                  .from('users')
+                  .insert([
+                    {
+                      username: user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`,
+                      email: user.email?.toLowerCase(),
+                      full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+                      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+                      auth_provider: 'facebook',
+                      auth_provider_id: user.id,
+                    },
+                  ]);
+
+                if (insertError) {
+                  console.error('Error creating user profile:', insertError);
+                }
+              }
+
+              Alert.alert(
+                'Success',
+                'Signed in successfully!',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      router.replace('/(tabs)/');
+                    },
+                  },
+                ]
+              );
+            }
+          }
+        } else if (result.type === 'cancel') {
+          Alert.alert('Cancelled', 'Sign in was cancelled');
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Sign In Failed', error.message || 'An error occurred during sign in');
+      console.error('Facebook sign in error:', error);
     } finally {
       setLoading(false);
     }
@@ -142,113 +213,42 @@ export default function SignUpScreen() {
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
 
-          <View style={[styles.headerSection, styles.headerSectionSmall]}>
+          <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
               <Text style={styles.logoEmoji}>🌿</Text>
             </View>
-            <Text style={styles.appName}>PlantHub</Text>
+            <Text style={styles.appName}>Liikid</Text>
+            <Text style={styles.welcomeText}>Join our plant community</Text>
           </View>
 
           <View style={styles.formSection}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join our plant community</Text>
+            <Text style={styles.title}>Sign Up</Text>
+            <Text style={styles.subtitle}>Choose your preferred sign-up method</Text>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>👤</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="#999"
-                  value={fullName}
-                  onChangeText={setFullName}
-                  autoCapitalize="words"
-                  editable={!loading}
-                />
-              </View>
-            </View>
+            <View style={styles.socialButtons}>
+              <TouchableOpacity 
+                style={styles.socialButtonLarge} 
+                onPress={handleGoogleSignIn}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#333" />
+                ) : (
+                  <>
+                    <Text style={styles.socialIcon}>🔍</Text>
+                    <Text style={styles.socialButtonText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Username</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>@</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Choose a username"
-                  placeholderTextColor="#999"
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>📧</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#999"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  editable={!loading}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>🔒</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Create a password"
-                  placeholderTextColor="#999"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                <TouchableOpacity 
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                  disabled={loading}
-                >
-                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '👁️‍🗨️'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>🔒</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Confirm your password"
-                  placeholderTextColor="#999"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                <TouchableOpacity 
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                  disabled={loading}
-                >
-                  <Text style={styles.eyeIcon}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity 
+                style={styles.socialButtonLarge} 
+                onPress={handleFacebookSignIn}
+                disabled={loading}
+              >
+                <Text style={styles.socialIcon}>📘</Text>
+                <Text style={styles.socialButtonText}>Continue with Facebook</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.termsContainer}>
@@ -257,35 +257,6 @@ export default function SignUpScreen() {
                 <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
                 <Text style={styles.termsLink}>Privacy Policy</Text>
               </Text>
-            </View>
-
-            <TouchableOpacity 
-              style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
-              onPress={handleSignUp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.dividerContainer}>
-              <View style={styles.divider} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.divider} />
-            </View>
-
-            <View style={styles.socialButtons}>
-              <TouchableOpacity style={styles.socialButton} disabled={loading}>
-                <Text style={styles.socialIcon}>📱</Text>
-                <Text style={styles.socialButtonText}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.socialButton} disabled={loading}>
-                <Text style={styles.socialIcon}>📘</Text>
-                <Text style={styles.socialButtonText}>Facebook</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.footer}>
@@ -329,21 +300,17 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     paddingBottom: 40,
   },
-  headerSectionSmall: {
-    paddingTop: 60,
-    paddingBottom: 20,
-  },
   logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#C8E853',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -351,13 +318,17 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   logoEmoji: {
-    fontSize: 40,
+    fontSize: 50,
   },
   appName: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#000',
     marginBottom: 8,
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: '#666',
   },
   formSection: {
     paddingHorizontal: 24,
@@ -367,102 +338,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#000',
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 32,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    height: 56,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  inputIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#000',
-  },
-  eyeButton: {
-    padding: 4,
-  },
-  eyeIcon: {
-    fontSize: 20,
-  },
-  loginButton: {
-    backgroundColor: '#C8E853',
-    borderRadius: 12,
-    height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E0E0E0',
-  },
-  dividerText: {
-    fontSize: 14,
-    color: '#999',
-    marginHorizontal: 16,
-    fontWeight: '600',
+    marginBottom: 40,
+    textAlign: 'center',
   },
   socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
+    gap: 16,
     marginBottom: 32,
   },
-  socialButton: {
-    flex: 1,
+  socialButtonLarge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#fff',
     borderRadius: 12,
     height: 56,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   socialIcon: {
-    fontSize: 20,
-    marginRight: 8,
+    fontSize: 24,
+    marginRight: 12,
   },
   socialButtonText: {
     fontSize: 16,
@@ -473,6 +378,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 20,
   },
   footerText: {
     fontSize: 15,
