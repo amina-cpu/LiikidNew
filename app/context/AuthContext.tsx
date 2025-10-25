@@ -2,8 +2,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
-
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 // Use the existing UserProfile interface from your profile.tsx
 interface UserProfile {
     user_id: number;

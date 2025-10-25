@@ -161,6 +161,8 @@ export default function TabLayout() {
       <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="product_detail" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
+      <Tabs.Screen name="edit_listing" options={{ headerShown: false, href: null }} />
+       <Tabs.Screen name="notifications" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="followers_list" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
     </Tabs>

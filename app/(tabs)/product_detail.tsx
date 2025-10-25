@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient'; // Assuming this is installed
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -37,6 +38,8 @@ interface ProductDetail {
   hasShipping: boolean;
   product_images?: ProductImage[];
   user_id: number;
+  condition: string | null;
+  also_exchange: boolean;
 }
 
 interface UserInfo {
@@ -56,9 +59,21 @@ const COLORS = {
   textLight: "#8A8A8E",
   background: "#F5F5F5",
   white: "#FFFFFF",
-  sell: "#007AFF",
+  sell: "#007AFF", // Blue color for Sell/Price
   rent: "#F59E0B",
-  exchange: "#A855F7",
+  exchange: "#A855F7", // Purple color for Exchange
+  exchangeGradientStart: "#E0E7FF", // Light Blue for the start of the background gradient
+  exchangeGradientEnd: "#F3E8FF",   // Very Light Purple for the end of the background gradient
+};
+
+// Format price helper function
+const formatPrice = (price: number): string => {
+  if (price >= 1000000) {
+    return `${(price / 1000000).toFixed(1)}M`;
+  } else if (price >= 10000) {
+    return `${(price / 1000).toFixed(0)}K`;
+  }
+  return price.toLocaleString();
 };
 
 const ProductDetailScreen = () => {
@@ -75,7 +90,6 @@ const ProductDetailScreen = () => {
   const scrollRef = useRef<ScrollView>(null);
   const router = useRouter();
 
-  // Check if current user is the owner of this product
   const isOwner = currentUserId && product && currentUserId === product.user_id;
 
   useEffect(() => {
@@ -155,6 +169,8 @@ const ProductDetailScreen = () => {
             longitude,
             created_at,
             user_id,
+            condition,
+            also_exchange,
             category:categories (delivery),
             product_images (image_url, order)
           `)
@@ -178,6 +194,8 @@ const ProductDetailScreen = () => {
             hasShipping: data.category?.delivery === true,
             product_images: data.product_images || [],
             user_id: data.user_id,
+            condition: data.condition,
+            also_exchange: data.also_exchange || false,
           });
 
           const { data: userData, error: userError } = await supabase
@@ -255,20 +273,17 @@ const ProductDetailScreen = () => {
 
     if (currentUserId === sellerId) { 
       router.push("/profile"); 
-      console.log("Navigating to personal profile: /profile");
     } else {
       router.push({
         pathname: "/someonesProfile",
         params: { userId: sellerId },
       });
-      console.log(`Navigating to external profile: /someonesProfile?userId=${sellerId}`);
     }
   };
 
   const handleEditProduct = () => {
     if (!product) return;
     
-    // Navigate to edit page with product ID
     router.push({
       pathname: "/edit_listing",
       params: { productId: product.id }
@@ -342,10 +357,24 @@ const ProductDetailScreen = () => {
       ? COLORS.rent
       : COLORS.exchange;
 
-  const formatPrice = () => {
-    if (product.listing_type === "exchange") return "Exchange";
-    if (product.listing_type === "rent") return `${product.price} DA/month`;
-    return `${product.price} DA`;
+  const formatPriceDisplay = () => {
+    if (product.listing_type === "exchange" && !product.also_exchange) return null;
+    
+    const formattedPrice = formatPrice(product.price);
+    
+    if (product.listing_type === "rent") {
+      return `${formattedPrice} DA/month`;
+    }
+    return `${formattedPrice} DA`;
+  };
+  
+  const isExchangeDisplayActive = product.also_exchange || product.listing_type === "exchange";
+
+
+  const getConditionText = () => {
+    if (!product.condition) return "Condition not specified";
+    
+    return product.condition.charAt(0).toUpperCase() + product.condition.slice(1);
   };
 
   const getInitials = () => {
@@ -430,18 +459,35 @@ const ProductDetailScreen = () => {
 
         <View style={styles.detailsCard}>
           <Text style={styles.title}>{product.name}</Text>
-          <Text style={styles.condition}>Used Good</Text>
+          <Text style={styles.condition}>Conditon - {getConditionText()}</Text>
 
-          <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
-              {product.listing_type === "exchange"
-                ? "Exchange"
-                : `${product.price} DA`}
-              {" - "}
-              {product.listing_type.charAt(0).toUpperCase() +
-                product.listing_type.slice(1)}
-            </Text>
-          </View>
+          {/* Enhanced Price Display with Gradient for Exchange */}
+          {isExchangeDisplayActive ? (
+            <View style={styles.exchangePriceContainer}>
+              <LinearGradient
+                colors={[COLORS.exchangeGradientStart, COLORS.exchangeGradientEnd]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={styles.exchangeGradient}
+              >
+                {/* 1. Price is now styled with COLORS.sell (Blue) */}
+                <Text style={styles.exchangePriceTextBlue}> 
+                  {formatPrice(product.price)} DA
+                </Text>
+                <View style={styles.exchangeDivider} />
+                 {/* 2. Label is now styled with COLORS.exchange (Purple) */}
+                <Text style={styles.exchangeLabelTextPurple}> 
+                  Exchange
+                </Text>
+              </LinearGradient>
+            </View>
+          ) : (
+            <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
+                {formatPriceDisplay()}
+              </Text>
+            </View>
+          )}
 
           {product.hasShipping && (
             <View style={styles.shippingContainer}>
@@ -464,39 +510,43 @@ const ProductDetailScreen = () => {
 
           <View style={styles.postedRow}>
             <Text style={styles.postedDate}>Posted on {product.created_at}</Text>
-            <View style={styles.likesContainer}>
-              <Ionicons name="heart" size={16} color="#FF3B30" />
-              <Text style={styles.likesText}>{likesCount}</Text>
-            </View>
+            {likesCount > 0 && (
+              <View style={styles.likesContainer}>
+                <Ionicons name="heart" size={16} color="#FF3B30" />
+                <Text style={styles.likesText}>{likesCount}</Text>
+              </View>
+            )}
           </View>
         </View>
 
         {userInfo && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionHeader}>Posted by</Text>
-           
+            
             <TouchableOpacity 
-              style={styles.userContainer}
+              style={styles.userContainerWrapper}
               onPress={navigateToSellerProfile} 
             >
-              {userInfo.profile_image_url ? (
-                <Image 
-                  source={{ uri: userInfo.profile_image_url }} 
-                  style={styles.userAvatar}
-                />
-              ) : (
-                <View style={styles.userAvatarPlaceholder}>
-                  <Text style={styles.userAvatarText}>{getInitials()}</Text>
-                </View>
-              )}
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{userInfo.username}</Text>
-                {userInfo.bio && (
-                  <Text style={styles.userBio} numberOfLines={2}>{userInfo.bio}</Text>
+              <View style={styles.userContainer}>
+                {userInfo.profile_image_url ? (
+                  <Image 
+                    source={{ uri: userInfo.profile_image_url }} 
+                    style={styles.userAvatar}
+                  />
+                ) : (
+                  <View style={styles.userAvatarPlaceholder}>
+                    <Text style={styles.userAvatarText}>{getInitials()}</Text>
+                  </View>
                 )}
-                <Text style={styles.userMeta}>Joined {getJoinedDate()}</Text>
+                <View style={styles.userInfo}>
+                  <Text style={styles.userName}>{userInfo.username}</Text>
+                  {userInfo.bio && (
+                    <Text style={styles.userBio} numberOfLines={2}>{userInfo.bio}</Text>
+                  )}
+                  <Text style={styles.userMeta}>Joined {getJoinedDate()}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
               </View>
-              <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
             </TouchableOpacity>
           </View>
         )}
@@ -523,7 +573,6 @@ const ProductDetailScreen = () => {
         </View>
       )}
 
-      {/* Owner's action buttons */}
       {isOwner && (
         <View style={styles.bottomButtons}>
           <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteProduct}>
@@ -537,7 +586,6 @@ const ProductDetailScreen = () => {
         </View>
       )}
 
-      {/* Menu for non-owners */}
       <Modal
         animationType="slide"
         transparent
@@ -568,6 +616,10 @@ const ProductDetailScreen = () => {
     </SafeAreaView>
   );
 };
+
+// ---
+// Style Sheet
+// ---
 
 const styles = StyleSheet.create({
   flexContainer: { flex: 1, backgroundColor: COLORS.background },
@@ -608,13 +660,18 @@ const styles = StyleSheet.create({
 
   paginationContainer: {
     position: "absolute",
-    bottom: 20,
+    bottom: 30,
     left: 0,
     right: 0,
     flexDirection: "row",
     justifyContent: "center",
   },
-  dot: { width: 8, height: 8, borderRadius: 4, marginHorizontal: 4 },
+  dot: { 
+    width: 10, 
+    height: 10, 
+    borderRadius: 5, 
+    marginHorizontal: 5 
+  },
 
   detailsCard: {
     backgroundColor: COLORS.white,
@@ -653,26 +710,66 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   
-  priceText: { 
-    fontSize: 20, 
-    fontWeight: "700" 
+  // New Exchange Price Styles
+  exchangePriceContainer: {
+    marginBottom: 12,
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    overflow: "hidden", 
   },
   
-  separator: {
+  exchangeGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    // LinearGradient handles background
+  },
+  
+  // Custom style for the price text (Blue color)
+  exchangePriceTextBlue: {
     fontSize: 20,
-    color: COLORS.textLight,
-    marginHorizontal: 8,
+    fontWeight: "700",
+    color: COLORS.sell, // Use the primary blue color for the price
   },
   
-  typeText: { 
-    fontSize: 20, 
-    fontWeight: "600" 
+  exchangeDivider: {
+    width: 2,
+    height: 20,
+    backgroundColor: COLORS.exchange,
+    marginHorizontal: 12,
+    opacity: 0.3,
+  },
+  
+  // Custom style for the label text (Purple color)
+  exchangeLabelTextPurple: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.exchange, // Use the exchange purple color for the label
+  },
+  
+  exchangeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+  
+  exchangeText: {
+    marginLeft: 6,
+    color: COLORS.exchange,
+    fontWeight: "600",
+    fontSize: 14,
   },
 
   shippingContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,167,143,0.1)",
+  
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -725,6 +822,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textLight,
     fontWeight: "600",
+  },
+
+  userContainerWrapper: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
   },
 
   userContainer: {

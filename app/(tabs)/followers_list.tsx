@@ -1,21 +1,21 @@
 // app/followers_list.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
+    Image,
+    RefreshControl,
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
-    View,
     TouchableOpacity,
-    Alert,
-    Image,
-    RefreshControl,
+    View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/Supabase';
 
 interface FollowUser {
@@ -247,7 +247,7 @@ const FollowersList = () => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity   onPress={() => handleProfilePress(targetUserId!)}  style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Followers ({followers.length})</Text>

@@ -245,55 +245,67 @@ const SomeonesProfileScreen = () => {
         }
     }, [targetUserId, currentUserId, fetchUserProducts]);
 
-    const handleFollowToggle = useCallback(async () => {
-        if (!currentUserId) {
-            Alert.alert('Login Required', 'You must be logged in to follow users.');
-            return;
-        }
-        if (currentUserId === targetUserId) return;
+   const handleFollowToggle = useCallback(async () => {
+    if (!currentUserId) {
+        Alert.alert('Login Required', 'You must be logged in to follow users.');
+        return;
+    }
+    if (currentUserId === targetUserId) return;
 
-        try {
-            const wasFollowing = isFollowing;
+    try {
+        const wasFollowing = isFollowing;
+        
+        // Optimistic update
+        setIsFollowing(!wasFollowing);
+        setFollowersCount(prev => wasFollowing ? Math.max(0, prev - 1) : prev + 1);
+
+        if (wasFollowing) {
+            // Unfollow - delete the follow relationship
+            const { error: unfollowError } = await supabase
+                .from('user_follows')
+                .delete()
+                .eq('follower_id', currentUserId)
+                .eq('following_id', targetUserId);
             
-            // Optimistic update
-            setIsFollowing(!wasFollowing);
-            setFollowersCount(prev => wasFollowing ? Math.max(0, prev - 1) : prev + 1);
+            if (unfollowError) throw unfollowError;
 
-            if (wasFollowing) {
-                const { error } = await supabase
-                    .from('user_follows')
-                    .delete()
-                    .eq('follower_id', currentUserId)
-                    .eq('following_id', targetUserId);
-                
-                if (error) throw error;
-                setIsMutualFollow(false);
-            } else {
-                const { error } = await supabase
-                    .from('user_follows')
-                    .insert({ follower_id: currentUserId, following_id: targetUserId });
-
-                if (error) throw error;
-
-                // Check if it's now mutual
-                const { data: followBackStatus } = await supabase
-                    .from('user_follows')
-                    .select('follow_id')
-                    .eq('follower_id', targetUserId)
-                    .eq('following_id', currentUserId)
-                    .maybeSingle();
-                
-                setIsMutualFollow(!!followBackStatus);
-            }
-        } catch (error: any) {
-            console.error('Error toggling follow:', error);
-            Alert.alert('Error', 'Failed to update follow status.');
+            // Delete the associated follow notification
+            await supabase
+                .from('notifications')
+                .delete()
+                .eq('sender_id', currentUserId)
+                .eq('receiver_id', targetUserId)
+                .eq('type', 'follow');
             
-            // Revert
-            setIsFollowing(isFollowing);
-            setFollowersCount(prev => isFollowing ? prev + 1 : Math.max(0, prev - 1));
+            setIsMutualFollow(false);
+        } else {
+            // Follow - insert the follow relationship
+            // The trigger will automatically create the notification
+            const { error: followError } = await supabase
+                .from('user_follows')
+                .insert({ follower_id: currentUserId, following_id: targetUserId });
+
+            if (followError) throw followError;
+
+            // Check if it's now mutual
+            const { data: followBackStatus } = await supabase
+                .from('user_follows')
+                .select('follow_id')
+                .eq('follower_id', targetUserId)
+                .eq('following_id', currentUserId)
+                .maybeSingle();
+            
+            setIsMutualFollow(!!followBackStatus);
         }
-    }, [currentUserId, targetUserId, isFollowing]);
+    } catch (error: any) {
+        console.error('Error toggling follow:', error);
+        Alert.alert('Error', 'Failed to update follow status.');
+        
+        // Revert optimistic update
+        setIsFollowing(wasFollowing);
+        setFollowersCount(prev => wasFollowing ? prev + 1 : Math.max(0, prev - 1));
+    }
+}, [currentUserId, targetUserId, isFollowing]);
 
     useEffect(() => {
         const fetchAndCheckUser = async () => {
@@ -359,7 +371,7 @@ const SomeonesProfileScreen = () => {
 
     const getFollowButtonText = () => {
         if (isMutualFollow) return 'Friends';
-        if (isFollowing) return 'Following';
+        if (isFollowing) return 'Unfollow';
         return 'Follow';
     };
 
@@ -368,11 +380,6 @@ const SomeonesProfileScreen = () => {
             <StatusBar barStyle="dark-content" />
             
             <View style={styles.header}>
-                {/* VERIFIED: This is the correct way to navigate back. 
-                    If this goes to the homepage, it means the page you 
-                    came from was cleared from the stack, usually by 
-                    a bottom tab navigation or router.replace() elsewhere.
-                */}
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
@@ -451,6 +458,7 @@ const SomeonesProfileScreen = () => {
                                     {getFollowButtonText()}
                                 </Text>
                             </TouchableOpacity>
+
                             <TouchableOpacity 
                                 style={styles.chatButton} 
                                 onPress={() => Alert.alert("Chat", `Starting chat with ${profileData.username}`)}
@@ -458,6 +466,7 @@ const SomeonesProfileScreen = () => {
                                 <Text style={styles.chatButtonText}>Chat</Text>
                             </TouchableOpacity>
                         </View>
+
                     </View>
                 </View>
 

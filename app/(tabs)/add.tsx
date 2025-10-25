@@ -1,7 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,13 +19,13 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
-import { useLocalSearchParams, useRouter } from "expo-router";
 
 interface Category {
   id: number;
   name: string;
   description: string | null;
   delivery?: boolean;
+  also_exchange?: boolean;
 }
 
 interface Subcategory {
@@ -137,12 +138,19 @@ const AddListingForm = () => {
     }
   }, [selectedSubcategory]);
 
+  // Reset alsoExchange when listing type changes to exchange
+  useEffect(() => {
+    if (dealType === 'exchange') {
+      setAlsoExchange(false);
+    }
+  }, [dealType]);
+
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true);
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name, description, delivery')
+        .select('id, name, description, delivery, also_exchange')
         .order('name');
 
       if (error) throw error;
@@ -333,6 +341,9 @@ const AddListingForm = () => {
         throw new Error('User not authenticated');
       }
 
+      console.log('Condition value:', condition);
+      console.log('Also Exchange value:', alsoExchange);
+
       const productData: any = {
         name: title.trim(),
         description: description.trim() || null,
@@ -343,13 +354,19 @@ const AddListingForm = () => {
         delivery: deliveryMethod === 'Delivery' || deliveryMethod === 'Both',
         user_id: user.user_id,
         state: 'active',
+        condition: condition,
+        also_exchange: alsoExchange,
       };
+
+      console.log('Product data before insert:', productData);
 
       if (selectedSubcategory) productData.subcategory_id = selectedSubcategory.id;
       if (selectedSubSubcategory) productData.sub_subcategory_id = selectedSubSubcategory.id;
       if (locationAddress.trim()) productData.location_address = locationAddress.trim();
       if (latitude && !isNaN(parseFloat(latitude))) productData.latitude = parseFloat(latitude);
       if (longitude && !isNaN(parseFloat(longitude))) productData.longitude = parseFloat(longitude);
+
+      console.log('Final product data:', productData);
 
       const { data, error } = await supabase
         .from('products')
@@ -428,6 +445,10 @@ const AddListingForm = () => {
                   setSelectedSubcategory(null);
                   setSelectedSubSubcategory(null);
                   if (cat.delivery === false) setDeliveryMethod(null);
+                  // Reset alsoExchange if category doesn't support it
+                  if (!cat.also_exchange) {
+                    setAlsoExchange(false);
+                  }
                   if (subcategories.length > 0 || cat.id !== selectedCategory?.id) {
                     setCategoryStep(2);
                   } else {
@@ -526,6 +547,8 @@ const AddListingForm = () => {
   }
 
   const categoryAllowsDelivery = selectedCategory?.delivery !== false;
+  const categoryAllowsExchange = selectedCategory?.also_exchange === true;
+  const showAlsoExchangeToggle = categoryAllowsExchange && dealType !== 'exchange';
 
   return (
     <View style={styles.container}>
@@ -632,33 +655,39 @@ const AddListingForm = () => {
               <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>Sell</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity
-              style={[styles.dealTypeButton, dealType === 'rent' && styles.dealTypeRent]}
-              onPress={() => setDealType('rent')}
-              disabled={uploading}
-            >
-              <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>Rent</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.dealTypeButton, dealType === 'exchange' && styles.dealTypeExchange]}
-              onPress={() => setDealType('exchange')}
-              disabled={uploading}
-            >
-              <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>Exchange</Text>
-            </TouchableOpacity>
+            {categoryAllowsExchange && (
+              <>
+                <TouchableOpacity
+                  style={[styles.dealTypeButton, dealType === 'rent' && styles.dealTypeRent]}
+                  onPress={() => setDealType('rent')}
+                  disabled={uploading}
+                >
+                  <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>Rent</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.dealTypeButton, dealType === 'exchange' && styles.dealTypeExchange]}
+                  onPress={() => setDealType('exchange')}
+                  disabled={uploading}
+                >
+                  <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>Exchange</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
           
-          <View style={styles.switchContainer}>
-            <Text style={styles.switchLabel}>Also available for exchange</Text>
-            <Switch
-              value={alsoExchange}
-              onValueChange={setAlsoExchange}
-              trackColor={{ false: '#E5E7EB', true: '#10B981' }}
-              thumbColor="#fff"
-              disabled={uploading}
-            />
-          </View>
+          {categoryAllowsExchange && dealType !== 'exchange' && (
+            <View style={styles.switchContainer}>
+              <Text style={styles.switchLabel}>Also available for exchange</Text>
+              <Switch
+                value={alsoExchange}
+                onValueChange={setAlsoExchange}
+                trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+                thumbColor="#fff"
+                disabled={uploading}
+              />
+            </View>
+          )}
         </View>
 
         {dealType !== 'exchange' && (

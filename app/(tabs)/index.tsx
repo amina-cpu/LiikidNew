@@ -427,47 +427,59 @@ export default function HomeScreen() {
   }, [currentUserId]);
 
   // Toggle like functionality
-  const handleToggleLike = async (productId: number) => {
-    if (!currentUserId) {
-      Alert.alert('Login Required', 'Please login to like products');
-      return;
-    }
+ const handleToggleLike = async (productId: number) => {
+  if (!currentUserId) {
+    Alert.alert('Login Required', 'Please login to like products');
+    return;
+  }
 
-    const isCurrentlyLiked = likedProducts.has(productId);
+  const isCurrentlyLiked = likedProducts.has(productId);
 
-    try {
-      if (isCurrentlyLiked) {
-        const { error } = await supabase
-          .from('likes')
-          .delete()
-          .eq('user_id', currentUserId)
-          .eq('product_id', productId);
+  try {
+    if (isCurrentlyLiked) {
+      await supabase
+        .from('likes')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('product_id', productId);
 
-        if (error) throw error;
+      setLikedProducts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+    } else {
+      await supabase.from('likes').insert({
+        user_id: currentUserId,
+        product_id: productId,
+        post_id: null
+      });
 
-        setLikedProducts(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(productId);
-          return newSet;
+      setLikedProducts(prev => new Set([...prev, productId]));
+
+      // 🔥 Auto Notification Insert
+      const { data: productData } = await supabase
+        .from("products")
+        .select("user_id")
+        .eq("id", productId)
+        .single();
+
+      // ✅ Prevent self-notification
+      if (productData && productData.user_id !== currentUserId) {
+        await supabase.from("notifications").insert({
+          receiver_id: productData.user_id,
+          sender_id: currentUserId,
+          type: "like",
+          product_id: productId,
         });
-      } else {
-        const { error } = await supabase
-          .from('likes')
-          .insert({
-            user_id: currentUserId,
-            product_id: productId,
-            post_id: null
-          });
-
-        if (error) throw error;
-
-        setLikedProducts(prev => new Set([...prev, productId]));
       }
-    } catch (error: any) {
-      console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like status');
     }
-  };
+  } catch (error: any) {
+    console.error("Error toggling like:", error);
+    Alert.alert("Error", "Failed to update like status");
+  }
+};
+
 
   useEffect(() => {
     (async () => {

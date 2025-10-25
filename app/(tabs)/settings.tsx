@@ -1,5 +1,8 @@
-import React from 'react';
+import { AntDesign, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+    Alert,
     SafeAreaView,
     ScrollView,
     StatusBar,
@@ -7,17 +10,66 @@ import {
     Text,
     TouchableOpacity,
     View,
-    Alert,
 } from 'react-native';
-import { Ionicons, FontAwesome5, MaterialIcons, AntDesign } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../context/AuthContext'; // 👈 same context as ProfileScreen
+import { supabase } from '../../lib/Supabase';
+import { useAuth } from '../context/AuthContext';
 
 const SettingsScreen = () => {
     const router = useRouter();
-    const { signOut } = useAuth();
+    const { user, signOut } = useAuth();
+    const [unreadCount, setUnreadCount] = useState(0);
 
-    // ✅ Same logout logic as ProfileScreen
+    const loadUnreadCount = useCallback(async () => {
+        if (!user?.user_id) return;
+
+        try {
+            const { count, error } = await supabase
+                .from("notifications")
+                .select("*", { count: 'exact', head: true })
+                .eq("receiver_id", user.user_id)
+                .eq("is_read", false);
+
+            if (!error) {
+                setUnreadCount(count || 0);
+            }
+        } catch (error) {
+            console.error('Error loading unread count:', error);
+        }
+    }, [user?.user_id]);
+
+    // Load on screen focus
+    useFocusEffect(
+        useCallback(() => {
+            loadUnreadCount();
+        }, [loadUnreadCount])
+    );
+
+    // Real-time subscription
+    useEffect(() => {
+        if (!user?.user_id) return;
+
+        const channel = supabase
+            .channel('settings-notifications')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `receiver_id=eq.${user.user_id}`
+                },
+                (payload) => {
+                    console.log('Notification change in settings:', payload);
+                    loadUnreadCount();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            channel.unsubscribe();
+        };
+    }, [user?.user_id, loadUnreadCount]);
+
     const handleLogout = async () => {
         Alert.alert(
             'Logout',
@@ -32,8 +84,7 @@ const SettingsScreen = () => {
                             await signOut();
                             router.replace('/(auth)/login');
                         } catch (error) {
-                            console.error('Error logging out:', error);
-                            Alert.alert('Error', 'Failed to logout. Please try again.');
+                            Alert.alert('Error', 'Failed to logout.');
                         }
                     },
                 },
@@ -46,12 +97,16 @@ const SettingsScreen = () => {
         iconName,
         iconSize = 22,
         title,
+        showBadge = false,
+        badgeCount = 0,
         onPress,
     }: {
         IconComponent: any;
         iconName: string;
         iconSize?: number;
         title: string;
+        showBadge?: boolean;
+        badgeCount?: number;
         onPress?: () => void;
     }) => (
         <TouchableOpacity style={styles.settingItem} onPress={onPress}>
@@ -61,7 +116,17 @@ const SettingsScreen = () => {
                 </View>
                 <Text style={styles.settingTitle}>{title}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={22} color="#999" />
+
+            <View style={styles.rightSide}>
+                {showBadge && badgeCount > 0 && (
+                    <View style={styles.badge}>
+                        <Text style={styles.badgeText}>
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                        </Text>
+                    </View>
+                )}
+                <Ionicons name="chevron-forward" size={22} color="#999" />
+            </View>
         </TouchableOpacity>
     );
 
@@ -69,17 +134,15 @@ const SettingsScreen = () => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() =>  router.push('/(tabs)/profile')} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={28} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Settings</Text>
                 <View style={styles.placeholder} />
             </View>
 
-            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                {/* General Section */}
+            <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>General</Text>
 
@@ -87,23 +150,30 @@ const SettingsScreen = () => {
                         IconComponent={Ionicons}
                         iconName="notifications-outline"
                         title="Notifications"
-                        onPress={() => {}}
+                        showBadge={true}
+                        badgeCount={unreadCount}
+                        onPress={() => {
+                            router.push('/notifications');
+                        }}
                     />
                     <SettingItem
                         IconComponent={Ionicons}
                         iconName="language-outline"
                         title="Language"
-                        onPress={() => {}}
+                        onPress={() => {
+                            Alert.alert('Coming Soon', 'Language settings will be available soon');
+                        }}
                     />
                     <SettingItem
                         IconComponent={MaterialIcons}
                         iconName="block"
                         title="Blocked users"
-                        onPress={() => {}}
+                        onPress={() => {
+                            Alert.alert('Coming Soon', 'Blocked users list will be available soon');
+                        }}
                     />
                 </View>
 
-                {/* Connect Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Connect</Text>
 
@@ -133,7 +203,6 @@ const SettingsScreen = () => {
                     />
                 </View>
 
-                {/* Contact Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Contact</Text>
 
@@ -152,12 +221,15 @@ const SettingsScreen = () => {
                     />
                 </View>
 
-                {/* 🔴 Logout Button at Bottom */}
                 <View style={styles.logoutContainer}>
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
                         <Ionicons name="log-out-outline" size={22} color="#fff" style={{ marginRight: 8 }} />
                         <Text style={styles.logoutButtonText}>Logout</Text>
                     </TouchableOpacity>
+                </View>
+
+                <View style={styles.versionContainer}>
+                    <Text style={styles.versionText}>Version 1.0.0</Text>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -175,6 +247,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 8,
         paddingVertical: 12,
+        marginTop:30,
         borderBottomWidth: 0.5,
         borderBottomColor: '#e5e5e5',
     },
@@ -190,9 +263,6 @@ const styles = StyleSheet.create({
     placeholder: {
         width: 44,
     },
-    content: {
-        flex: 1,
-    },
     section: {
         marginTop: 28,
         paddingHorizontal: 16,
@@ -200,13 +270,13 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#000',
         marginBottom: 12,
+        color: '#000',
     },
     settingItem: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'space-between',
+        alignItems: 'center',
         paddingVertical: 14,
         borderBottomWidth: 0.5,
         borderBottomColor: '#f0f0f0',
@@ -224,9 +294,28 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#000',
     },
+    rightSide: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    badge: {
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FF3B30',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 6,
+    },
+    badgeText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#fff',
+    },
     logoutContainer: {
         marginTop: 40,
-        marginBottom: 40,
+        marginBottom: 20,
         paddingHorizontal: 20,
     },
     logoutButton: {
@@ -236,16 +325,19 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF3B30',
         paddingVertical: 16,
         borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
     },
     logoutButtonText: {
         fontSize: 16,
         fontWeight: '700',
         color: '#fff',
+    },
+    versionContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    versionText: {
+        fontSize: 13,
+        color: '#999',
     },
 });
 

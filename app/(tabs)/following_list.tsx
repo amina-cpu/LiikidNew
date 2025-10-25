@@ -1,21 +1,21 @@
 // app/following_list.tsx
 
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
+    Image,
+    RefreshControl,
     SafeAreaView,
     ScrollView,
     StyleSheet,
     Text,
-    View,
     TouchableOpacity,
-    Alert,
-    RefreshControl,
-    Image,
+    View,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/Supabase';
 
 interface FollowingUser {
@@ -165,38 +165,48 @@ const FollowingList = () => {
                 )}
                 <Text style={styles.username} numberOfLines={1}>{user.username}</Text>
 
-                <View style={styles.buttonContainer}>
-                    {/* The logged-in user's following list shows ONLY REMOVE and FRIENDS */}
-                    {!isCurrentUser && targetUserId === currentUserId && (
-                        <>
-                            <TouchableOpacity style={styles.friendsButton} onPress={() => Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')}>
-                                <Text style={styles.friendsButtonText}>Friends</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.removeButton} // Always 'Remove' style
-                                onPress={() => handleFollowToggle(user)}
-                            >
-                                <Text style={styles.removeButtonText}>Remove</Text> {/* Always 'Remove' text */}
-                            </TouchableOpacity>
-                        </>
-                    )}
-                    
-                    {/* If viewing someone else's following list, show the appropriate action */}
-                    {!isCurrentUser && targetUserId !== currentUserId && (
-                        <>
-                            {/* NOTE: You'd need complex logic here to check if CURRENT_USER follows THIS_USER if needed */}
-                            <TouchableOpacity style={styles.friendsButton} onPress={() => Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')}>
-                                <Text style={styles.friendsButtonText}>Friends</Text>
-                            </TouchableOpacity>
-                             <TouchableOpacity 
-                                style={styles.followButton}
-                                onPress={() => Alert.alert('Action', 'Implement follow/unfollow logic relative to the current user')}
-                            >
-                                <Text style={styles.followButtonText}>Follow</Text>
-                            </TouchableOpacity>
-                        </>
-                    )}
-                </View>
+             <View style={styles.buttonContainer}>
+    {/* The logged-in user's own following list (show REMOVE + FRIENDS) */}
+    {!isCurrentUser && targetUserId === currentUserId && (
+        <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity
+                style={styles.friendsButton}
+                onPress={() =>
+                    Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')
+                }>
+                <Text style={styles.friendsButtonText}>Friends</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => handleFollowToggle(user)}>
+                <Text style={styles.removeButtonText}>Remove</Text>
+            </TouchableOpacity>
+        </View>
+    )}
+
+    {/* Viewing someone else's following list (show FOLLOW + FRIENDS) */}
+    {!isCurrentUser && targetUserId !== currentUserId && (
+        <View style={{ flexDirection: 'row' }}>
+            <TouchableOpacity
+                style={styles.friendsButton}
+                onPress={() =>
+                    Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')
+                }>
+                <Text style={styles.friendsButtonText}>Friends</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                style={styles.followButton}
+                onPress={() =>
+                    Alert.alert('Action', 'Implement follow/unfollow logic relative to the current user.')
+                }>
+                <Text style={styles.followButtonText}>Follow</Text>
+            </TouchableOpacity>
+        </View>
+    )}
+</View>
+
             </TouchableOpacity>
         );
     };
@@ -224,7 +234,7 @@ const FollowingList = () => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity   onPress={() => handleProfilePress(targetUserId!)}  style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{listTitle}</Text>

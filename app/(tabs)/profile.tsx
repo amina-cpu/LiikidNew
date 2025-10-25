@@ -175,6 +175,7 @@ const ProfileScreen = () => {
     const [followingCount, setFollowingCount] = useState(0);
     const [followersCount, setFollowersCount] = useState(0);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
     const { signOut } = useAuth();
     
     const [products, setProducts] = useState<Product[]>([]);
@@ -197,6 +198,21 @@ const ProfileScreen = () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
             Alert.alert('Permission needed', 'Please allow access to your photos to upload a profile picture');
+        }
+    };
+
+    const fetchUnreadNotifications = async (userId: number) => {
+        try {
+            const { count, error } = await supabase
+                .from('notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('receiver_id', userId)
+                .eq('is_read', false);
+
+            if (error) throw error;
+            setUnreadNotifications(count || 0);
+        } catch (error) {
+            console.error('Error fetching unread notifications:', error);
         }
     };
 
@@ -246,6 +262,9 @@ const ProfileScreen = () => {
                 if (categoriesError) throw categoriesError;
                 setCategories(categoriesData || []);
 
+                // Fetch unread notifications
+                await fetchUnreadNotifications(user.user_id);
+
                 await Promise.all([
                     fetchUserProducts(user.user_id),
                     fetchLikedProducts(user.user_id)
@@ -263,6 +282,32 @@ const ProfileScreen = () => {
             }
         }
     };
+
+    // Real-time subscription for notifications
+    useEffect(() => {
+        if (!userData) return;
+
+        const notificationSubscription = supabase
+            .channel('notifications-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `receiver_id=eq.${userData.user_id}`
+                },
+                (payload) => {
+                    console.log('Notification change received:', payload);
+                    fetchUnreadNotifications(userData.user_id);
+                }
+            )
+            .subscribe();
+
+        return () => {
+            notificationSubscription.unsubscribe();
+        };
+    }, [userData]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -398,6 +443,13 @@ const ProfileScreen = () => {
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/settings')}>
                         <Ionicons name="settings-outline" size={24} color="#000" />
+                        {unreadNotifications > 0 && (
+                            <View style={styles.notificationBadge}>
+                                <Text style={styles.notificationBadgeText}>
+                                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                                </Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </View>
             </View>
@@ -433,28 +485,27 @@ const ProfileScreen = () => {
 
                         <Text style={styles.displayName}>{userData.username}</Text>
 
-                       <View style={styles.statsRow}>
-    <View style={styles.statBox}>
-        <Text style={styles.statValue}>{products.length}</Text>
-        <Text style={styles.statName}>Posts</Text>
-    </View>
-  <TouchableOpacity 
-    style={styles.statBox}
-    onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
->
-    <Text style={styles.statValue}>{followingCount}</Text>
-    <Text style={styles.statName}>Following</Text>
-</TouchableOpacity>
+                        <View style={styles.statsRow}>
+                            <View style={styles.statBox}>
+                                <Text style={styles.statValue}>{products.length}</Text>
+                                <Text style={styles.statName}>Posts</Text>
+                            </View>
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
+                            >
+                                <Text style={styles.statValue}>{followingCount}</Text>
+                                <Text style={styles.statName}>Following</Text>
+                            </TouchableOpacity>
 
-
-<TouchableOpacity 
-    style={styles.statBox}
-    onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
->
-    <Text style={styles.statValue}>{followersCount}</Text>
-    <Text style={styles.statName}>Followers</Text>
-</TouchableOpacity>
-</View>
+                            <TouchableOpacity 
+                                style={styles.statBox}
+                                onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
+                            >
+                                <Text style={styles.statValue}>{followersCount}</Text>
+                                <Text style={styles.statName}>Followers</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     <TouchableOpacity 
@@ -584,6 +635,26 @@ const styles = StyleSheet.create({
     },
     headerButton: {
         padding: 2,
+        position: 'relative',
+    },
+    notificationBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#FF3B30',
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
+    notificationBadgeText: {
+        color: '#fff',
+        fontSize: 10,
+        fontWeight: '700',
     },
     scrollContent: {
         flex: 1,
