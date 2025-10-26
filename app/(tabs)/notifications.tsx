@@ -258,7 +258,7 @@ const NotificationsScreen = () => {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() =>  router.push('/(tabs)/settings')} style={styles.backButton}>
+                <TouchableOpacity onPress={() =>  router.push('/(tabs)/messages')} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={28} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.title}>Notifications</Text>

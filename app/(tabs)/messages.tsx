@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter, useFocusEffect } from "expo-router";
+import { supabase } from "../../lib/Supabase";
+import { useAuth } from "../context/AuthContext";
 
 interface Message {
   id: string;
@@ -29,26 +32,102 @@ const messages: Message[] = [
   {
     id: "2",
     name: "Liam",
-    message: "Sure, I’ll check it later.",
+    message: "Sure, I'll check it later.",
     time: "10m ago",
     avatar: "https://randomuser.me/api/portraits/men/32.jpg",
   },
   {
     id: "3",
     name: "Amina",
-    message: "That’s perfect, thank you!",
+    message: "That's perfect, thank you!",
     time: "1h ago",
     avatar: "https://randomuser.me/api/portraits/women/45.jpg",
   },
 ];
 
 const MessagesScreen = () => {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadUnreadCount = useCallback(async () => {
+    if (!user?.user_id) return;
+
+    try {
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: 'exact', head: true })
+        .eq("receiver_id", user.user_id)
+        .eq("is_read", false);
+
+      if (!error) {
+        setUnreadCount(count || 0);
+      }
+    } catch (error) {
+      console.error('Error loading unread count:', error);
+    }
+  }, [user?.user_id]);
+
+  // Load on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUnreadCount();
+    }, [loadUnreadCount])
+  );
+
+  // Real-time subscription for notifications
+  useEffect(() => {
+    if (!user?.user_id) return;
+
+    const channel = supabase
+      .channel('messages-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `receiver_id=eq.${user.user_id}`
+        },
+        (payload) => {
+          console.log('Notification change in messages:', payload);
+          loadUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user?.user_id, loadUnreadCount]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* 🔹 Top Bar */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
-        <Ionicons name="create-outline" size={22} color="black" />
+        
+        <View style={styles.headerRight}>
+          {/* Notification Bell */}
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => router.push('/notifications')}
+          >
+            <Ionicons name="notifications-outline" size={24} color="black" />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* New Message Icon */}
+          <TouchableOpacity style={styles.createButton}>
+            <Ionicons name="create-outline" size={22} color="black" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 🔹 Chat List */}
@@ -81,10 +160,42 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 15,
     paddingVertical: 12,
+    marginTop:30,
     borderBottomWidth: 0.5,
     borderBottomColor: "#ddd",
   },
   headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  createButton: {
+    padding: 4,
+  },
   chatItem: {
     flexDirection: "row",
     alignItems: "center",
