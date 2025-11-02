@@ -23,9 +23,19 @@ const WHITE = '#FFFFFF';
 
 // --- Options ---
 const SORT_OPTIONS = ['Best Match', 'Most Recent', 'Lowest Price', 'Highest Price', 'Nearest'];
-const DELIVERY_METHODS = ['All Methods', 'Pickup', 'Delivery', 'Shipping'];
+const DELIVERY_METHODS = [
+    { label: 'All Methods', icon: 'apps-outline' },
+    { label: 'Pickup', icon: 'walk-outline' },
+    { label: 'Delivery', icon: 'bicycle-outline' },
+    { label: 'Shipping', icon: 'airplane-outline' }
+];
 const CONDITION_OPTIONS = ['All', 'New', 'Used'];
 const LOCATIONS = ['All Locations', 'Setif', 'Blida', 'Algiers', 'Oran', 'Constantine', 'Annaba'];
+const PRICE_UNITS = [
+    { label: 'DA', value: 1, display: 'DA' },
+    { label: 'Thousands', value: 1000, display: 'K DA' },
+    { label: 'Millions', value: 1000000, display: 'M DA' }
+];
 
 interface Category {
     id: number;
@@ -36,27 +46,23 @@ export default function FiltersScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
     
-    // Get the category ID from params if it exists
     const categoryId = params.categoryId ? Number(params.categoryId) : null;
-    
-    // Get the listing type (Sell/Rent/Exchange filter from category page)
     const listingType = params.listingType as string || null;
+    const searchMode = params.searchMode === 'true';
+    const searchQuery = params.searchQuery as string || '';
     
-    // Filter states - initialize from params if available
     const [selectedCategory, setSelectedCategory] = useState(params.category as string || 'All');
     const [selectedSortBy, setSelectedSortBy] = useState(params.sortBy as string || 'Best Match');
     const [selectedLocation, setSelectedLocation] = useState(params.location as string || 'All Locations');
     const [selectedDelivery, setSelectedDelivery] = useState(params.delivery as string || 'All Methods');
     const [minPrice, setMinPrice] = useState(params.minPrice as string || '');
     const [maxPrice, setMaxPrice] = useState(params.maxPrice as string || '');
-    const [currency, setCurrency] = useState('DA');
+    const [priceUnit, setPriceUnit] = useState(PRICE_UNITS[0]);
     const [selectedCondition, setSelectedCondition] = useState(params.condition as string || 'All');
     
-    // Modal states
     const [modalVisible, setModalVisible] = useState(false);
-    const [modalType, setModalType] = useState<'category' | 'sortBy' | 'location' | 'delivery' | null>(null);
+    const [modalType, setModalType] = useState<'category' | 'sortBy' | 'location' | 'delivery' | 'priceUnit' | null>(null);
     
-    // Categories from database
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
 
@@ -79,7 +85,7 @@ export default function FiltersScreen() {
         setLoadingCategories(false);
     };
 
-    const openModal = (type: 'category' | 'sortBy' | 'location' | 'delivery') => {
+    const openModal = (type: 'category' | 'sortBy' | 'location' | 'delivery' | 'priceUnit') => {
         setModalType(type);
         setModalVisible(true);
     };
@@ -107,12 +113,77 @@ export default function FiltersScreen() {
         closeModal();
     };
 
+    const handlePriceUnitSelect = (unit: typeof PRICE_UNITS[0]) => {
+        setPriceUnit(unit);
+        closeModal();
+    };
+
     const renderModalContent = () => {
         if (!modalType) return null;
 
         let title = '';
         let options: string[] = [];
         let currentValue = '';
+
+        if (modalType === 'priceUnit') {
+            return (
+                <View style={modalStyles.contentContainer}>
+                    <Text style={modalStyles.title}>Price Unit</Text>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        {PRICE_UNITS.map((unit) => (
+                            <TouchableOpacity
+                                key={unit.label}
+                                style={modalStyles.row}
+                                onPress={() => handlePriceUnitSelect(unit)}
+                            >
+                                <View>
+                                    <Text style={modalStyles.rowText}>{unit.label}</Text>
+                                    <Text style={modalStyles.rowSubtext}>
+                                        {unit.value === 1 ? 'Standard pricing' : 
+                                         unit.value === 1000 ? '1K = 1,000 DA' : 
+                                         '1M = 1,000,000 DA'}
+                                    </Text>
+                                </View>
+                                {priceUnit.label === unit.label && (
+                                    <Ionicons name="checkmark" size={22} color={PRIMARY_TEAL} />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            );
+        }
+
+        if (modalType === 'delivery') {
+            return (
+                <View style={modalStyles.contentContainer}>
+                    <Text style={modalStyles.title}>Delivery Methods</Text>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        {DELIVERY_METHODS.map((method) => (
+                            <TouchableOpacity
+                                key={method.label}
+                                style={modalStyles.row}
+                                onPress={() => handleSelect(method.label)}
+                            >
+                                <View style={modalStyles.deliveryOption}>
+                                    <View style={modalStyles.deliveryIconContainer}>
+                                        <Ionicons 
+                                            name={method.icon as any} 
+                                            size={24} 
+                                            color={selectedDelivery === method.label ? PRIMARY_TEAL : DARK_GRAY} 
+                                        />
+                                    </View>
+                                    <Text style={modalStyles.rowText}>{method.label}</Text>
+                                </View>
+                                {selectedDelivery === method.label && (
+                                    <Ionicons name="checkmark" size={22} color={PRIMARY_TEAL} />
+                                )}
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
+            );
+        }
 
         switch (modalType) {
             case 'category':
@@ -129,11 +200,6 @@ export default function FiltersScreen() {
                 title = 'Location';
                 options = LOCATIONS;
                 currentValue = selectedLocation;
-                break;
-            case 'delivery':
-                title = 'Delivery Methods';
-                options = DELIVERY_METHODS;
-                currentValue = selectedDelivery;
                 break;
         }
 
@@ -160,11 +226,7 @@ export default function FiltersScreen() {
                         >
                             <Text style={modalStyles.rowText}>{option}</Text>
                             {currentValue === option && (
-                                <Ionicons
-                                    name="checkmark"
-                                    size={22}
-                                    color={PRIMARY_TEAL}
-                                />
+                                <Ionicons name="checkmark" size={22} color={PRIMARY_TEAL} />
                             )}
                         </TouchableOpacity>
                     ))}
@@ -180,6 +242,7 @@ export default function FiltersScreen() {
         setSelectedDelivery('All Methods');
         setMinPrice('');
         setMaxPrice('');
+        setPriceUnit(PRICE_UNITS[0]);
         setSelectedCondition('All');
     };
 
@@ -192,17 +255,22 @@ export default function FiltersScreen() {
             filtersApplied: "true",
         };
 
-        // Add category ID if it exists
         if (categoryId) {
             filterParams.id = categoryId;
         }
 
-        // IMPORTANT: Preserve the listing type filter (Sell/Rent/Exchange)
+        // Preserve search mode and query
+        if (searchMode) {
+            filterParams.searchMode = 'true';
+        }
+        if (searchQuery.trim()) {
+            filterParams.searchQuery = searchQuery;
+        }
+
         if (listingType && listingType !== "All") {
             filterParams.listingType = listingType;
         }
 
-        // Only add parameters if they're not default values
         if (selectedSortBy !== 'Best Match') {
             filterParams.sortBy = selectedSortBy;
         }
@@ -219,25 +287,32 @@ export default function FiltersScreen() {
             filterParams.condition = selectedCondition;
         }
         
+        // Convert prices based on unit before sending
         if (minPrice) {
-            filterParams.minPrice = minPrice;
+            const actualMinPrice = parseFloat(minPrice) * priceUnit.value;
+            filterParams.minPrice = actualMinPrice;
         }
         
         if (maxPrice) {
-            filterParams.maxPrice = maxPrice;
+            const actualMaxPrice = parseFloat(maxPrice) * priceUnit.value;
+            filterParams.maxPrice = actualMaxPrice;
         }
         
         if (selectedCategory && selectedCategory !== "All") {
             filterParams.category = selectedCategory;
         }
 
-        // Build query string manually
         const queryString = Object.entries(filterParams)
             .map(([key, value]) => `${key}=${encodeURIComponent(value as string)}`)
             .join("&");
 
-        // Navigate to category page with all filter params
         router.push(`/category?${queryString}`);
+    };
+
+    // Get icon for selected delivery method
+    const getDeliveryIcon = () => {
+        const method = DELIVERY_METHODS.find(m => m.label === selectedDelivery);
+        return method ? method.icon : 'apps-outline';
     };
 
     return (
@@ -254,6 +329,16 @@ export default function FiltersScreen() {
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                {/* Search Info Banner */}
+                {searchQuery.trim() && (
+                    <View style={styles.searchInfoBanner}>
+                        <Ionicons name="search" size={18} color={PRIMARY_TEAL} />
+                        <Text style={styles.searchInfoText}>
+                            Filtering results for: <Text style={styles.searchQueryText}>"{searchQuery}"</Text>
+                        </Text>
+                    </View>
+                )}
+
                 {/* Main Filters Section */}
                 <View style={styles.section}>
                     <FilterRow
@@ -266,9 +351,10 @@ export default function FiltersScreen() {
                         value={selectedLocation}
                         onPress={() => openModal('location')}
                     />
-                    <FilterRow
+                    <FilterRowWithIcon
                         label="Delivery Methods"
                         value={selectedDelivery}
+                        icon={getDeliveryIcon()}
                         onPress={() => openModal('delivery')}
                     />
                 </View>
@@ -293,11 +379,19 @@ export default function FiltersScreen() {
                             onChangeText={setMaxPrice}
                             keyboardType="numeric"
                         />
-                        <TouchableOpacity style={styles.currencyButton}>
-                            <Text style={styles.currencyText}>{currency}</Text>
+                        <TouchableOpacity 
+                            style={styles.currencyButton}
+                            onPress={() => openModal('priceUnit')}
+                        >
+                            <Text style={styles.currencyText}>{priceUnit.display}</Text>
                             <Ionicons name="chevron-down" size={16} color={DARK_GRAY} />
                         </TouchableOpacity>
                     </View>
+                    {priceUnit.value > 1 && (
+                        <Text style={styles.priceHint}>
+                            💡 {priceUnit.value === 1000 ? '1 = 1,000 DA' : '1 = 1,000,000 DA'}
+                        </Text>
+                    )}
                 </View>
 
                 {/* Item Condition Section */}
@@ -340,7 +434,6 @@ export default function FiltersScreen() {
                 onRequestClose={closeModal}
             >
                 <View style={modalStyles.overlay}>
-                    {/* Blurred Background */}
                     <BlurView intensity={20} tint="dark" style={modalStyles.blurView}>
                         <TouchableOpacity
                             style={modalStyles.backdrop}
@@ -348,8 +441,6 @@ export default function FiltersScreen() {
                             onPress={closeModal}
                         />
                     </BlurView>
-
-                    {/* Modal Content */}
                     <View style={modalStyles.modalContainer}>
                         <View style={modalStyles.handle} />
                         {renderModalContent()}
@@ -369,6 +460,23 @@ const FilterRow: React.FC<{ label: string; value: string; onPress: () => void }>
     <TouchableOpacity style={styles.filterRow} onPress={onPress}>
         <Text style={styles.filterLabel}>{label}</Text>
         <View style={styles.filterValueContainer}>
+            <Text style={styles.filterValue}>{value}</Text>
+            <Ionicons name="chevron-forward" size={20} color={TEXT_LIGHT} />
+        </View>
+    </TouchableOpacity>
+);
+
+// Filter Row with Icon Component
+const FilterRowWithIcon: React.FC<{ 
+    label: string; 
+    value: string; 
+    icon: string;
+    onPress: () => void 
+}> = ({ label, value, icon, onPress }) => (
+    <TouchableOpacity style={styles.filterRow} onPress={onPress}>
+        <Text style={styles.filterLabel}>{label}</Text>
+        <View style={styles.filterValueContainer}>
+            <Ionicons name={icon as any} size={20} color={PRIMARY_TEAL} style={styles.valueIcon} />
             <Text style={styles.filterValue}>{value}</Text>
             <Ionicons name="chevron-forward" size={20} color={TEXT_LIGHT} />
         </View>
@@ -405,6 +513,26 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
     },
+    searchInfoBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#E8F5F3',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginTop: 8,
+        marginHorizontal: 16,
+        borderRadius: 8,
+        gap: 8,
+    },
+    searchInfoText: {
+        fontSize: 14,
+        color: DARK_GRAY,
+        flex: 1,
+    },
+    searchQueryText: {
+        fontWeight: '700',
+        color: PRIMARY_TEAL,
+    },
     section: {
         backgroundColor: WHITE,
         marginTop: 16,
@@ -440,10 +568,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: TEXT_LIGHT,
     },
+    valueIcon: {
+        marginRight: 4,
+    },
     priceContainer: {
         flexDirection: 'row',
         gap: 12,
-        marginBottom: 16,
+        marginBottom: 10,
     },
     priceInput: {
         flex: 1,
@@ -462,11 +593,18 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         gap: 4,
+        minWidth: 80,
     },
     currencyText: {
         fontSize: 16,
         color: DARK_GRAY,
         fontWeight: '600',
+    },
+    priceHint: {
+        fontSize: 13,
+        color: PRIMARY_TEAL,
+        marginBottom: 16,
+        fontWeight: '500',
     },
     conditionContainer: {
         flexDirection: 'row',
@@ -539,6 +677,7 @@ const modalStyles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: 16,
+        height:300,
     },
     title: {
         fontSize: 18,
@@ -563,5 +702,23 @@ const modalStyles = StyleSheet.create({
         fontSize: 16,
         color: DARK_GRAY,
         fontWeight: '500',
+    },
+    rowSubtext: {
+        fontSize: 13,
+        color: TEXT_LIGHT,
+        marginTop: 4,
+    },
+    deliveryOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    deliveryIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: LIGHT_GRAY,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 });

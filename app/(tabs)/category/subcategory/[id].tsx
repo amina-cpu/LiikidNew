@@ -27,7 +27,7 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 20;
 const SAFE_AREA_PADDING = 40;
 
 const INITIAL_PRODUCT_LIMIT = 8;
@@ -342,9 +342,15 @@ export default function SubcategoryScreen() {
 
     setFilteredProducts(filtered);
 
-    // Update sub-subcategories with results when searching
+    // CRITICAL FIX: Update sub-subcategories with results based on SEARCH ONLY
+    // This ensures red dots show correctly when coming from category page
     if (searchQuery.trim()) {
-      const subSubcategoryIds = [...new Set(filtered.map(p => p.sub_subcategory_id).filter(Boolean))];
+      // Get products that match ONLY the search query (before other filters)
+      let searchMatches = products.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
+      const subSubcategoryIds = [...new Set(searchMatches.map(p => p.sub_subcategory_id).filter(Boolean))];
       
       setSubSubcategories(prevSubs => 
         prevSubs.map(sub => ({
@@ -361,6 +367,21 @@ export default function SubcategoryScreen() {
       );
     }
   }, [selectedBrand, selectedFilter, searchQuery, products]);
+
+  // Auto-select first brand if only one has results when coming from search
+  useEffect(() => {
+    const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
+    
+    if (
+      subsWithResults.length === 1 &&
+      searchQuery.trim() &&
+      !hasNavigatedRef.current &&
+      selectedBrand === null
+    ) {
+      hasNavigatedRef.current = true;
+      setSelectedBrand(subsWithResults[0].id);
+    }
+  }, [subSubcategories, searchQuery, selectedBrand]);
 
   const fetchProducts = async (isInitialLoad: boolean) => {
     if (!subcategoryId) return;
@@ -432,13 +453,9 @@ export default function SubcategoryScreen() {
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
 
-      // ONLY auto-redirect if there's exactly one sub-subcategory AND we're NOT in search mode
-      // This prevents conflicts with search navigation
-      if (brands && brands.length === 1 && !searchMode && !searchQueryParam) {
-        router.replace(`/category/subcategory/subsubcategory/${brands[0].id}`);
-        return;
-      }
-
+      // Don't auto-redirect when there's only one sub-subcategory
+      // Just show it in the list and let user click if they want
+      
       await fetchProducts(isInitialLoad);
 
     } catch (e: any) {
@@ -661,13 +678,8 @@ export default function SubcategoryScreen() {
                     selectedBrand === brand.id && styles.brandPillActive,
                   ]}
                   onPress={() => {
-                    if (searchQuery.trim()) {
-                      router.push(
-                        `/category/subcategory/subsubcategory/${brand.id}?searchMode=true&searchQuery=${encodeURIComponent(searchQuery)}`
-                      );
-                    } else {
-                      router.push(`/category/subcategory/subsubcategory/${brand.id}`);
-                    }
+                    // Just set the selected brand filter, don't navigate away
+                    setSelectedBrand(brand.id);
                   }}
                 >
                   {brand.hasResults && (
@@ -920,9 +932,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 20,
   },
-  stickyFilterTabsWrapper: {
+    stickyFilterTabsWrapper: {
     position: "absolute",
-    top: SAFE_AREA_PADDING + 68,
+    top: SAFE_AREA_PADDING ,
     left: 0,
     right: 0,
     paddingHorizontal: 16,

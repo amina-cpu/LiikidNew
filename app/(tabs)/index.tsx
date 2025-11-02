@@ -1,3 +1,5 @@
+// HomeScreen.tsx
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,6 +21,8 @@ import FontAwesome from "react-native-vector-icons/FontAwesome";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../lib/Supabase";
+// 💡 Import i18n and the helper function
+import i18n, { translateFilter } from '../../lib/i18n';
 
 const PRIMARY_TEAL = "#16A085";
 const LIGHT_GRAY = "#F5F5F5";
@@ -26,13 +30,14 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 16;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 20;
+
 const SAFE_AREA_PADDING = 40;
 const TAB_BAR_HEIGHT = 90;
 
 // Pagination constants
-const INITIAL_PRODUCT_LIMIT = 8;
-const LOAD_MORE_INCREMENT = 6;
+const INITIAL_PRODUCT_LIMIT = 10;
+const LOAD_MORE_INCREMENT = 10;
 
 type IconName =
   | "home"
@@ -66,20 +71,21 @@ interface Product {
   location_address: string | null;
   created_at: string;
   category_id: number;
+  user_id: number;
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
 const getCategoryIcon = (categoryName: string): IconName => {
   const name = categoryName.toLowerCase();
-  if (name.includes("real estate") || name.includes("property")) return "home";
-  if (name.includes("vehicle") || name.includes("car")) return "car";
-  if (name.includes("phone")) return "mobile";
-  if (name.includes("computer") || name.includes("laptop")) return "laptop";
-  if (name.includes("clothing") || name.includes("fashion"))
+  if (name.includes("real estate") || name.includes("property") || name.includes("immobilier") || name.includes("عقار")) return "home";
+  if (name.includes("vehicle") || name.includes("car") || name.includes("voiture") || name.includes("سيارة")) return "car";
+  if (name.includes("phone") || name.includes("téléphone") || name.includes("هاتف")) return "mobile";
+  if (name.includes("computer") || name.includes("laptop") || name.includes("ordinateur") || name.includes("كمبيوتر")) return "laptop";
+  if (name.includes("clothing") || name.includes("fashion") || name.includes("vêtement") || name.includes("ملابس"))
     return "shopping-bag";
-  if (name.includes("food")) return "cutlery";
-  if (name.includes("sport")) return "soccer-ball-o";
+  if (name.includes("food") || name.includes("alimentation") || name.includes("طعام")) return "cutlery";
+  if (name.includes("sport") || name.includes("رياضة")) return "soccer-ball-o";
   if (name.includes("camera") || name.includes("photo")) return "camera";
   return "cog";
 };
@@ -118,8 +124,41 @@ const calculateDistance = (
   return R * c;
 };
 
-const CategoryButton: React.FC<{ 
-  category: Category; 
+// 💡 Helper function to translate category names
+const getCategoryTranslation = (catName: string): string => {
+  const normalized = catName.trim().toLowerCase();
+
+  const categoryMap: { [key: string]: string } = {
+    'food': 'Food',
+    'computers & accessories': 'ComputersAccessories',
+    'real estate': 'RealEstate',
+    'electronics & home appliance': 'ElectronicsHomeAppliance',
+    'materials & equipment': 'MaterialsEquipment',
+    'repair parts': 'RepairParts',
+    'cars and vehicles': 'CarsVehicles',
+    'sports': 'Sports',
+    'phones & accessories': 'PhonesAccessories',
+    'travel': 'Travel',
+    'computers & laptops': 'ComputersLaptops',
+    'hobbies and entertainment': 'HobbiesEntertainment',
+    'baby essentials': 'BabyEssentials',
+    'clothing & fashion': 'ClothingFashion',
+    'health & beauty': 'HealthBeauty',
+    'homemade & handcrafted': 'HomemadeHandcrafted',
+  };
+
+  const mappedKey = categoryMap[normalized];
+
+  if (!mappedKey) return catName;
+
+  const translationKey = `categories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : catName;
+};
+
+
+const CategoryButton: React.FC<{
+  category: Category;
   index: number;
   searchMode: boolean;
   searchQuery: string;
@@ -155,8 +194,8 @@ const CategoryButton: React.FC<{
       {searchMode && category.hasResults && (
         <View style={styles.redDot} />
       )}
-      <FontAwesome name={getCategoryIcon(category.name)} size={28} color="white" />
-      <Text style={styles.categoryText}>{category.name}</Text>
+      <FontAwesome name={getCategoryIcon(category.name)} size={22} color="white" />
+      <Text style={styles.categoryText}>{getCategoryTranslation(category.name)}</Text>
     </TouchableOpacity>
   );
 };
@@ -168,7 +207,8 @@ const ProductCard: React.FC<{
   categories: Category[];
   isLiked: boolean;
   onToggleLike: (productId: number) => void;
-}> = ({ product, userLat, userLon, categories, isLiked, onToggleLike }) => {
+  currentUserId: number | null;
+}> = ({ product, userLat, userLon, categories, isLiked, onToggleLike, currentUserId }) => {
   const router = useRouter();
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -181,6 +221,7 @@ const ProductCard: React.FC<{
 
   const category = categories.find((c) => c.id === product.category_id);
   const categoryAcceptsDelivery = category?.delivery || false;
+  const isOwnProduct = currentUserId === product.user_id;
 
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
@@ -202,12 +243,12 @@ const ProductCard: React.FC<{
   const tagColors = getTagColor();
 
   const formatPrice = () => {
-    if (product.listing_type === "exchange") return "Exchange";
-    
+    if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
+
     if (product.price >= 10000) {
       const millions = product.price / 10000;
       let formattedMillions;
-      
+
       if (millions % 1 === 0) {
         formattedMillions = millions.toString();
       } else if (millions >= 10) {
@@ -215,17 +256,17 @@ const ProductCard: React.FC<{
       } else {
         formattedMillions = millions.toFixed(1);
       }
-      
+
       if (product.listing_type === "rent") {
-        return `${formattedMillions} million DA/mo`;
+        return `${formattedMillions} million ${i18n.t('product.priceSuffixDAMonth')}`;
       }
-      return `${formattedMillions} million DA`;
+      return `${formattedMillions} million ${i18n.t('product.priceSuffixDA')}`;
     }
-    
+
     if (product.listing_type === "rent") {
-      return `${product.price.toLocaleString()} DA/mo`;
+      return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDAMonth')}`;
     }
-    return `${product.price.toLocaleString()} DA`;
+    return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDA')}`;
   };
 
   return (
@@ -239,7 +280,7 @@ const ProductCard: React.FC<{
             source={{
               uri:
                 product.image_url ||
-                "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+                `https://placehold.co/180x180/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
             }}
             style={styles.cardImage}
           />
@@ -254,17 +295,20 @@ const ProductCard: React.FC<{
             </View>
           )}
 
-          <TouchableOpacity 
-            onPress={toggleLike} 
-            style={styles.heartIcon}
-            disabled={isAnimating}
-          >
-            <Ionicons
-              name={isLiked ? "heart" : "heart-outline"}
-              size={22}
-              color={isLiked ? "#FF5B5B" : "white"}
-            />
-          </TouchableOpacity>
+          {/* 🔥 HIDE HEART IF IT'S THE USER'S OWN PRODUCT */}
+          {!isOwnProduct && (
+            <TouchableOpacity
+              onPress={toggleLike}
+              style={styles.heartIcon}
+              disabled={isAnimating}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#FF5B5B" : "white"}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.cardDetails}>
@@ -351,7 +395,7 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
         {loading ? (
           <ActivityIndicator size="small" color="white" />
         ) : (
-          <Text style={styles.loadMoreText}>Load More Items</Text>
+          <Text style={styles.loadMoreText}>{i18n.t('home.loadMore')}</Text>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -359,11 +403,12 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
 };
 
 export default function HomeScreen() {
-  const [location, setLocation] = useState<string>("Loading...");
+  const [location, setLocation] = useState<string>(i18n.t('home.loading'));
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [likedProducts, setLikedProducts] = useState<Set<number>>(new Set());
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<number>>(new Set()); 
   const router = useRouter();
   const params = useLocalSearchParams();
   const searchQuery = params.query as string || '';
@@ -384,23 +429,76 @@ export default function HomeScreen() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const [isSticky, setIsSticky] = useState(false);
 
-  // Get current user
+  const fetchBlockedUsers = useCallback(async (userId: number) => {
+    try {
+      console.log(`🔍 Fetching users blocked by ${userId}`);
+      
+      const { data: blockedByMe, error: blockedByMeError } = await supabase
+        .from('block')
+        .select('blocked_id')
+        .eq('blocker_id', userId);
+
+      if (blockedByMeError) throw blockedByMeError;
+      
+      const blockedIds = new Set(blockedByMe?.map(item => item.blocked_id) || []);
+      
+      console.log('✅ Blocked users IDs:', Array.from(blockedIds));
+      setBlockedUserIds(blockedIds);
+
+    } catch (error) {
+      console.error('❌ Error fetching blocked users:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
         const userJson = await AsyncStorage.getItem('user');
+        const userIdString = await AsyncStorage.getItem('userId');
+
         if (userJson) {
           const user = JSON.parse(userJson);
-          setCurrentUserId(user.user_id);
+          const userId = user.user_id || user.id || parseInt(userIdString || '0');
+
+          if (userId && userId > 0) {
+            setCurrentUserId(userId);
+            return;
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user?.email) {
+          const { data: dbUser, error } = await supabase
+            .from('users')
+            .select('user_id, email, username')
+            .eq('email', session.user.email.toLowerCase())
+            .single();
+
+          if (dbUser && !error) {
+            setCurrentUserId(dbUser.user_id);
+            await AsyncStorage.setItem('user', JSON.stringify(dbUser));
+            await AsyncStorage.setItem('userId', String(dbUser.user_id));
+            await AsyncStorage.setItem('isLoggedIn', 'true');
+          }
         }
       } catch (error) {
-        console.error('Error getting current user:', error);
+        console.error('❌ Error getting current user:', error);
       }
     };
+
     getCurrentUser();
   }, []);
 
-  // Fetch user's liked products
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserLikes();
+      fetchBlockedUsers(currentUserId);
+    } else {
+      setBlockedUserIds(new Set());
+    }
+  }, [currentUserId, fetchBlockedUsers]);
+
   const fetchUserLikes = async () => {
     if (!currentUserId) return;
 
@@ -420,72 +518,62 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    if (currentUserId) {
-      fetchUserLikes();
+  const handleToggleLike = async (productId: number) => {
+    if (!currentUserId) {
+      Alert.alert(i18n.t('home.loginRequiredTitle'), i18n.t('home.loginRequiredMessage'));
+      return;
     }
-  }, [currentUserId]);
 
-  // Toggle like functionality
- const handleToggleLike = async (productId: number) => {
-  if (!currentUserId) {
-    Alert.alert('Login Required', 'Please login to like products');
-    return;
-  }
+    const isCurrentlyLiked = likedProducts.has(productId);
 
-  const isCurrentlyLiked = likedProducts.has(productId);
+    try {
+      if (isCurrentlyLiked) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId);
 
-  try {
-    if (isCurrentlyLiked) {
-      await supabase
-        .from('likes')
-        .delete()
-        .eq('user_id', currentUserId)
-        .eq('product_id', productId);
-
-      setLikedProducts(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(productId);
-        return newSet;
-      });
-    } else {
-      await supabase.from('likes').insert({
-        user_id: currentUserId,
-        product_id: productId,
-        post_id: null
-      });
-
-      setLikedProducts(prev => new Set([...prev, productId]));
-
-      // 🔥 Auto Notification Insert
-      const { data: productData } = await supabase
-        .from("products")
-        .select("user_id")
-        .eq("id", productId)
-        .single();
-
-      // ✅ Prevent self-notification
-      if (productData && productData.user_id !== currentUserId) {
-        await supabase.from("notifications").insert({
-          receiver_id: productData.user_id,
-          sender_id: currentUserId,
-          type: "like",
-          product_id: productId,
+        setLikedProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
         });
-      }
-    }
-  } catch (error: any) {
-    console.error("Error toggling like:", error);
-    Alert.alert("Error", "Failed to update like status");
-  }
-};
+      } else {
+        await supabase.from('likes').insert({
+          user_id: currentUserId,
+          product_id: productId,
+          post_id: null
+        });
 
+        setLikedProducts(prev => new Set([...prev, productId]));
+
+        const { data: productData } = await supabase
+          .from("products")
+          .select("user_id")
+          .eq("id", productId)
+          .single();
+
+        if (productData && productData.user_id !== currentUserId) {
+          await supabase.from("notifications").insert({
+            receiver_id: productData.user_id,
+            sender_id: currentUserId,
+            type: "like",
+            product_id: productId,
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error("Error toggling like:", error);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToUpdateLike'));
+    }
+  };
 
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setLocation("Permission denied");
+        setLocation(i18n.t('home.permissionDenied'));
         return;
       }
 
@@ -496,7 +584,7 @@ export default function HomeScreen() {
       let reverse = await Location.reverseGeocodeAsync(coords.coords);
 
       if (reverse.length > 0) {
-        let city = reverse[0].city || reverse[0].region || "Unknown";
+        let city = reverse[0].city || reverse[0].region || i18n.t('home.unknownLocation');
         setLocation(city);
       }
     })();
@@ -515,6 +603,8 @@ export default function HomeScreen() {
   }, [selectedFilter, products]);
 
   const fetchProducts = async (isInitialLoad: boolean) => {
+    if (!isInitialLoad && !hasMoreProducts) return;
+
     if (!isInitialLoad) {
       setLoadingMore(true);
     } else {
@@ -525,10 +615,16 @@ export default function HomeScreen() {
       let query = supabase
         .from("products")
         .select(
-          "id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, category_id",
+          "id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, category_id, user_id",
           { count: "exact" }
         )
         .order("created_at", { ascending: false });
+
+      const blockedIdsArray = Array.from(blockedUserIds);
+      if (blockedIdsArray.length > 0) {
+        query = query.not('user_id', 'in', `(${blockedIdsArray.join(',')})`);
+        console.log(`⚠️ Excluding products from blocked user IDs: ${blockedIdsArray.join(', ')}`);
+      }
 
       if (searchMode && searchQuery) {
         query = query.ilike("name", `%${searchQuery}%`);
@@ -545,8 +641,8 @@ export default function HomeScreen() {
       if (productsError) throw productsError;
 
       const newProducts = isInitialLoad ? productsData || [] : [...products, ...(productsData || [])];
-      setProducts(newProducts);
-      
+      setProducts(newProducts as Product[]);
+
       if (searchMode) {
         setHasMoreProducts(false);
       } else {
@@ -554,7 +650,7 @@ export default function HomeScreen() {
       }
     } catch (error: any) {
       console.error("HOME ERROR fetching products:", error);
-      Alert.alert("Error", "Failed to load products: " + error.message);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToLoadProducts') + error.message);
     } finally {
       if (!isInitialLoad) {
         setLoadingMore(false);
@@ -577,13 +673,13 @@ export default function HomeScreen() {
 
       if (productsData) {
         const categoryIds = [...new Set(productsData.map(p => p.category_id))];
-        
+
         const categoryCounts = productsData.reduce((acc, p) => {
           acc[p.category_id] = (acc[p.category_id] || 0) + 1;
           return acc;
         }, {} as Record<number, number>);
 
-        setCategories(prevCats => 
+        setCategories(prevCats =>
           prevCats.map(cat => ({
             ...cat,
             hasResults: categoryIds.includes(cat.id),
@@ -596,7 +692,7 @@ export default function HomeScreen() {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       console.log("=== HOME: Starting fetchData ===");
@@ -619,16 +715,16 @@ export default function HomeScreen() {
       console.log("HOME: Fetch complete");
     } catch (error: any) {
       console.error("HOME ERROR:", error);
-      Alert.alert("Error", "Failed to load data: " + error.message);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToLoadData') + error.message);
     } finally {
       setLoading(false);
       console.log("=== HOME: Finished fetchData ===");
     }
-  };
+  }, [searchMode, searchQuery, blockedUserIds]);
 
   useEffect(() => {
     fetchData();
-  }, [searchQuery]);
+  }, [fetchData]);
 
   const handleLoadMore = () => {
     fetchProducts(false);
@@ -649,45 +745,42 @@ export default function HomeScreen() {
     }
   );
 
-  // Pull to refresh handler
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Reset to initial state
       setProducts([]);
       setDisplayedProducts([]);
       setHasMoreProducts(true);
       setSelectedFilter("All");
-      
-      // Fetch fresh data
-      await fetchData();
-      
-      // Refresh user likes
+
       if (currentUserId) {
+        await fetchBlockedUsers(currentUserId);
         await fetchUserLikes();
       }
+      await fetchData(); 
+
     } catch (error) {
       console.error('Error refreshing:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, fetchData, fetchBlockedUsers]);
 
   if (loading && products.length === 0 && !refreshing) {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{i18n.t('home.loading')}</Text>
       </View>
     );
   }
 
-  const finalDisplayedProducts = displayedProducts.filter(p => 
+  const finalDisplayedProducts = displayedProducts.filter(p =>
     selectedFilter === 'All' || p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
   );
 
-  const displayCategories = searchMode 
-    ? categories.filter(cat => cat.hasResults) 
+  const displayCategories = searchMode
+    ? categories.filter(cat => cat.hasResults)
     : categories;
 
   return (
@@ -716,7 +809,7 @@ export default function HomeScreen() {
                     selectedFilter === tab && styles.filterTextActive,
                   ]}
                 >
-                  {tab}
+                  {translateFilter(tab)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -724,7 +817,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.contentContainer}
         onScroll={handleScroll}
         scrollEventThrottle={16}
@@ -734,7 +827,7 @@ export default function HomeScreen() {
             onRefresh={onRefresh}
             colors={[PRIMARY_TEAL]}
             tintColor={PRIMARY_TEAL}
-            title="Pull to refresh"
+            title={i18n.t('home.pullToRefresh')}
             titleColor={DARK_GRAY}
           />
         }
@@ -745,7 +838,7 @@ export default function HomeScreen() {
               <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
             </TouchableOpacity>
           )}
-          
+
           <TouchableOpacity
             style={styles.searchBarWrapper}
             onPress={() => {
@@ -764,7 +857,7 @@ export default function HomeScreen() {
                 style={styles.searchIcon}
               />
               <Text style={styles.searchInputPlaceholder}>
-                {searchMode ? searchQuery : "Search anything"}
+                {searchMode ? searchQuery : i18n.t('home.searchPlaceholder')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -774,9 +867,9 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Categories</Text>
+        <Text style={styles.sectionTitle}>{i18n.t('home.categoriesTitle')}</Text>
         {displayCategories.length === 0 ? (
-          <Text style={styles.emptyText}>No categories available</Text>
+          <Text style={styles.emptyText}>{i18n.t('home.noCategories')}</Text>
         ) : (
           <ScrollView
             horizontal
@@ -784,9 +877,9 @@ export default function HomeScreen() {
             contentContainerStyle={styles.categoryScroll}
           >
             {displayCategories.map((cat, index) => (
-              <CategoryButton 
-                key={cat.id} 
-                category={cat} 
+              <CategoryButton
+                key={cat.id}
+                category={cat}
                 index={index}
                 searchMode={searchMode}
                 searchQuery={searchQuery}
@@ -795,7 +888,7 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        <View 
+        <View
           style={styles.filterTabsWrapper}
           onLayout={(event) => {
             const { y, height } = event.nativeEvent.layout;
@@ -824,7 +917,7 @@ export default function HomeScreen() {
                     selectedFilter === tab && styles.filterTextActive,
                   ]}
                 >
-                  {tab}
+                  {translateFilter(tab)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -833,7 +926,7 @@ export default function HomeScreen() {
 
         {finalDisplayedProducts.length === 0 ? (
           <Text style={styles.emptyText}>
-            {searchMode ? "No products found matching your search" : "No products available for this filter."}
+            {searchMode ? i18n.t('home.noProductsSearch') : i18n.t('home.noProductsFilter')}
           </Text>
         ) : (
           <View style={styles.productGrid}>
@@ -846,6 +939,7 @@ export default function HomeScreen() {
                 categories={categories}
                 isLiked={likedProducts.has(product.id)}
                 onToggleLike={handleToggleLike}
+                currentUserId={currentUserId}
               />
             ))}
           </View>
@@ -855,7 +949,7 @@ export default function HomeScreen() {
           <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
         )}
         {!searchMode && selectedFilter === "All" && !hasMoreProducts && products.length > 0 && (
-          <Text style={styles.noMoreText}></Text>
+          <Text style={styles.noMoreText}>{i18n.t('home.noMoreText')}</Text>
         )}
       </ScrollView>
     </View>
@@ -870,8 +964,9 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     width: CARD_WIDTH,
-    marginBottom: 16,
+    marginBottom: 4,
     borderRadius: 16,
+    marginHorizontal: 1,
     backgroundColor: "white",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -912,7 +1007,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "500",
     color: "#333",
     minHeight: 34,
     marginBottom: 4,
@@ -924,6 +1019,7 @@ const styles = StyleSheet.create({
   },
   cardDistance: {
     marginLeft: 4,
+    marginRight: 4,
     fontSize: 12,
     color: "#666",
   },
@@ -956,11 +1052,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 14,
     color: PRIMARY_TEAL,
-    marginVertical: 20,
+    marginTop: 16,
+    marginBottom: 8,
     fontWeight: '600'
   },
   contentContainer: {
-    paddingBottom: TAB_BAR_HEIGHT + 20,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: "row",
@@ -994,13 +1091,6 @@ const styles = StyleSheet.create({
     marginRight: 8,
     color: "#999",
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#999",
-    paddingVertical: 0,
-    backgroundColor: "transparent",
-  },
   searchInputPlaceholder: {
     flex: 1,
     fontSize: 16,
@@ -1021,151 +1111,139 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: DARK_GRAY,
     paddingHorizontal: 16,
-    marginTop: 10,
     marginBottom: 10,
+    marginTop: 10,
   },
   categoryScroll: {
     paddingHorizontal: 16,
-    marginBottom: 20,
-    paddingTop: 12,
+    paddingBottom: 10,
   },
   categoryButton: {
-    position: "relative",
     width: 90,
     height: 90,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 12,
     marginRight: 12,
-    overflow: "visible",
-  },
-  redDot: {
-    position: "absolute",
-    top: -10,
-    right: -10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: ACCENT_RED,
-    borderWidth: 3,
-    borderColor: "white",
-    zIndex: 20,
-    shadowColor: ACCENT_RED,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }],
-  },
-  categoryText: {
-    marginTop: 8,
-    fontSize: 11,
-    fontWeight: "600",
-    color: "white",
-    textAlign: "center",
-  },
-  filterTabsWrapper: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  stickyFilterTabsWrapper: {
-    position: "absolute",
-    top: SAFE_AREA_PADDING,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
-    zIndex: 100,
+    shadowRadius: 4,
+    elevation: 2,
+    position: 'relative',
+  },
+  categoryText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "600",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  filterTabsWrapper: {
+    zIndex: 1,
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: LIGHT_GRAY,
+  },
+  stickyFilterTabsWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: 'white',
+    paddingTop: SAFE_AREA_PADDING + 10,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: LIGHT_GRAY,
   },
   filterTabs: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     backgroundColor: LIGHT_GRAY,
     borderRadius: 12,
     padding: 4,
   },
   filterButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterButtonActive: {
-    backgroundColor: DARK_GRAY,
+    backgroundColor: PRIMARY_TEAL,
   },
   filterText: {
-    fontWeight: "600",
     fontSize: 14,
-    color: "#666",
+    fontWeight: '600',
+    color: DARK_GRAY,
   },
   filterTextActive: {
-    color: "white",
+    color: 'white',
   },
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   cardTouchable: {
     borderRadius: 16,
-    overflow: "hidden",
+    overflow: 'hidden',
+    flex: 1,
   },
   cardImage: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
   },
-  deliveryBadge: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    backgroundColor: "white",
-    padding: 6,
-    borderRadius: 8,
+  cardDetails: {
+    padding: 10,
   },
   heartIcon: {
-    position: "absolute",
+    position: 'absolute',
     top: 10,
     right: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
     padding: 5,
   },
-  cardDetails: {
-    padding: 12,
-  },
-  cardPrice: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
+  redDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ACCENT_RED,
+    zIndex: 2,
   },
   loadMoreContainer: {
-    marginHorizontal: 16,
+    paddingHorizontal: 16,
     marginTop: 20,
-    marginBottom: 10,
+    marginBottom: 40,
+  },
+  loadMoreButton: {
+    backgroundColor: PRIMARY_TEAL,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: PRIMARY_TEAL,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  loadMoreButton: {
-    paddingVertical: 16,
-    backgroundColor: PRIMARY_TEAL,
-    borderRadius: 30,
-    alignItems: "center",
-    justifyContent: "center",
+    shadowRadius: 6,
+    elevation: 6,
   },
   loadMoreText: {
+    color: 'white',
     fontSize: 16,
-    fontWeight: "700",
-    color: "white",
+    fontWeight: '700',
   },
 });

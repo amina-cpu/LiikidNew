@@ -22,7 +22,8 @@ interface FollowingUser {
     user_id: number;
     username: string;
     profile_image_url: string | null;
-    isFollowing?: boolean; // Always true for this list, but maintained for consistency/toggling
+    isFollowing?: boolean; // Does the logged-in user follow this person?
+    isMutual?: boolean; // Is this a mutual follow (friends)?
 }
 
 const FollowingList = () => {
@@ -35,7 +36,6 @@ const FollowingList = () => {
     const [refreshing, setRefreshing] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-    // --- Utility to get current user ID from storage ---
     const getLoggedInUserId = async () => {
         try {
             const userJson = await AsyncStorage.getItem('user');
@@ -50,7 +50,42 @@ const FollowingList = () => {
             return null;
         }
     };
-    // ----------------------------------------------------
+
+    // Check if logged-in user follows these users
+    const checkFollowStatus = async (loggedInUserId: number, userIds: number[]): Promise<Set<number>> => {
+        if (userIds.length === 0) return new Set();
+
+        const { data, error } = await supabase
+            .from('user_follows')
+            .select('following_id')
+            .eq('follower_id', loggedInUserId)
+            .in('following_id', userIds);
+
+        if (error) {
+            console.error('Error checking follow status:', error);
+            return new Set();
+        }
+
+        return new Set(data?.map(item => item.following_id) || []);
+    };
+
+    // Check which users follow the logged-in user back (for mutual detection)
+    const checkMutualStatus = async (loggedInUserId: number, userIds: number[]): Promise<Set<number>> => {
+        if (userIds.length === 0) return new Set();
+
+        const { data, error } = await supabase
+            .from('user_follows')
+            .select('follower_id')
+            .eq('following_id', loggedInUserId)
+            .in('follower_id', userIds);
+
+        if (error) {
+            console.error('Error checking mutual status:', error);
+            return new Set();
+        }
+
+        return new Set(data?.map(item => item.follower_id) || []);
+    };
 
     const fetchFollowing = useCallback(async (isRefreshing = false) => {
         if (!targetUserId) {
@@ -58,12 +93,12 @@ const FollowingList = () => {
             return;
         }
 
-        await getLoggedInUserId();
+        const loggedInUserId = await getLoggedInUserId();
 
         try {
             if (!isRefreshing) setLoading(true);
 
-            // Fetch following list
+            // Fetch users that the target user is following
             const { data, error } = await supabase
                 .from('user_follows')
                 .select('following_id, users:following_id(user_id, username, profile_image_url)')
@@ -71,13 +106,39 @@ const FollowingList = () => {
 
             if (error) throw error;
 
-            // Map the results. Since this is the FOLLOWING list, all users are currently followed
-            const followingUsers: FollowingUser[] = (data || [])
+            const fetchedFollowing: FollowingUser[] = (data || [])
                 .map(item => item.users)
-                .filter(user => user !== null)
-                .map(user => ({ ...user, isFollowing: true })) as FollowingUser[];
+                .filter(user => user !== null) as FollowingUser[];
 
-            setFollowing(followingUsers);
+            let finalFollowing: FollowingUser[] = fetchedFollowing;
+
+            // If logged-in user is viewing their own list or someone else's
+            if (loggedInUserId) {
+                const followingIds = fetchedFollowing.map(f => f.user_id);
+                
+                if (loggedInUserId === targetUserId) {
+                    // Viewing own following list - check who follows back
+                    const followsBack = await checkMutualStatus(loggedInUserId, followingIds);
+
+                    finalFollowing = fetchedFollowing.map(user => ({
+                        ...user,
+                        isFollowing: true, // Always true for own following list
+                        isMutual: followsBack.has(user.user_id),
+                    }));
+                } else {
+                    // Viewing someone else's following list - check if logged-in user follows them
+                    const followedByCurrentUser = await checkFollowStatus(loggedInUserId, followingIds);
+                    const followsCurrentUserBack = await checkMutualStatus(loggedInUserId, followingIds);
+
+                    finalFollowing = fetchedFollowing.map(user => ({
+                        ...user,
+                        isFollowing: followedByCurrentUser.has(user.user_id),
+                        isMutual: followedByCurrentUser.has(user.user_id) && followsCurrentUserBack.has(user.user_id),
+                    }));
+                }
+            }
+
+            setFollowing(finalFollowing);
 
         } catch (error: any) {
             console.error('Error fetching following list:', error);
@@ -88,25 +149,17 @@ const FollowingList = () => {
         }
     }, [targetUserId]);
 
-    // --- NEW: Follow/Unfollow handler ---
     const handleFollowToggle = async (userToToggle: FollowingUser) => {
         if (!currentUserId) {
             Alert.alert('Login Required', 'Please log in to manage your follow list.');
             return;
         }
-        
-        // This button will always be 'Remove' on the following page, 
-        // but we use the isFollowing flag to guide the logic.
-        const isCurrentlyFollowing = userToToggle.isFollowing; 
-        
-        // Optimistic UI update: Remove the user from the list on unfollow
-        if (isCurrentlyFollowing) {
-            setFollowing(prev => prev.filter(f => f.user_id !== userToToggle.user_id));
-        }
+
+        const isCurrentlyFollowing = userToToggle.isFollowing;
 
         try {
             if (isCurrentlyFollowing) {
-                // Unfollow (Remove)
+                // Unfollow
                 const { error } = await supabase
                     .from('user_follows')
                     .delete()
@@ -114,18 +167,65 @@ const FollowingList = () => {
                     .eq('following_id', userToToggle.user_id);
 
                 if (error) throw error;
-                Alert.alert('Unfollowed', `You have unfollowed ${userToToggle.username}.`);
-            }
-            // Note: We don't need a 'Follow' action on the Following list itself.
 
-        } catch (error) {
-            console.error('Unfollow failed:', error);
-            Alert.alert('Error', 'Failed to unfollow.');
-            // Rollback optimistic update on failure (requires a full re-fetch to restore the list)
+                // Delete notification
+                await supabase
+                    .from('notifications')
+                    .delete()
+                    .eq('sender_id', currentUserId)
+                    .eq('receiver_id', userToToggle.user_id)
+                    .eq('type', 'follow');
+
+                // If viewing own list, remove from list; otherwise just update status
+                if (currentUserId === targetUserId) {
+                    setFollowing(prev => prev.filter(f => f.user_id !== userToToggle.user_id));
+                } else {
+                    setFollowing(prev => 
+                        prev.map(f => 
+                            f.user_id === userToToggle.user_id 
+                            ? { ...f, isFollowing: false, isMutual: false } 
+                            : f
+                        )
+                    );
+                }
+            } else {
+                // Follow - use upsert to handle duplicates
+                const { error } = await supabase
+                    .from('user_follows')
+                    .upsert(
+                        { follower_id: currentUserId, following_id: userToToggle.user_id },
+                        { onConflict: 'follower_id,following_id', ignoreDuplicates: false }
+                    );
+
+                if (error) throw error;
+
+                // Check if they follow back (mutual)
+                const { data: followBackData } = await supabase
+                    .from('user_follows')
+                    .select('follow_id')
+                    .eq('follower_id', userToToggle.user_id)
+                    .eq('following_id', currentUserId)
+                    .maybeSingle();
+
+                const isMutual = !!followBackData;
+
+                // Update UI
+                setFollowing(prev => 
+                    prev.map(f => 
+                        f.user_id === userToToggle.user_id 
+                        ? { ...f, isFollowing: true, isMutual } 
+                        : f
+                    )
+                );
+            }
+        } catch (error: any) {
+            console.error('Follow/Unfollow failed:', error);
+            Alert.alert('Error', `Failed to ${isCurrentlyFollowing ? 'unfollow' : 'follow'}.`);
+            
+            // Refresh from database on error
             fetchFollowing(true);
         }
     };
-    // ------------------------------------
 
     useFocusEffect(
         useCallback(() => {
@@ -140,16 +240,44 @@ const FollowingList = () => {
 
     const handleProfilePress = (id: number) => {
         if (id === currentUserId) {
-            // Navigate to the main tab-based profile screen
             router.push('/(tabs)/profile');
         } else {
-            // Navigate to another user's profile screen
             router.push(`/someonesProfile?userId=${id}`);
         }
     };
 
     const FollowingItem: React.FC<{ user: FollowingUser }> = ({ user }) => {
         const isCurrentUser = user.user_id === currentUserId;
+        const isOwnFollowingList = targetUserId === currentUserId;
+
+        // Determine button text and style
+        let buttonText = 'Follow';
+        let buttonStyle = styles.followButton;
+        let textStyle = styles.followButtonText;
+
+        if (isOwnFollowingList) {
+            // Own following list - show "Remove" or "Friends"
+            if (user.isMutual) {
+                buttonText = 'Friends';
+                buttonStyle = styles.friendsButton;
+                textStyle = styles.friendsButtonText;
+            } else {
+                buttonText = 'Remove';
+                buttonStyle = styles.removeButton;
+                textStyle = styles.removeButtonText;
+            }
+        } else {
+            // Someone else's following list
+            if (user.isMutual) {
+                buttonText = 'Friends';
+                buttonStyle = styles.friendsButton;
+                textStyle = styles.friendsButtonText;
+            } else if (user.isFollowing) {
+                buttonText = 'Unfollow';
+                buttonStyle = styles.unfollowButton;
+                textStyle = styles.unfollowButtonText;
+            }
+        }
 
         return (
             <TouchableOpacity
@@ -165,48 +293,14 @@ const FollowingList = () => {
                 )}
                 <Text style={styles.username} numberOfLines={1}>{user.username}</Text>
 
-             <View style={styles.buttonContainer}>
-    {/* The logged-in user's own following list (show REMOVE + FRIENDS) */}
-    {!isCurrentUser && targetUserId === currentUserId && (
-        <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity
-                style={styles.friendsButton}
-                onPress={() =>
-                    Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')
-                }>
-                <Text style={styles.friendsButtonText}>Friends</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => handleFollowToggle(user)}>
-                <Text style={styles.removeButtonText}>Remove</Text>
-            </TouchableOpacity>
-        </View>
-    )}
-
-    {/* Viewing someone else's following list (show FOLLOW + FRIENDS) */}
-    {!isCurrentUser && targetUserId !== currentUserId && (
-        <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity
-                style={styles.friendsButton}
-                onPress={() =>
-                    Alert.alert('Friends Feature', 'This is a placeholder for the Friends feature.')
-                }>
-                <Text style={styles.friendsButtonText}>Friends</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={styles.followButton}
-                onPress={() =>
-                    Alert.alert('Action', 'Implement follow/unfollow logic relative to the current user.')
-                }>
-                <Text style={styles.followButtonText}>Follow</Text>
-            </TouchableOpacity>
-        </View>
-    )}
-</View>
-
+                {!isCurrentUser && (
+                    <TouchableOpacity 
+                        style={buttonStyle}
+                        onPress={() => handleFollowToggle(user)}
+                    >
+                        <Text style={textStyle}>{buttonText}</Text>
+                    </TouchableOpacity>
+                )}
             </TouchableOpacity>
         );
     };
@@ -227,14 +321,13 @@ const FollowingList = () => {
         );
     }
 
-    // Determine the title based on whose list it is
     const isCurrentUserList = targetUserId === currentUserId;
-    const listTitle = isCurrentUserList ? `Following (${following.length})` : `User is Following (${following.length})`;
+    const listTitle = isCurrentUserList ? `Following (${following.length})` : `Following (${following.length})`;
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity   onPress={() => handleProfilePress(targetUserId!)}  style={styles.backButton}>
+                <TouchableOpacity onPress={() => handleProfilePress(targetUserId!)} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>{listTitle}</Text>
@@ -249,7 +342,9 @@ const FollowingList = () => {
                 {following.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <Ionicons name="people-outline" size={60} color="#888" />
-                        <Text style={styles.emptyText}>This user isn't following anyone yet.</Text>
+                        <Text style={styles.emptyText}>
+                            {isCurrentUserList ? "You're not following anyone yet." : "This user isn't following anyone yet."}
+                        </Text>
                     </View>
                 ) : (
                     following.map((user) => (
@@ -336,50 +431,61 @@ const styles = StyleSheet.create({
         flex: 1,
         marginRight: 10,
     },
-    buttonContainer: {
-        flexDirection: 'row',
-        gap: 8,
-        minWidth: 140, // Ensure buttons don't shrink too much
-        justifyContent: 'flex-end',
-    },
-    friendsButton: {
-        backgroundColor: '#E0E0E0',
-        paddingVertical: 6,
-        paddingHorizontal: 10,
-        borderRadius: 6,
-        minWidth: 55,
-        alignItems: 'center',
-    },
-    friendsButtonText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#333',
-    },
     followButton: {
-        backgroundColor: '#16A085', // Green for Follow
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-        minWidth: 65,
+        backgroundColor: '#16A085',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        minWidth: 80,
         alignItems: 'center',
     },
     followButtonText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
         color: '#fff',
     },
+    unfollowButton: {
+        backgroundColor: '#fff',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        minWidth: 80,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#16A085',
+    },
+    unfollowButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#16A085',
+    },
+    friendsButton: {
+        backgroundColor: '#fff',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        minWidth: 80,
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#C8E853',
+    },
+    friendsButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#000',
+    },
     removeButton: {
-        backgroundColor: '#E9E9E9', // Light gray for Remove
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 6,
-        minWidth: 65,
+        backgroundColor: '#E9E9E9',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        minWidth: 80,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#C8C8C8',
     },
     removeButtonText: {
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: '600',
         color: '#333',
     },

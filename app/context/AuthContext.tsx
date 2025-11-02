@@ -3,7 +3,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-// Use the existing UserProfile interface from your profile.tsx
+
 interface UserProfile {
     user_id: number;
     username: string;
@@ -12,22 +12,20 @@ interface UserProfile {
     bio: string | null;
     profile_image_url: string | null;
     location: string | null;
-    is_seller: boolean;
-    is_verified: boolean;
+    avatar_url?: string | null;
+    auth_provider?: string | null;
+    auth_provider_id?: string | null;
 }
 
 interface AuthContextType {
     user: UserProfile | null;
     isLoading: boolean;
     signOut: () => Promise<void>;
-    // Function to call on successful login, provided by the login screen
     updateUser: (user: UserProfile) => Promise<void>; 
 }
 
-// Create the context
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Custom hook to consume the context
 export function useAuth() {
     const context = useContext(AuthContext);
     if (!context) {
@@ -36,48 +34,59 @@ export function useAuth() {
     return context;
 }
 
-// Custom hook for protected routes (the navigation logic)
 function useProtectedRoute(user: UserProfile | null, isLoading: boolean) {
     const segments = useSegments();
     const router = useRouter();
 
     useEffect(() => {
-        if (isLoading) return; // Wait until loading is complete
+        if (isLoading) {
+            console.log('⏳ Auth is loading...');
+            return;
+        }
 
-        // isAuthenticated is now just checking if the user object exists
         const isAuthenticated = !!user;
         const inAuthGroup = segments[0] === '(auth)';
+        const inTabsGroup = segments[0] === '(tabs)';
+        const onWelcomeScreen = segments.length === 0 || segments[0] === 'index';
         
-        if (isAuthenticated && inAuthGroup) {
-            // User IS authenticated but is on login/signup, redirect to home
-            console.log("-> Redirecting to Home (User is Logged In)");
-            router.replace('/(tabs)');
-        } else if (!isAuthenticated && !inAuthGroup) {
-            // User is NOT authenticated and is on a protected route, redirect to login
-            console.log("-> Redirecting to Login (User is Logged Out)");
-            // Ensure the path matches your login file location
-            router.replace('/(auth)/login');
+        console.log('🔐 Auth Check:', { 
+            isAuthenticated, 
+            inAuthGroup,
+            inTabsGroup,
+            onWelcomeScreen,
+            segments: segments.join('/'),
+            userEmail: user?.email 
+        });
+
+        // ONLY protect tabs - let index page handle its own routing
+        if (!isAuthenticated && inTabsGroup) {
+            console.log("❌ Redirecting unauthenticated user to signup");
+            router.replace('/(auth)/signup');
         }
-    }, [user, isLoading, segments]);
+    }, [user, isLoading, segments, router]);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initial load from AsyncStorage
     useEffect(() => {
         const loadUser = async () => {
             try {
+                console.log('🔄 Loading user from AsyncStorage...');
                 const userJson = await AsyncStorage.getItem('user');
                 const isLoggedIn = await AsyncStorage.getItem('isLoggedIn');
                 
                 if (isLoggedIn === 'true' && userJson) {
                     const loadedUser = JSON.parse(userJson) as UserProfile;
+                    console.log('✅ User loaded from storage:', loadedUser.email);
+                    console.log('✅ User ID loaded:', loadedUser.user_id);
                     setUser(loadedUser);
+                } else {
+                    console.log('ℹ️ No user in storage');
                 }
             } catch (e) {
-                console.error("Failed to load auth state:", e);
+                console.error("❌ Failed to load auth state:", e);
             } finally {
                 setIsLoading(false);
             }
@@ -85,26 +94,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadUser();
     }, []);
 
-    // Function to handle login (called by login.tsx)
     const updateUser = async (newUser: UserProfile) => {
-        await AsyncStorage.setItem('user', JSON.stringify(newUser));
-        await AsyncStorage.setItem('isLoggedIn', 'true');
-        // 'userId' should also be set if your load logic depends on it
-        await AsyncStorage.setItem('userId', newUser.user_id.toString()); 
-        setUser(newUser);
+        try {
+            console.log('💾 Storing user in AsyncStorage:', newUser.email);
+            console.log('💾 User ID being stored:', newUser.user_id);
+            console.log('💾 Full user object:', JSON.stringify(newUser, null, 2));
+            
+            await AsyncStorage.setItem('user', JSON.stringify(newUser));
+            await AsyncStorage.setItem('isLoggedIn', 'true');
+            await AsyncStorage.setItem('userId', newUser.user_id.toString());
+            
+            setUser(newUser);
+            console.log('✅ User updated in context');
+            console.log('✅ Stored userId:', newUser.user_id.toString());
+        } catch (error) {
+            console.error('❌ Error updating user:', error);
+            throw error;
+        }
     };
 
-    // Function to handle logout (called by profile.tsx)
     const signOut = async () => {
-        await AsyncStorage.multiRemove(['user', 'isLoggedIn', 'userId']);
-        setUser(null); // Setting state to null is the key!
-        setIsLoading(false); // Ensure we don't flash the loading screen
+        try {
+            console.log('👋 Signing out...');
+            await AsyncStorage.multiRemove(['user', 'isLoggedIn', 'userId']);
+            setUser(null);
+            console.log('✅ User signed out');
+        } catch (error) {
+            console.error('❌ Error signing out:', error);
+        }
     };
 
-    // Apply the protection logic
     useProtectedRoute(user, isLoading);
 
-    // Memoize the value to prevent unnecessary re-renders
     const contextValue = useMemo(() => ({
         user,
         isLoading,

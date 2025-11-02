@@ -1,11 +1,12 @@
-
-// lib/Supabase.ts
+// lib/supabase.ts (or Supabase.ts)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+
 const supabaseUrl = 'https://gggopknzksqvzisxylts.supabase.co';
-const supabaseAnonKey=  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZ29wa256a3Nxdnppc3h5bHRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1ODg3MjAsImV4cCI6MjA3NTE2NDcyMH0.JD6Lt61P9tDhjjKHtj3n299GJ1DD6-oJTJMu3BNJ-Jg'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdnZ29wa256a3Nxdnppc3h5bHRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1ODg3MjAsImV4cCI6MjA3NTE2NDcyMH0.JD6Lt61P9tDhjjKHtj3n299GJ1DD6-oJTJMu3BNJ-Jg';
+
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string) => {
     if (Platform.OS === 'web') {
@@ -35,7 +36,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: ExpoSecureStoreAdapter,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce', // Use PKCE flow for better security with OAuth
+    detectSessionInUrl: false, // CHANGED: false for mobile
+    flowType: 'implicit', // CHANGED: implicit instead of pkce
   },
 });

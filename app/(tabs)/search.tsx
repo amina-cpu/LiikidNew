@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
+import { useAuth } from '../context/AuthContext';
 
 const PRIMARY_TEAL = "#16A085";
 
@@ -23,34 +24,34 @@ interface Category {
 
 const SearchScreen = () => {
   const router = useRouter();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedCategoryName, setSelectedCategoryName] = useState('All Categories');
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([
-    'TACTILE',
-    'CAMERA',
-    'iPhone 14 Pro',
-    'Apartment for Rent',
-  ]);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Reset search when screen comes into focus
   useFocusEffect(
     useCallback(() => {
-      // Reset search state when user navigates back to search
       setSearch('');
       setSelectedCategoryId(null);
       setSelectedCategoryName('All Categories');
       setShowCategoryPicker(false);
-    }, [])
+      
+      if (user) {
+        loadRecentSearches();
+      }
+    }, [user])
   );
 
   useEffect(() => {
     fetchCategories();
-    loadRecentSearches();
-  }, []);
+    if (user) {
+      loadRecentSearches();
+    }
+  }, [user]);
 
   const fetchCategories = async () => {
     try {
@@ -67,15 +68,64 @@ const SearchScreen = () => {
   };
 
   const loadRecentSearches = async () => {
-    // TODO: Load from AsyncStorage or user preferences
-    // For now, using default values
+    if (!user || !user.user_id) {
+      console.log('No user logged in, setting empty search history');
+      setRecentSearches([]);
+      return;
+    }
+
+    try {
+      console.log('Loading search history for user:', user.user_id);
+      const { data, error } = await supabase
+        .from('search_history')
+        .select('search_query')
+        .eq('user_id', user.user_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        console.error('Error loading search history:', error);
+        throw error;
+      }
+
+      console.log('Search history data:', data);
+
+      if (data && data.length > 0) {
+        const uniqueQueries = Array.from(
+          new Set(data.map(item => item.search_query))
+        );
+        console.log('Setting recent searches:', uniqueQueries);
+        setRecentSearches(uniqueQueries);
+      } else {
+        console.log('No search history found, setting empty array');
+        setRecentSearches([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading search history:', error);
+      setRecentSearches([]);
+    }
   };
 
-  const saveRecentSearch = (query: string) => {
-    if (query.trim() && !recentSearches.includes(query)) {
-      const updated = [query, ...recentSearches].slice(0, 10);
-      setRecentSearches(updated);
-      // TODO: Save to AsyncStorage
+  const saveRecentSearch = async (query: string) => {
+    if (!user || !user.user_id || !query.trim()) {
+      return;
+    }
+
+    try {
+      await supabase
+        .from('search_history')
+        .insert([{
+          user_id: user.user_id,
+          search_query: query.trim(),
+          category_id: selectedCategoryId,
+        }]);
+
+      if (!recentSearches.includes(query.trim())) {
+        const updated = [query.trim(), ...recentSearches].slice(0, 10);
+        setRecentSearches(updated);
+      }
+    } catch (error: any) {
+      console.error('Error saving search history:', error);
     }
   };
 
@@ -85,12 +135,11 @@ const SearchScreen = () => {
       return;
     }
 
-    saveRecentSearch(search.trim());
+    await saveRecentSearch(search.trim());
     setLoading(true);
 
     try {
       if (selectedCategoryId) {
-        // Search within a specific category - go directly to category page
         router.push({
           pathname: '/category',
           params: {
@@ -101,7 +150,6 @@ const SearchScreen = () => {
           },
         });
       } else {
-        // Search across all categories - check how many categories have results
         const { data: productsData, error } = await supabase
           .from('products')
           .select('category_id')
@@ -110,11 +158,9 @@ const SearchScreen = () => {
         if (error) throw error;
 
         if (productsData && productsData.length > 0) {
-          // Get unique category IDs
           const categoryIds = [...new Set(productsData.map(p => p.category_id))];
 
           if (categoryIds.length === 1) {
-            // Only one category has results - redirect directly to that category
             router.push({
               pathname: '/category',
               params: {
@@ -124,7 +170,6 @@ const SearchScreen = () => {
               },
             });
           } else {
-            // Multiple categories have results - go to homepage
             router.push({
               pathname: '/',
               params: {
@@ -133,7 +178,6 @@ const SearchScreen = () => {
             });
           }
         } else {
-          // No results found
           Alert.alert('No Results', 'No products found matching your search');
         }
       }
@@ -148,10 +192,23 @@ const SearchScreen = () => {
     setSearch(query);
   };
 
-  const removeRecent = (item: string) => {
-    const updated = recentSearches.filter(i => i !== item);
-    setRecentSearches(updated);
-    // TODO: Update AsyncStorage
+  const removeRecent = async (item: string) => {
+    if (!user || !user.user_id) {
+      return;
+    }
+
+    try {
+      await supabase
+        .from('search_history')
+        .delete()
+        .eq('user_id', user.user_id)
+        .eq('search_query', item);
+
+      const updated = recentSearches.filter(i => i !== item);
+      setRecentSearches(updated);
+    } catch (error: any) {
+      console.error('Error removing search history:', error);
+    }
   };
 
   const selectCategory = (cat: Category | null) => {
@@ -167,7 +224,6 @@ const SearchScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Search</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
@@ -175,7 +231,6 @@ const SearchScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Search Input Section */}
       <Text style={styles.sectionLabel}>Search in Local Marketplace</Text>
 
       <View style={styles.searchBox}>
@@ -191,7 +246,6 @@ const SearchScreen = () => {
         />
       </View>
 
-      {/* Category Dropdown */}
       <TouchableOpacity 
         style={styles.categoryBox}
         onPress={() => setShowCategoryPicker(!showCategoryPicker)}
@@ -204,7 +258,6 @@ const SearchScreen = () => {
         />
       </TouchableOpacity>
 
-      {/* Category Picker - Absolute positioned */}
       {showCategoryPicker && (
         <ScrollView style={styles.categoryPicker} nestedScrollEnabled>
           <TouchableOpacity 
@@ -241,7 +294,6 @@ const SearchScreen = () => {
         </ScrollView>
       )}
 
-      {/* Search Button */}
       <TouchableOpacity 
         style={styles.searchBtn} 
         onPress={handleSearch}
@@ -257,7 +309,6 @@ const SearchScreen = () => {
         )}
       </TouchableOpacity>
 
-      {/* Recent Searches */}
       <Text style={styles.recentLabel}>Recent Searches</Text>
 
       <FlatList

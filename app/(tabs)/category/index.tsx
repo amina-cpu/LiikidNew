@@ -1,3 +1,5 @@
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -15,9 +17,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+
 import { supabase } from "../../../lib/Supabase";
+// 💡 Import i18n and helper
+
+import i18n, { translateFilter } from '../../../lib/i18n';
 
 const PRIMARY_TEAL = "#16A085";
 const SEARCH_GREEN = "#059669";
@@ -26,7 +30,7 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 24;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 20;
 const SAFE_AREA_PADDING = 40;
 
 const INITIAL_PRODUCT_LIMIT = 8;
@@ -59,9 +63,150 @@ interface Product {
   sub_subcategory_id: number | null;
   created_at: string;
   delivery: boolean;
+  user_id: number; // 🔥 NEW
+}
+const getCategoryTranslation = (catName: string): string => {
+  const normalized = catName.trim().toLowerCase();
+
+  const categoryMap: { [key: string]: string } = {
+    'food': 'Food',
+    'computers & accessories': 'ComputersAccessories',
+    'real estate': 'RealEstate',
+    'electronics & home appliance': 'ElectronicsHomeAppliance',
+    'materials & equipment': 'MaterialsEquipment',
+    'repair parts': 'RepairParts',
+    'cars and vehicles': 'CarsVehicles',
+    'sports': 'Sports',
+    'phones & accessories': 'PhonesAccessories',
+    'travel': 'Travel',
+    'computers & laptops': 'ComputersLaptops',
+    'hobbies and entertainment': 'HobbiesEntertainment',
+    'baby essentials': 'BabyEssentials',
+    'clothing & fashion': 'ClothingFashion',
+    'health & beauty': 'HealthBeauty',
+    'homemade & handcrafted': 'HomemadeHandcrafted',
+  };
+
+  const mappedKey = categoryMap[normalized];
+
+  if (!mappedKey) return catName;
+
+  const translationKey = `categories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : catName;
+};
+const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
+
+// 💡 Helper function to translate category names
+const getCategoryIcon = (name: string, size = 24, color = "#16A085") => {
+  if (!name) return <MaterialCommunityIcons name="shape-outline" size={size} color={color} />;
+
+  const lower = name.toLowerCase();
+
+  // Real estate
+  if (lower.includes("real estate") || lower.includes("apartment") || lower.includes("villa") || lower.includes("house")|| lower.includes("commercial properties")|| lower.includes("land")) {
+    return <MaterialCommunityIcons name="home-city-outline" size={size} color={color} />;
+  }
+
+  // Cars and vehicles
+  if (lower.includes("car") || lower.includes("vehicle")  || lower.includes("truck")) {
+    return <Ionicons name="car-outline" size={size} color={color} />;
+  }
+
+  // Cars and vehicles
+  if (lower.includes("bicycles")  || lower.includes("motorcycles") ) {
+    return <MaterialCommunityIcons  name="motorbike" size={size} color={color} />;
+  }
+  // Electronics
+  if (lower.includes("phone") || lower.includes("electronics") || lower.includes("appliance") || lower.includes("tv")) {
+    return <Ionicons name="phone-portrait-outline" size={size} color={color} />;
+  }
+ if (lower.includes("washing machine") || lower.includes("machine")) {
+    return <MaterialCommunityIcons name="washing-machine" size={size} color={color} />;
+  }
+ if (lower.includes("refrigirator") || lower.includes("fridge")) {
+    return <MaterialCommunityIcons name="fridge-outline" size={size} color={color} />;
+  }
+if (lower.includes("charger") || lower.includes("cable")) {
+  return <MaterialCommunityIcons name="power-plug-outline" size={size} color={color} />;
+}
+if (lower.includes("headphones") || lower.includes("earphone")|| lower.includes("headphones & earphones") || lower.includes("earbud")) {
+  return <MaterialCommunityIcons name="headphones" size={size} color={color} />;
 }
 
-const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
+  // Computers
+  if (lower.includes("computer") || lower.includes("laptop") || lower.includes("accessory")) {
+    return <MaterialCommunityIcons name="laptop" size={size} color={color} />;
+  }
+
+  // Furniture
+  if (lower.includes("furniture") || lower.includes("chair") || lower.includes("sofa") || lower.includes("table")) {
+    return <MaterialCommunityIcons name="sofa-outline" size={size} color={color} />;
+  }
+
+  // Fashion
+  if (lower.includes("fashion") || lower.includes("clothing") || lower.includes("dress") || lower.includes("shoes")) {
+    return <MaterialCommunityIcons name="tshirt-crew-outline" size={size} color={color} />;
+  }
+
+  // Jobs
+  if (lower.includes("job") || lower.includes("career")) {
+    return <MaterialCommunityIcons name="briefcase-outline" size={size} color={color} />;
+  }
+
+  // Services
+  if (lower.includes("service") || lower.includes("repair")) {
+    return <MaterialCommunityIcons name="account-cog-outline" size={size} color={color} />;
+  }
+
+  // Books or education
+  if (lower.includes("book") || lower.includes("study") || lower.includes("education")) {
+    return <Ionicons name="book-outline" size={size} color={color} />;
+  }
+
+  // Food
+  if (lower.includes("food") || lower.includes("restaurant") || lower.includes("drink")) {
+    return <MaterialCommunityIcons name="food-outline" size={size} color={color} />;
+  }
+
+  // Sports
+  if (lower.includes("sport") || lower.includes("fitness") || lower.includes("gym")) {
+    return <MaterialCommunityIcons name="basketball-hoop-outline" size={size} color={color} />;
+  }
+
+  // Kids / Baby
+  if (lower.includes("baby") || lower.includes("kid") || lower.includes("child") || lower.includes("toy")) {
+    return <MaterialCommunityIcons name="baby-face-outline" size={size} color={color} />;
+  }
+
+  // Health & Beauty
+  if (lower.includes("health") || lower.includes("beauty") || lower.includes("makeup")) {
+    return <MaterialCommunityIcons name="heart-outline" size={size} color={color} />;
+  }
+
+  // Handmade / Crafts
+  if (lower.includes("handmade") || lower.includes("craft") || lower.includes("art")) {
+    return <MaterialCommunityIcons name="hammer-wrench" size={size} color={color} />;
+  }
+
+  // Travel
+  if (lower.includes("travel") || lower.includes("trip") || lower.includes("flight")) {
+    return <MaterialCommunityIcons name="airplane" size={size} color={color} />;
+  }
+
+  // Entertainment
+  if (lower.includes("hobby") || lower.includes("entertainment") || lower.includes("music")) {
+    return <MaterialCommunityIcons name="guitar-electric" size={size} color={color} />;
+  }
+
+  // Tools & Materials
+  if (lower.includes("tool") || lower.includes("material") || lower.includes("equipment")) {
+    return <MaterialCommunityIcons name="tools" size={size} color={color} />;
+  }
+
+ 
+};
+
 
 const calculateDistance = (
   lat1: number,
@@ -86,10 +231,20 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
-}> = ({ product, userLat, userLon }) => {
+  currentUserId: number | null; // 🔥 NEW
+  isLiked: boolean; // 🔥 NEW
+  onToggleLike: (productId: number) => void; // 🔥 NEW
+}> = ({ product, userLat, userLon, currentUserId, isLiked, onToggleLike }) => {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const toggleLike = () => setLiked(!liked);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const isOwnProduct = currentUserId === product.user_id; // 🔥 NEW
+
+  const toggleLike = async () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    await onToggleLike(product.id);
+    setTimeout(() => setIsAnimating(false), 300);
+  };
 
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
@@ -116,10 +271,28 @@ const ProductCard: React.FC<{
   const tagColors = getTagColor();
 
   const formatPrice = () => {
-    if (product.listing_type === "exchange") return "Exchange";
+    if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
+    
+    if (product.price >= 10000) {
+      const millions = product.price / 10000;
+      let formattedMillions;
+      if (millions % 1 === 0) {
+        formattedMillions = millions.toString();
+      } else if (millions >= 10) {
+        formattedMillions = Math.round(millions).toString();
+      } else {
+        formattedMillions = millions.toFixed(1);
+      }
+      
+      if (product.listing_type === "rent") {
+        return `${formattedMillions} million ${i18n.t('product.priceSuffixDAMonth')}`;
+      }
+      return `${formattedMillions} million ${i18n.t('product.priceSuffixDA')}`;
+    }
+    
     if (product.listing_type === "rent")
-      return `${product.price.toLocaleString()} DA/month`;
-    return `${product.price.toLocaleString()} DA`;
+      return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDAMonth')}`;
+    return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDA')}`;
   };
 
   return (
@@ -133,7 +306,7 @@ const ProductCard: React.FC<{
             source={{
               uri:
                 product.image_url ||
-                "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+                `https://placehold.co/180x180/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
             }}
             style={styles.cardImage}
           />
@@ -146,13 +319,20 @@ const ProductCard: React.FC<{
               />
             </View>
           )}
-          <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
-            <Ionicons
-              name={liked ? "heart" : "heart-outline"}
-              size={22}
-              color={liked ? "#FF5B5B" : "white"}
-            />
-          </TouchableOpacity>
+          {/* 🔥 HIDE HEART IF IT'S THE USER'S OWN PRODUCT */}
+          {!isOwnProduct && (
+            <TouchableOpacity 
+              onPress={toggleLike} 
+              style={styles.heartIcon}
+              disabled={isAnimating}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#FF5B5B" : "white"}
+              />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.cardDetails}>
           <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
@@ -226,7 +406,7 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
         {loading ? (
           <ActivityIndicator size="small" color="white" />
         ) : (
-          <Text style={styles.loadMoreText}>Load More Items</Text>
+          <Text style={styles.loadMoreText}>{i18n.t('home.loadMore')}</Text>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -240,6 +420,10 @@ export default function CategoryScreen() {
   const searchMode = params.searchMode === 'true';
   const searchQuery = params.searchQuery as string || '';
 
+  // 🔥 NEW: User state
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [likedProducts, setLikedProducts] = useState<Set<number>>(new Set());
+
   // Filter params from filters page
   const filtersApplied = params.filtersApplied === "true";
   const listingTypeParam = (params.listingType as string) || null;
@@ -252,7 +436,7 @@ export default function CategoryScreen() {
 
   const [selectedFilter, setSelectedFilter] = useState(listingTypeParam || "All");
   const [selectedSubcategory, setSelectedSubcategory] = useState<number | null>(null);
-  const [location, setLocation] = useState<string>("Loading...");
+  const [location, setLocation] = useState<string>(i18n.t('home.loading'));
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -276,6 +460,120 @@ export default function CategoryScreen() {
   const lastScrollY = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  // 🔥 Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        const userIdString = await AsyncStorage.getItem('userId');
+
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          const userId = user.user_id || user.id || parseInt(userIdString || '0');
+          if (userId && userId > 0) {
+            setCurrentUserId(userId);
+            return;
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          const { data: dbUser, error } = await supabase
+            .from('users')
+            .select('user_id, email, username')
+            .eq('email', session.user.email.toLowerCase())
+            .single();
+
+          if (dbUser && !error) {
+            setCurrentUserId(dbUser.user_id);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error getting current user:', error);
+      }
+    };
+
+    getCurrentUser();
+  }, []);
+
+  // 🔥 Fetch user likes
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserLikes();
+    }
+  }, [currentUserId]);
+
+  const fetchUserLikes = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('likes')
+        .select('product_id')
+        .eq('user_id', currentUserId)
+        .not('product_id', 'is', null);
+
+      if (error) throw error;
+
+      const likedProductIds = new Set(data?.map(like => like.product_id) || []);
+      setLikedProducts(likedProductIds);
+    } catch (error: any) {
+      console.error('Error fetching likes:', error);
+    }
+  };
+
+  // 🔥 Toggle like functionality
+  const handleToggleLike = async (productId: number) => {
+    if (!currentUserId) {
+      Alert.alert(i18n.t('home.loginRequiredTitle'), i18n.t('home.loginRequiredMessage'));
+      return;
+    }
+
+    const isCurrentlyLiked = likedProducts.has(productId);
+
+    try {
+      if (isCurrentlyLiked) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId);
+
+        setLikedProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      } else {
+        await supabase.from('likes').insert({
+          user_id: currentUserId,
+          product_id: productId,
+          post_id: null
+        });
+
+        setLikedProducts(prev => new Set([...prev, productId]));
+
+        const { data: productData } = await supabase
+          .from("products")
+          .select("user_id")
+          .eq("id", productId)
+          .single();
+
+        if (productData && productData.user_id !== currentUserId) {
+          await supabase.from("notifications").insert({
+            receiver_id: productData.user_id,
+            sender_id: currentUserId,
+            type: "like",
+            product_id: productId,
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error("Error toggling like:", error);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToUpdateLike'));
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       hasNavigatedRef.current = false;
@@ -294,7 +592,7 @@ export default function CategoryScreen() {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setLocation("Permission denied");
+        setLocation(i18n.t('home.permissionDenied'));
         return;
       }
 
@@ -304,7 +602,7 @@ export default function CategoryScreen() {
 
       let reverse = await Location.reverseGeocodeAsync(coords.coords);
       if (reverse.length > 0) {
-        let city = reverse[0].city || reverse[0].region || "Unknown";
+        let city = reverse[0].city || reverse[0].region || i18n.t('home.unknownLocation');
         setLocation(city);
       }
     })();
@@ -316,14 +614,12 @@ export default function CategoryScreen() {
     }
   }, [categoryId]);
 
-  // Apply listingType from params when filters are applied
   useEffect(() => {
     if (listingTypeParam && filtersApplied) {
       setSelectedFilter(listingTypeParam);
     }
   }, [listingTypeParam, filtersApplied]);
 
-  // Apply all filters whenever any filter changes
   useEffect(() => {
     applyAllFilters();
   }, [
@@ -344,30 +640,24 @@ export default function CategoryScreen() {
   const applyAllFilters = () => {
     let filtered = [...allProducts];
 
-    // 1. Apply subcategory filter (from clicking subcategory pills)
     if (selectedSubcategory) {
       filtered = filtered.filter((p) => p.subcategory_id === selectedSubcategory);
     }
 
-    // 2. Apply listing type filter (All/Sell/Rent/Exchange tabs)
     if (selectedFilter !== "All") {
       filtered = filtered.filter(
         (p) => p.listing_type.toLowerCase() === selectedFilter.toLowerCase()
       );
     }
 
-    // 3. Apply search query filter
     if (currentSearchQuery.trim()) {
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(currentSearchQuery.toLowerCase())
       );
     }
 
-    // 4. Apply filters from the filters page (if filtersApplied is true)
     if (filtersApplied) {
-      // Location filter - check if product is near the selected city
       if (locationParam && locationParam !== "All Locations" && userLat && userLon) {
-        // Define city coordinates (you can expand this)
         const cityCoordinates: { [key: string]: { lat: number; lon: number } } = {
           'Blida': { lat: 36.4706, lon: 2.8277 },
           'Algiers': { lat: 36.7538, lon: 3.0588 },
@@ -379,18 +669,16 @@ export default function CategoryScreen() {
 
         const cityCoords = cityCoordinates[locationParam];
         if (cityCoords) {
-          // Filter products within 50km of the city
           filtered = filtered.filter(p => {
             if (p.latitude && p.longitude) {
               const distance = calculateDistance(cityCoords.lat, cityCoords.lon, p.latitude, p.longitude);
-              return distance <= 50; // Within 50km radius
+              return distance <= 50;
             }
             return false;
           });
         }
       }
 
-      // Delivery filter
       if (deliveryParam && deliveryParam !== "All Methods") {
         if (deliveryParam.toLowerCase() === "pickup") {
           filtered = filtered.filter(p => p.delivery === false);
@@ -399,7 +687,6 @@ export default function CategoryScreen() {
         }
       }
 
-      // Price range filters
       if (minPriceParam !== null) {
         filtered = filtered.filter(p => p.price >= minPriceParam);
       }
@@ -407,7 +694,6 @@ export default function CategoryScreen() {
         filtered = filtered.filter(p => p.price <= maxPriceParam);
       }
 
-      // Sorting
       if (sortByParam === "Lowest Price") {
         filtered.sort((a, b) => a.price - b.price);
       } else if (sortByParam === "Highest Price") {
@@ -429,7 +715,6 @@ export default function CategoryScreen() {
 
     setFilteredProducts(filtered);
 
-    // Update subcategories with hasResults for search
     if (currentSearchQuery.trim()) {
       const subcategoryIds = [...new Set(filtered.map(p => p.subcategory_id).filter(Boolean))];
       setSubcategories(prevSubs => 
@@ -448,7 +733,6 @@ export default function CategoryScreen() {
     }
   };
 
-  // Auto-navigate when only one subcategory has results
   useEffect(() => {
     const subsWithResults = subcategories.filter(sub => sub.hasResults);
     
@@ -486,11 +770,11 @@ export default function CategoryScreen() {
       if (subcategoriesError) throw subcategoriesError;
       setSubcategories(subcategoriesData || []);
 
-      // Fetch ALL products for this category (we'll filter client-side)
+      // 🔥 UPDATED: Include user_id
       const { data: productsData, error: productsError } = await supabase
         .from("products")
         .select(
-          `id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery`
+          `id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery, user_id`
         )
         .eq("category_id", categoryId)
         .order("created_at", { ascending: false });
@@ -498,10 +782,10 @@ export default function CategoryScreen() {
       if (productsError) throw productsError;
       
       setAllProducts(productsData || []);
-      setHasMoreProducts(false); // No pagination since we load all products
+      setHasMoreProducts(false);
     } catch (error: any) {
       console.error("Error fetching data:", error);
-      Alert.alert("Error", "Failed to load data: " + error.message);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToLoadData') + error.message);
     } finally {
       setLoading(false);
     }
@@ -514,7 +798,6 @@ export default function CategoryScreen() {
       listener: (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
         
-        // Update sticky state
         setIsSticky(currentScrollY >= filterTabsLayout.y);
         
         if (scrollTimeout.current) {
@@ -548,12 +831,10 @@ export default function CategoryScreen() {
       categoryId: categoryId,
     };
     
-    // IMPORTANT: Preserve current listing type filter (Sell/Rent/Exchange)
     if (selectedFilter !== "All") {
       currentParams.listingType = selectedFilter;
     }
     
-    // Pass existing filter params if they exist
     if (filtersApplied) {
       if (sortByParam) currentParams.sortBy = sortByParam;
       if (locationParam) currentParams.location = locationParam;
@@ -584,7 +865,6 @@ export default function CategoryScreen() {
   };
 
   const handleBackPress = () => {
-    // Always go back, don't replace with home
     router.back();
   };
 
@@ -596,7 +876,7 @@ export default function CategoryScreen() {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{i18n.t('home.loading')}</Text>
       </View>
     );
   }
@@ -619,7 +899,7 @@ export default function CategoryScreen() {
               <TextInput
                 ref={searchInputRef}
                 style={styles.searchInputExpanded}
-                placeholder={`Search in ${category?.name || 'this category'}`}
+                placeholder={`${i18n.t('home.searchPlaceholder')} ${getCategoryTranslation(category?.name || '')}`}
                 placeholderTextColor="#999"
                 value={currentSearchQuery}
                 onChangeText={setCurrentSearchQuery}
@@ -663,7 +943,7 @@ export default function CategoryScreen() {
                     selectedFilter === tab && styles.filterTextActive,
                   ]}
                 >
-                  {tab}
+                  {translateFilter(tab)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -706,7 +986,7 @@ export default function CategoryScreen() {
                   style={styles.searchIcon}
                 />
                 <Text style={styles.searchPlaceholder} numberOfLines={1}>
-                  {currentSearchQuery.trim() ? currentSearchQuery : `Search in ${category?.name}`}
+                  {currentSearchQuery.trim() ? currentSearchQuery : `${i18n.t('home.searchPlaceholder')} ${getCategoryTranslation(category?.name || '')}`}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -724,43 +1004,54 @@ export default function CategoryScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-          <View style={styles.categoryTitleContainer}>
-            <Ionicons name="phone-portrait-outline" size={24} color={PRIMARY_TEAL} />
-            <Text style={styles.categoryTitle}>{category?.name || "Category"}</Text>
-          </View>
+         <View style={styles.categoryTitleContainer}>
+  {getCategoryIcon(category?.name || "Category", 24, PRIMARY_TEAL)}
+  <Text style={styles.categoryTitle}>
+    {getCategoryTranslation(category?.name || "Category")}
+  </Text>
+</View>
 
-          {visibleSubcategories.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.subcategoryScroll}
-            >
-              {visibleSubcategories.map((sub) => (
-                <TouchableOpacity
-                  key={sub.id}
-                  style={[
-                    styles.subcategoryPill,
-                    selectedSubcategory === sub.id && styles.subcategoryPillActive,
-                  ]}
-                  onPress={() => router.push(`/category/subcategory/${sub.id}`)}
-                >
-                  {sub.hasResults && (
-                    <View style={styles.redDot} />
-                  )}
-                  <Ionicons
-                    name="phone-portrait-outline"
-                    size={20}
-                    color={DARK_GRAY}
-                    style={styles.subcategoryIcon}
-                  />
-                  <Text style={styles.subcategoryText}>
-                    {sub.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
 
+{visibleSubcategories.length > 0 && (
+  <ScrollView
+    horizontal
+    showsHorizontalScrollIndicator={false}
+    contentContainerStyle={styles.subcategoryScroll}
+  >
+    {visibleSubcategories.map((sub) => (
+      <TouchableOpacity
+        key={sub.id}
+        style={[
+          styles.subcategoryPill,
+          selectedSubcategory === sub.id && styles.subcategoryPillActive,
+        ]}
+        onPress={() => {
+          if (currentSearchQuery.trim()) {
+            router.push(
+              `/category/subcategory/${sub.id}?searchMode=true&searchQuery=${encodeURIComponent(currentSearchQuery)}`
+            );
+          } else {
+            router.push(`/category/subcategory/${sub.id}`);
+          }
+        }}
+      >
+        {sub.hasResults && (
+          <View style={styles.redDot} />
+        )}
+      {sub.hasResults && (
+  <View style={styles.redDot} />
+)}
+
+{getCategoryIcon(sub.name, 20, DARK_GRAY)}
+
+<Text style={styles.subcategoryText}>
+  {sub.name}
+</Text>
+
+      </TouchableOpacity>
+    ))}
+  </ScrollView>
+)}
           <View 
             style={styles.filterTabsWrapper}
             onLayout={(event) => {
@@ -790,7 +1081,7 @@ export default function CategoryScreen() {
                       selectedFilter === tab && styles.filterTextActive,
                     ]}
                   >
-                    {tab}
+                    {translateFilter(tab)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -799,7 +1090,7 @@ export default function CategoryScreen() {
 
           {filteredProducts.length === 0 ? (
             <Text style={styles.emptyText}>
-              {currentSearchQuery.trim() ? "No products found matching your search" : "No products available"}
+              {currentSearchQuery.trim() ? i18n.t('home.noProductsSearch') : i18n.t('home.noProductsFilter')}
             </Text>
           ) : (
             <View style={styles.productGrid}>
@@ -809,6 +1100,9 @@ export default function CategoryScreen() {
                   product={product}
                   userLat={userLat}
                   userLon={userLon}
+                  currentUserId={currentUserId}
+                  isLiked={likedProducts.has(product.id)}
+                  onToggleLike={handleToggleLike}
                 />
               ))}
             </View>

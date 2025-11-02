@@ -1,12 +1,14 @@
-import { Tabs, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { Tabs, useRouter, useSegments } from 'expo-router';
+import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import i18n from '../../lib/i18n';
 
-const PRIMARY_COLOR = '#000000';
-const INACTIVE_COLOR = '#999999';
-const HOVER_COLOR = '#00C853'; // Green hover color
+const ACTIVE_COLOR = '#00C853'; // green active icon/text
+// --- REVERTED/UPDATED: Both are set to pure black for maximum visibility ---
+const INACTIVE_COLOR = '#545151ff'; // Darkest possible color for inactive icon (was #9E9E9E)
+const TEXT_COLOR = '#000000'; // Darkest possible color for inactive text (was #1C1C1C)
 
 const TwoChatsIcon = ({ color, size }: { color: string; size: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -28,85 +30,59 @@ const TwoChatsIcon = ({ color, size }: { color: string; size: number }) => (
   </Svg>
 );
 
-const HomeTabButton = ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => {
-  const [isPressed, setIsPressed] = useState(false);
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      onPressIn={() => setIsPressed(true)}
-      onPressOut={() => setIsPressed(false)}
-      style={[styles.homeButton, isPressed && styles.homeButtonHover]}
-      activeOpacity={0.9}
-    >
-      {children}
-    </TouchableOpacity>
-  );
-};
+const HomeTabButton = ({ children, onPress }: { children: React.ReactNode; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} style={styles.homeButton} activeOpacity={0.9}>
+    {children}
+  </TouchableOpacity>
+);
 
 export default function TabLayout() {
   const router = useRouter();
+  const segments = useSegments();
+  const currentRoute = segments.join('/');
+  const isHome = currentRoute === '' || currentRoute === 'index';
 
-  const handleHomePress = () => {
-    router.push('/');
-  };
+  const handleHomePress = () => router.push('/');
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: PRIMARY_COLOR,
-        tabBarInactiveTintColor: INACTIVE_COLOR,
         headerShown: false,
         tabBarStyle: {
-          position: 'relative',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          elevation: 0,
           backgroundColor: 'white',
-          borderRadius: 0,
-          height: Platform.OS === 'ios' ? 150 : 100,
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
-          shadowColor: 'transparent',
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0,
-          shadowRadius: 0,
+          height: Platform.OS === 'ios' ? 150 : 100,
           paddingBottom: Platform.OS === 'ios' ? 30 : 20,
           paddingTop: 15,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '500',
-          marginTop: 2,
+          elevation: 0,
+          shadowColor: '#000',
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: -2 },
         },
       }}
     >
+      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Icon name="home-variant" size={24} color={color} />,
-          tabBarButton: (props) => (
+          tabBarButton: () => (
             <HomeTabButton onPress={handleHomePress}>
               <View style={styles.tabItem}>
                 <Icon
                   name="home-variant"
-                  size={24}
-                  color={
-                    props.accessibilityState?.selected ? PRIMARY_COLOR : INACTIVE_COLOR
-                  }
+                  size={26}
+                  color={isHome ? ACTIVE_COLOR : INACTIVE_COLOR} // Uses INACTIVE_COLOR (#000000)
                 />
                 <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '500',
-                    marginTop: 2,
-                    color: props.accessibilityState?.selected
-                      ? PRIMARY_COLOR
-                      : INACTIVE_COLOR,
-                  }}
+                  style={[
+                    styles.tabLabel,
+                    // *** REVERTED: Now uses TEXT_COLOR (#000000) for consistency, same as INACTIVE_COLOR ***
+                    { color: isHome ? ACTIVE_COLOR : TEXT_COLOR }, 
+                  ]}
                 >
-                  Home
+                  {i18n.t('tabs.home')}
                 </Text>
               </View>
             </HomeTabButton>
@@ -114,46 +90,96 @@ export default function TabLayout() {
         }}
       />
 
+      {/* MAP */}
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
-          tabBarIcon: ({ color }) => <Icon name="map" size={24} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <Icon name="map" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+          ),
+          tabBarLabel: ({ focused }) => (
+            <Text
+              style={[
+                styles.tabLabel,
+                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+              ]}
+            >
+              {i18n.t('tabs.map')}
+            </Text>
+          ),
         }}
       />
 
+      {/* ADD */}
       <Tabs.Screen
         name="add"
         options={{
-          title: 'Add',
-          tabBarIcon: ({ color }) => <Icon name="plus" size={24} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <Icon name="plus" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+          ),
+          tabBarLabel: ({ focused }) => (
+            <Text
+              style={[
+                styles.tabLabel,
+                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+              ]}
+            >
+              {i18n.t('tabs.add')}
+            </Text>
+          ),
         }}
       />
 
+      {/* MESSAGES */}
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'Messages',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ focused }) => (
             <View>
-              <TwoChatsIcon color={color} size={24} />
+              <TwoChatsIcon color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} size={26} /> 
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>3</Text>
               </View>
             </View>
           ),
+          tabBarLabel: ({ focused }) => (
+            <Text
+              style={[
+                styles.tabLabel,
+                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+              ]}
+            >
+              {i18n.t('tabs.messages')}
+            </Text>
+          ),
         }}
       />
 
+      {/* PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <Icon name="account" size={24} color={color} />,
+          tabBarIcon: ({ focused }) => (
+            <Icon name="account" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+          ),
+          tabBarLabel: ({ focused }) => (
+            <Text
+              style={[
+                styles.tabLabel,
+                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+              ]}
+            >
+              {i18n.t('tabs.profile')}
+            </Text>
+          ),
         }}
       />
 
-      {/* Hidden screens */}
+      {/* Hidden Screens */}
       <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="someonesProfile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
@@ -162,9 +188,11 @@ export default function TabLayout() {
       <Tabs.Screen name="product_detail" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
       <Tabs.Screen name="edit_listing" options={{ headerShown: false, href: null }} />
-       <Tabs.Screen name="notifications" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="notifications" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="followers_list" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="notification_settings" options={{ headerShown: false, href: null }} />
     </Tabs>
   );
 }
@@ -180,9 +208,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     height: '100%',
   },
-  homeButtonHover: {
-    borderTopWidth: 3,
-    borderTopColor: HOVER_COLOR,
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '700', // makes text stronger
+    marginTop: 3,
+    color: TEXT_COLOR, // This will use the pure black TEXT_COLOR
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    opacity: 1, // Full opacity
   },
   badge: {
     position: 'absolute',

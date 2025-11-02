@@ -1,4 +1,3 @@
-// app/(tabs)/notifications.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -16,6 +15,7 @@ import {
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
 
+// Interface for the notification item (Sender/Product details are nested)
 interface NotificationItem {
     notification_id: number;
     type: string;
@@ -36,6 +36,20 @@ interface NotificationItem {
     };
 }
 
+// Interface for the Notification Settings (matching the DB structure)
+interface NotificationSettings {
+    newFollowers: boolean;
+    likes: boolean;
+    comments: boolean;
+    mentions: boolean;
+    recommendedForYou: boolean;
+    collectibleUpdates: boolean;
+    liveBookmarked: boolean;
+    liveMightBeInterested: boolean;
+    marketplace: boolean;
+    orders: boolean;
+}
+
 const NotificationsScreen = () => {
     const router = useRouter();
     const { user } = useAuth();
@@ -50,23 +64,44 @@ const NotificationsScreen = () => {
         if (!isRefreshing) setLoading(true);
 
         try {
-            // Fetch notifications with sender info
+            // 1. Fetch the receiver's notification settings from the 'users' table
+            const { data: userProfile, error: profileError } = await supabase
+                .from('users')
+                .select('notification_settings')
+                .eq('user_id', user.user_id)
+                .single();
+
+            let currentSettings: NotificationSettings = { // Use default settings for safety
+                newFollowers: true, likes: true, comments: true, mentions: true, 
+                recommendedForYou: true, collectibleUpdates: true, liveBookmarked: true, 
+                liveMightBeInterested: true, marketplace: true, orders: true 
+            };
+            
+            if (profileError) {
+                console.error("Fetch profile error:", profileError);
+                // Continue with default settings (all enabled) on error
+            } else if (userProfile?.notification_settings) {
+                // Merge fetched settings with defaults to ensure all keys exist
+                currentSettings = { ...currentSettings, ...userProfile.notification_settings };
+            }
+
+            // 2. Fetch ALL notifications for the user
             const { data: notifData, error: notifError } = await supabase
                 .from("notifications")
-                .select(`
-                  notification_id,
-                  type,
-                  is_read,
-                  created_at,
-                  product_id,
-                  post_id,
-                  sender:users!fk_sender_id(
-                    user_id,
-                    username,
-                    full_name,
-                    profile_image_url
-                  )
-                `)
+                .select(
+                    `notification_id,
+                     type,
+                     is_read,
+                     created_at,
+                     product_id,
+                     post_id,
+                     sender:users!fk_sender_id(
+                        user_id,
+                        username,
+                        full_name,
+                        profile_image_url
+                     )`
+                )
                 .eq("receiver_id", user.user_id)
                 .order("created_at", { ascending: false });
 
@@ -80,14 +115,31 @@ const NotificationsScreen = () => {
                 return;
             }
 
-            // Get all product IDs that are not null
-            const productIds = notifData
+            // 3. Filter the notifications based on the user's settings (THE FIX)
+            const filteredNotifications = notifData.filter(notif => {
+                switch (notif.type) {
+                    case 'follow':
+                        return currentSettings.newFollowers; // Only show if newFollowers is true
+                    case 'like':
+                        return currentSettings.likes; // Only show if likes is true
+                    case 'comment':
+                        return currentSettings.comments; // Only show if comments is true
+                    case 'mention':
+                        return currentSettings.mentions; // Only show if mentions is true
+                    // You would add other notification types here
+                    default:
+                        return true; // Show all other types by default (e.g., recommendedForYou, orders)
+                }
+            });
+
+            // 4. Get all product IDs from the filtered list that are not null
+            const productIds = filteredNotifications
                 .filter(n => n.product_id !== null)
-                .map(n => n.product_id);
+                .map(n => n.product_id) as number[];
 
             let productsMap: { [key: number]: any } = {};
 
-            // Fetch product details if there are any
+            // 5. Fetch product details if there are any
             if (productIds.length > 0) {
                 const { data: productsData, error: productsError } = await supabase
                     .from("products")
@@ -102,8 +154,8 @@ const NotificationsScreen = () => {
                 }
             }
 
-            // Combine notifications with product data
-            const enrichedNotifications = notifData.map(notif => ({
+            // 6. Combine filtered notifications with product data
+            const enrichedNotifications = filteredNotifications.map(notif => ({
                 ...notif,
                 product: notif.product_id ? productsMap[notif.product_id] : undefined,
             }));
@@ -132,9 +184,10 @@ const NotificationsScreen = () => {
                     table: 'notifications',
                     filter: `receiver_id=eq.${user?.user_id}`
                 },
+                // Trigger a full re-fetch to get new notification and re-apply filters
                 (payload) => {
                     console.log('Notification change:', payload);
-                    fetchNotifications();
+                    fetchNotifications(); 
                 }
             )
             .subscribe();
@@ -147,6 +200,41 @@ const NotificationsScreen = () => {
     const onRefresh = () => {
         setRefreshing(true);
         fetchNotifications(true);
+    };
+
+    // ... rest of your functions (markAsRead, handleNotificationPress, getNotificationText, etc.)
+    // ... all other functions and styles are unchanged from your original file ...
+
+    // The component structure (return statement) is also unchanged
+    
+    // NOTE: The `getNotificationText` function assumes your notification types are 'like', 'follow', and 'comment'.
+    const getNotificationText = (item: NotificationItem) => {
+        switch (item.type) {
+            case 'like':
+                return item.product?.name  
+                    ? `liked your product "${item.product.name}" ❤️`
+                    : 'liked your product ❤️';
+            case 'follow':
+                return 'started following you 👤';
+            case 'comment':
+                return 'commented on your post 💬';
+            case 'mention':
+                return 'mentioned you in a post 📣';
+            default:
+                return item.type;
+        }
+    };
+
+    const getTimeAgo = (dateString: string) => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+        return `${Math.floor(seconds / 604800)}w ago`;
     };
 
     const markAsRead = async (notificationId: number) => {
@@ -175,33 +263,6 @@ const NotificationsScreen = () => {
             // Default: go to sender's profile
             router.push(`/someonesProfile?userId=${item.sender.user_id}`);
         }
-    };
-
-    const getNotificationText = (item: NotificationItem) => {
-        switch (item.type) {
-            case 'like':
-                return item.product?.name 
-                    ? `liked your product "${item.product.name}" ❤️`
-                    : 'liked your product ❤️';
-            case 'follow':
-                return 'started following you 👤';
-            case 'comment':
-                return 'commented on your post 💬';
-            default:
-                return item.type;
-        }
-    };
-
-    const getTimeAgo = (dateString: string) => {
-        const date = new Date(dateString);
-        const now = new Date();
-        const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-        if (seconds < 60) return 'just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-        return `${Math.floor(seconds / 604800)}w ago`;
     };
 
     const renderItem = ({ item }: { item: NotificationItem }) => (
@@ -315,6 +376,7 @@ const NotificationsScreen = () => {
     );
 };
 
+// ... Styles (unchanged) ...
 const styles = StyleSheet.create({
     container: {
         flex: 1,
