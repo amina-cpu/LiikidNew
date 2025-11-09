@@ -19,6 +19,8 @@ import {
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
+// 💡 Import i18n
+import i18n from '../../lib/i18n';
 
 interface Category {
   id: number;
@@ -42,7 +44,16 @@ interface SubSubcategory {
   description: string | null;
 }
 
-const PRIMARY_TEAL = "#000000ff";
+const PRIMARY_TEAL = "#10B981"; // Green
+const FOCUS_GREEN = "#10B981"; // Green for focus state
+
+// 💡 Helper function to translate category names
+const getCategoryTranslation = (catName: string): string => {
+  const key = catName.replace(/[^a-zA-Z]/g, '');
+  const translationKey = `categories.${key}`;
+  const translated = i18n.t(translationKey);
+  return translated === translationKey ? catName : translated;
+};
 
 const AddListingForm = () => {
   const { user } = useAuth();
@@ -61,7 +72,8 @@ const AddListingForm = () => {
   const [locationAddress, setLocationAddress] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
-  
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
@@ -81,8 +93,8 @@ const AddListingForm = () => {
   const handleBackPress = () => {
     if (uploading) {
       Alert.alert(
-        'Upload in Progress',
-        'Please wait for the upload to complete before going back.'
+        i18n.t('addListing.uploadInProgress'),
+        i18n.t('addListing.uploadInProgressMessage')
       );
       return;
     }
@@ -92,12 +104,12 @@ const AddListingForm = () => {
 
     if (hasChanges) {
       Alert.alert(
-        'Discard Changes?',
-        'You have unsaved changes. Are you sure you want to go back?',
+        i18n.t('addListing.discardChanges'),
+        i18n.t('addListing.discardChangesMessage'),
         [
-          { text: 'Cancel', style: 'cancel' },
+          { text: i18n.t('addListing.cancel'), style: 'cancel' },
           { 
-            text: 'Discard', 
+            text: i18n.t('addListing.discard'), 
             style: 'destructive',
             onPress: () => router.back()
           }
@@ -138,7 +150,6 @@ const AddListingForm = () => {
     }
   }, [selectedSubcategory]);
 
-  // Reset alsoExchange when listing type changes to exchange
   useEffect(() => {
     if (dealType === 'exchange') {
       setAlsoExchange(false);
@@ -157,7 +168,7 @@ const AddListingForm = () => {
       setCategories(data || []);
     } catch (error: any) {
       console.error('Error fetching categories:', error);
-      Alert.alert('Error', 'Unable to load categories: ' + error.message);
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.unableToLoadCategories') + error.message);
     } finally {
       setLoadingCategories(false);
     }
@@ -175,7 +186,7 @@ const AddListingForm = () => {
       setSubcategories(data || []);
     } catch (error: any) {
       console.error('Error fetching subcategories:', error);
-      Alert.alert('Error', 'Unable to load subcategories');
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.unableToLoadSubcategories'));
     }
   };
 
@@ -191,7 +202,7 @@ const AddListingForm = () => {
       setSubSubcategories(data || []);
     } catch (error: any) {
       console.error('Error fetching sub-subcategories:', error);
-      Alert.alert('Error', 'Unable to load sub-subcategories');
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.unableToLoadSubSubcategories'));
     }
   };
 
@@ -200,7 +211,7 @@ const AddListingForm = () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'We need access to your photos to upload an image.');
+        Alert.alert(i18n.t('addListing.permissionRequired'), i18n.t('addListing.permissionRequiredMessage'));
         return;
       }
 
@@ -216,7 +227,7 @@ const AddListingForm = () => {
         const asset = result.assets[0];
         
         if (asset.fileSize && asset.fileSize > 3 * 1024 * 1024) {
-          Alert.alert('Image Too Large', 'The image is too large. Please choose a smaller image.');
+          Alert.alert(i18n.t('addListing.imageTooLarge'), i18n.t('addListing.imageTooLargeMessage'));
           return;
         }
 
@@ -224,7 +235,7 @@ const AddListingForm = () => {
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Unable to select image');
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.unableToSelectImage'));
     }
   };
 
@@ -245,7 +256,7 @@ const AddListingForm = () => {
       });
 
       if (base64.length > 7000000) {
-        throw new Error('Image is too large. Please choose a smaller image.');
+        throw new Error(i18n.t('addListing.imageTooLargeMessage'));
       }
 
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
@@ -267,7 +278,7 @@ const AddListingForm = () => {
       return publicUrlData.publicUrl;
     } catch (err: any) {
       console.error('Upload error:', err);
-      Alert.alert('Upload Error', err.message || 'Failed to upload image');
+      Alert.alert(i18n.t('addListing.uploadError'), err.message || i18n.t('addListing.failedToUploadImage'));
       return null;
     }
   };
@@ -276,20 +287,20 @@ const AddListingForm = () => {
     const newErrors: any = {};
     
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to create a listing.');
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.mustBeLoggedIn'));
       return false;
     }
     
-    if (photos.length === 0) newErrors.photos = 'Please add at least one photo.';
-    if (!title.trim()) newErrors.title = 'Please enter a title.';
-    if (!description.trim()) newErrors.description = 'Please add a description.';
-    if (dealType !== 'exchange' && !price.trim()) newErrors.price = 'Please enter a price.';
+    if (photos.length === 0) newErrors.photos = i18n.t('addListing.errorAtLeastOnePhoto');
+    if (!title.trim()) newErrors.title = i18n.t('addListing.errorEnterTitle');
+    if (!description.trim()) newErrors.description = i18n.t('addListing.errorAddDescription');
+    if (dealType !== 'exchange' && !price.trim()) newErrors.price = i18n.t('addListing.errorEnterPrice');
     if (!selectedSubSubcategory && !selectedSubcategory && !selectedCategory) {
-      newErrors.category = 'Please select a category.';
+      newErrors.category = i18n.t('addListing.errorSelectCategory');
     }
     
     if (selectedCategory?.delivery !== false && !deliveryMethod) {
-      newErrors.delivery = 'Please select a delivery method.';
+      newErrors.delivery = i18n.t('addListing.errorSelectDelivery');
     }
 
     setErrors(newErrors);
@@ -300,7 +311,7 @@ const AddListingForm = () => {
     if (uploading) return;
 
     if (!validateForm()) {
-      Alert.alert('Error', 'Please fill in all required fields.');
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.fillAllFields'));
       return;
     }
 
@@ -315,9 +326,9 @@ const AddListingForm = () => {
       }
 
       if (uploadedUrls.length === 0) {
-        Alert.alert('Image Upload Failed', 'All image uploads failed.', [
-          { text: 'Cancel', style: 'cancel', onPress: () => setUploading(false) },
-          { text: 'Continue', onPress: () => insertProduct([]) }
+        Alert.alert(i18n.t('addListing.imageUploadFailed'), i18n.t('addListing.allImageUploadsFailed'), [
+          { text: i18n.t('addListing.cancel'), style: 'cancel', onPress: () => setUploading(false) },
+          { text: i18n.t('addListing.continue'), onPress: () => insertProduct([]) }
         ]);
         return;
       }
@@ -330,7 +341,7 @@ const AddListingForm = () => {
 
     } catch (error: any) {
       console.error('Error in handlePublish:', error);
-      Alert.alert('Error', 'An error occurred: ' + (error.message || 'Unknown error'));
+      Alert.alert(i18n.t('addListing.error'), i18n.t('addListing.errorOccurred') + (error.message || i18n.t('addListing.unknownError')));
       setUploading(false);
     }
   };
@@ -338,11 +349,8 @@ const AddListingForm = () => {
   const insertProduct = async (imageUrls: string[]) => {
     try {
       if (!user || !user.user_id) {
-        throw new Error('User not authenticated');
+        throw new Error(i18n.t('addListing.userNotAuthenticated'));
       }
-
-      console.log('Condition value:', condition);
-      console.log('Also Exchange value:', alsoExchange);
 
       const productData: any = {
         name: title.trim(),
@@ -358,15 +366,11 @@ const AddListingForm = () => {
         also_exchange: alsoExchange,
       };
 
-      console.log('Product data before insert:', productData);
-
       if (selectedSubcategory) productData.subcategory_id = selectedSubcategory.id;
       if (selectedSubSubcategory) productData.sub_subcategory_id = selectedSubSubcategory.id;
       if (locationAddress.trim()) productData.location_address = locationAddress.trim();
       if (latitude && !isNaN(parseFloat(latitude))) productData.latitude = parseFloat(latitude);
       if (longitude && !isNaN(parseFloat(longitude))) productData.longitude = parseFloat(longitude);
-
-      console.log('Final product data:', productData);
 
       const { data, error } = await supabase
         .from('products')
@@ -387,9 +391,9 @@ const AddListingForm = () => {
         await supabase.from('product_images').insert(imageRecords);
       }
 
-      Alert.alert('✅ Success', 'Listing published successfully!', [
+      Alert.alert('✅ ' + i18n.t('addListing.success'), i18n.t('addListing.listingPublished'), [
         {
-          text: 'OK',
+          text: i18n.t('addListing.ok'),
           onPress: () => {
             setPhotos([]);
             setMainPhotoIndex(0);
@@ -415,13 +419,13 @@ const AddListingForm = () => {
     } catch (error: any) {
       console.error('Error in insertProduct:', error);
       
-      let errorMessage = 'Unable to add product';
-      if (error.code === '23503') errorMessage = 'Invalid category or user reference.';
-      else if (error.code === '42501') errorMessage = 'You do not have permission to add products';
-      else if (error.code === '23505') errorMessage = 'This product already exists';
+      let errorMessage = i18n.t('addListing.unableToAddProduct');
+      if (error.code === '23503') errorMessage = i18n.t('addListing.invalidCategory');
+      else if (error.code === '42501') errorMessage = i18n.t('addListing.noPermission');
+      else if (error.code === '23505') errorMessage = i18n.t('addListing.productExists');
       else if (error.message) errorMessage = error.message;
       
-      Alert.alert('Error', errorMessage);
+      Alert.alert(i18n.t('addListing.error'), errorMessage);
     } finally {
       setUploading(false);
     }
@@ -432,7 +436,9 @@ const AddListingForm = () => {
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>
-            {categoryStep === 1 ? 'Select Category' : categoryStep === 2 ? 'Select Subcategory' : 'Select Sub-subcategory'}
+            {categoryStep === 1 ? i18n.t('addListing.selectCategory') : 
+             categoryStep === 2 ? i18n.t('addListing.selectSubcategory') : 
+             i18n.t('addListing.selectSubSubcategory')}
           </Text>
           
           <ScrollView style={styles.modalScroll}>
@@ -445,7 +451,6 @@ const AddListingForm = () => {
                   setSelectedSubcategory(null);
                   setSelectedSubSubcategory(null);
                   if (cat.delivery === false) setDeliveryMethod(null);
-                  // Reset alsoExchange if category doesn't support it
                   if (!cat.also_exchange) {
                     setAlsoExchange(false);
                   }
@@ -457,7 +462,7 @@ const AddListingForm = () => {
                   }
                 }}
               >
-                <Text style={styles.modalOptionText}>{cat.name}</Text>
+                <Text style={styles.modalOptionText}>{getCategoryTranslation(cat.name)}</Text>
               </TouchableOpacity>
             ))}
             
@@ -496,7 +501,7 @@ const AddListingForm = () => {
           </ScrollView>
           
           <TouchableOpacity style={styles.modalClose} onPress={() => { setShowCategoryModal(false); setCategoryStep(1); }}>
-            <Text style={styles.modalCloseText}>Close</Text>
+            <Text style={styles.modalCloseText}>{i18n.t('addListing.close')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -507,22 +512,22 @@ const AddListingForm = () => {
     <Modal visible={showDeliveryModal} animationType="slide" transparent={true} onRequestClose={() => setShowDeliveryModal(false)}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Delivery Method</Text>
+          <Text style={styles.modalTitle}>{i18n.t('addListing.selectDeliveryMethod')}</Text>
           
           <TouchableOpacity style={styles.modalOption} onPress={() => { setDeliveryMethod('In-person'); setShowDeliveryModal(false); }}>
-            <Text style={styles.modalOptionText}>In-person Meeting</Text>
+            <Text style={styles.modalOptionText}>{i18n.t('addListing.inPersonMeeting')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.modalOption} onPress={() => { setDeliveryMethod('Delivery'); setShowDeliveryModal(false); }}>
-            <Text style={styles.modalOptionText}>Delivery</Text>
+            <Text style={styles.modalOptionText}>{i18n.t('addListing.delivery')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.modalOption} onPress={() => { setDeliveryMethod('Both'); setShowDeliveryModal(false); }}>
-            <Text style={styles.modalOptionText}>Both</Text>
+            <Text style={styles.modalOptionText}>{i18n.t('addListing.both')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.modalClose} onPress={() => setShowDeliveryModal(false)}>
-            <Text style={styles.modalCloseText}>Close</Text>
+            <Text style={styles.modalCloseText}>{i18n.t('addListing.close')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -532,8 +537,8 @@ const AddListingForm = () => {
   if (loadingCategories) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#10B981" />
-        <Text style={styles.loadingText}>Loading categories...</Text>
+        <ActivityIndicator size="large" color={PRIMARY_TEAL} />
+        <Text style={styles.loadingText}>{i18n.t('addListing.loadingCategories')}</Text>
       </View>
     );
   }
@@ -541,14 +546,13 @@ const AddListingForm = () => {
   if (!user) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorTextMain}>Please log in to create a listing</Text>
+        <Text style={styles.errorTextMain}>{i18n.t('addListing.pleaseLogin')}</Text>
       </View>
     );
   }
 
   const categoryAllowsDelivery = selectedCategory?.delivery !== false;
   const categoryAllowsExchange = selectedCategory?.also_exchange === true;
-  const showAlsoExchangeToggle = categoryAllowsExchange && dealType !== 'exchange';
 
   return (
     <View style={styles.container}>
@@ -557,17 +561,17 @@ const AddListingForm = () => {
           <Ionicons name="arrow-back" size={24} color={PRIMARY_TEAL} />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle}>Add Listing</Text>
+        <Text style={styles.topBarTitle}>{i18n.t('addListing.addListing')}</Text>
         <View style={{ width: 32 }} /> 
       </View>
 
       <ScrollView ref={scrollViewRef} style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Photos</Text>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.photos')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
             <TouchableOpacity style={styles.addPhotoBox} onPress={pickImage} disabled={uploading}>
               <Text style={styles.addPhotoPlus}>+</Text>
-              <Text style={styles.addPhotoText}>Add Photo</Text>
+              <Text style={styles.addPhotoText}>{i18n.t('addListing.addPhoto')}</Text>
             </TouchableOpacity>
             
             {photos.map((photo, index) => (
@@ -586,58 +590,73 @@ const AddListingForm = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Title</Text>
-          <View style={[styles.inputContainer, errors.title && styles.inputError]}>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.title')}</Text>
+          <View
+            style={[
+              styles.inputContainer,
+              errors.title && styles.inputError,
+              focusedField === 'title' && styles.inputFocused,
+            ]}
+          >
             <TextInput
               style={styles.input}
-              placeholder="What are you selling?"
-              placeholderTextColor="#9CA3AF"
+              placeholder={i18n.t('addListing.titlePlaceholder')}
+              placeholderTextColor="#677080ff"
               value={title}
               onChangeText={setTitle}
+              onFocus={() => setFocusedField('title')}
+              onBlur={() => setFocusedField(null)}
               maxLength={200}
               editable={!uploading}
             />
-            {errors.title && (
-              <View style={styles.errorIconContainer}>
-                <Text style={styles.errorIcon}>▲</Text>
-              </View>
-            )}
           </View>
           {errors.title && <Text style={styles.errorText}>{errors.title}</Text>}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <View style={[styles.inputContainer, errors.description && styles.inputError]}>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.description')}</Text>
+          <View
+            style={[
+              styles.inputContainer,
+              errors.description && styles.inputError,
+              focusedField === 'description' && styles.inputFocused,
+            ]}
+          >
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Describe your item in detail..."
-              placeholderTextColor="#9CA3AF"
+              placeholder={i18n.t('addListing.descriptionPlaceholder')}
               value={description}
+              placeholderTextColor="#677080ff"
               onChangeText={setDescription}
+              onFocus={() => setFocusedField('description')}
+              onBlur={() => setFocusedField(null)}
               multiline
               numberOfLines={4}
               maxLength={2000}
               editable={!uploading}
             />
-            {errors.description && (
-              <View style={styles.errorIconContainerTextArea}>
-                <Text style={styles.errorIcon}>▲</Text>
-              </View>
-            )}
           </View>
           {errors.description && <Text style={styles.errorText}>{errors.description}</Text>}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Category</Text>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.category')}</Text>
           <TouchableOpacity
-            style={[styles.selectContainer, errors.category && styles.inputError]}
-            onPress={() => setShowCategoryModal(true)}
+            style={[
+              styles.selectContainer, 
+              errors.category && styles.inputError,
+              focusedField === 'category' && styles.inputFocused
+            ]}
+            onPress={() => {
+              setShowCategoryModal(true);
+              setFocusedField('category');
+            }}
+            onPressOut={() => setFocusedField(null)}
             disabled={uploading}
           >
             <Text style={[styles.selectText, !selectedSubSubcategory && !selectedSubcategory && !selectedCategory && styles.placeholderText]}>
-              {selectedSubSubcategory?.name || selectedSubcategory?.name || selectedCategory?.name || 'Select category'}
+              {selectedSubSubcategory?.name || selectedSubcategory?.name || 
+               (selectedCategory ? getCategoryTranslation(selectedCategory.name) : i18n.t('addListing.selectCategoryPlaceholder'))}
             </Text>
             <Text style={styles.selectArrow}>›</Text>
           </TouchableOpacity>
@@ -645,14 +664,16 @@ const AddListingForm = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Deal Type</Text>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.dealType')}</Text>
           <View style={styles.dealTypeContainer}>
             <TouchableOpacity
               style={[styles.dealTypeButton, dealType === 'sell' && styles.dealTypeSell]}
               onPress={() => setDealType('sell')}
               disabled={uploading}
             >
-              <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>Sell</Text>
+              <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>
+                {i18n.t('filters.sell')}
+              </Text>
             </TouchableOpacity>
             
             {categoryAllowsExchange && (
@@ -662,7 +683,9 @@ const AddListingForm = () => {
                   onPress={() => setDealType('rent')}
                   disabled={uploading}
                 >
-                  <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>Rent</Text>
+                  <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>
+                    {i18n.t('filters.rent')}
+                  </Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity
@@ -670,7 +693,9 @@ const AddListingForm = () => {
                   onPress={() => setDealType('exchange')}
                   disabled={uploading}
                 >
-                  <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>Exchange</Text>
+                  <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>
+                    {i18n.t('filters.exchange')}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -678,11 +703,11 @@ const AddListingForm = () => {
           
           {categoryAllowsExchange && dealType !== 'exchange' && (
             <View style={styles.switchContainer}>
-              <Text style={styles.switchLabel}>Also available for exchange</Text>
+              <Text style={styles.switchLabel}>{i18n.t('addListing.alsoExchange')}</Text>
               <Switch
                 value={alsoExchange}
                 onValueChange={setAlsoExchange}
-                trackColor={{ false: '#E5E7EB', true: '#10B981' }}
+                trackColor={{ false: '#E5E7EB', true: PRIMARY_TEAL }}
                 thumbColor="#fff"
                 disabled={uploading}
               />
@@ -692,23 +717,24 @@ const AddListingForm = () => {
 
         {dealType !== 'exchange' && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Price</Text>
+            <Text style={styles.sectionTitle}>{i18n.t('addListing.price')}</Text>
             <View style={styles.priceRow}>
-              <View style={[styles.priceInputContainer, errors.price && styles.inputError]}>
+              <View style={[
+                styles.priceInputContainer, 
+                errors.price && styles.inputError,
+                focusedField === 'price' && styles.inputFocused
+              ]}>
                 <TextInput
                   style={styles.input}
-                  placeholder="Price"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder={i18n.t('addListing.pricePlaceholder')}
+                  placeholderTextColor="#677080ff"
                   value={price}
                   onChangeText={setPrice}
                   keyboardType="numeric"
+                  onFocus={() => setFocusedField('price')}
+                  onBlur={() => setFocusedField(null)}
                   editable={!uploading}
                 />
-                {errors.price && (
-                  <View style={styles.errorIconContainer}>
-                    <Text style={styles.errorIcon}>▲</Text>
-                  </View>
-                )}
               </View>
               <View style={styles.currencyContainer}>
                 <Text style={styles.currencyText}>DA</Text>
@@ -719,13 +745,18 @@ const AddListingForm = () => {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Phone Number (Optional)</Text>
-          <View style={styles.inputContainer}>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.phoneNumber')}</Text>
+          <View style={[
+            styles.inputContainer,
+            focusedField === 'phone' && styles.inputFocused
+          ]}>
             <TextInput
               style={styles.input}
-              placeholder="e.g. 0777770707"
-              placeholderTextColor="#9CA3AF"
+              placeholder={i18n.t('addListing.phoneNumberPlaceholder')}
+              placeholderTextColor="#677080ff"
               value={phoneNumber}
+              onFocus={() => setFocusedField('phone')}
+              onBlur={() => setFocusedField(null)}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
               editable={!uploading}
@@ -734,35 +765,47 @@ const AddListingForm = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Condition</Text>
+          <Text style={styles.sectionTitle}>{i18n.t('addListing.condition')}</Text>
           <View style={styles.conditionContainer}>
             <TouchableOpacity
               style={[styles.conditionButton, condition === 'new' && styles.conditionActive]}
               onPress={() => setCondition('new')}
               disabled={uploading}
             >
-              <Text style={[styles.conditionText, condition === 'new' && styles.conditionTextActive]}>New</Text>
+              <Text style={[styles.conditionText, condition === 'new' && styles.conditionTextActive]}>
+                {i18n.t('addListing.new')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.conditionButton, condition === 'used' && styles.conditionActive]}
               onPress={() => setCondition('used')}
               disabled={uploading}
             >
-              <Text style={[styles.conditionText, condition === 'used' && styles.conditionTextActive]}>Used</Text>
+              <Text style={[styles.conditionText, condition === 'used' && styles.conditionTextActive]}>
+                {i18n.t('addListing.used')}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {categoryAllowsDelivery && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delivery Method</Text>
+            <Text style={styles.sectionTitle}>{i18n.t('addListing.deliveryMethod')}</Text>
             <TouchableOpacity
-              style={[styles.selectContainer, errors.delivery && styles.inputError]}
-              onPress={() => setShowDeliveryModal(true)}
+              style={[
+                styles.selectContainer, 
+                errors.delivery && styles.inputError,
+                focusedField === 'delivery' && styles.inputFocused
+              ]}
+              onPress={() => {
+                setShowDeliveryModal(true);
+                setFocusedField('delivery');
+              }}
+              onPressOut={() => setFocusedField(null)}
               disabled={uploading}
             >
               <Text style={[styles.selectText, !deliveryMethod && styles.placeholderText]}>
-                {deliveryMethod || 'Select delivery method'}
+                {deliveryMethod || i18n.t('addListing.selectDeliveryPlaceholder')}
               </Text>
               <Text style={styles.selectArrow}>›</Text>
             </TouchableOpacity>
@@ -778,10 +821,12 @@ const AddListingForm = () => {
           {uploading ? (
             <View style={styles.uploadingRow}>
               <ActivityIndicator color="#fff" />
-              <Text style={styles.uploadingText}>Uploading {photos.length} photo{photos.length > 1 ? 's' : ''}...</Text>
+              <Text style={styles.uploadingText}>
+                {i18n.t('addListing.uploading')} {photos.length} {photos.length > 1 ? i18n.t('addListing.photos') : i18n.t('addListing.photo')}...
+              </Text>
             </View>
           ) : (
-            <Text style={styles.publishButtonText}>Publish Listing</Text>
+            <Text style={styles.publishButtonText}>{i18n.t('addListing.publishListing')}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -793,7 +838,7 @@ const AddListingForm = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1,marginBottom:80, backgroundColor: '#fff' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   errorTextMain: { fontSize: 16, color: '#EF4444' },
@@ -801,29 +846,82 @@ const styles = StyleSheet.create({
   section: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   sectionTitle: { fontSize: 15, fontWeight: '600', color: '#111', marginBottom: 10 },
   photosScroll: { flexDirection: 'row' },
-  addPhotoBox: { width: 90, height: 90, borderWidth: 2, borderColor: '#D1D5DB', borderStyle: 'dashed', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  addPhotoPlus: { fontSize: 32, color: '#9CA3AF', marginBottom: 4 },
+  addPhotoBox: { 
+    width: 90, 
+    height: 90, 
+    borderWidth: 2, 
+    borderColor: '#b0b4bdff', 
+    borderStyle: 'dashed', 
+    borderRadius: 8, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: 12 
+  },
+  addPhotoPlus: { fontSize: 32, color: '#6B7280', marginBottom: 4 },
   addPhotoText: { fontSize: 12, color: '#6B7280' },
   photoItem: { width: 90, height: 90, marginRight: 12, position: 'relative' },
   photoImage: { width: '100%', height: '100%', borderRadius: 8 },
-  photoDelete: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  photoDelete: { 
+    position: 'absolute', 
+    top: 4, 
+    right: 4, 
+    width: 24, 
+    height: 24, 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
   photoDeleteText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-  photoStar: { position: 'absolute', bottom: 4, right: 4, width: 24, height: 24, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  photoStar: { 
+    position: 'absolute', 
+    bottom: 4, 
+    right: 4, 
+    width: 24, 
+    height: 24, 
+    backgroundColor: 'rgba(0,0,0,0.6)', 
+    borderRadius: 12, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
   photoStarText: { color: '#FBBF24', fontSize: 16 },
-  inputContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
+  inputContainer: { 
+    borderWidth: 1.5, 
+    borderColor: '#b0b4bdff', 
+    borderRadius: 8, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#fff' 
+  },
   input: { flex: 1, padding: 12, fontSize: 15, color: '#111' },
   textArea: { minHeight: 100, textAlignVertical: 'top', paddingTop: 12 },
   inputError: { borderColor: '#EF4444', borderWidth: 1.5 },
+  inputFocused: { borderColor: FOCUS_GREEN, borderWidth: 2 },
   errorIconContainer: { paddingRight: 12, justifyContent: 'center', alignItems: 'center' },
-  errorIconContainerTextArea: { position: 'absolute', right: 12, top: 12 },
   errorIcon: { color: '#EF4444', fontSize: 16, fontWeight: 'bold' },
   errorText: { color: '#EF4444', fontSize: 13, marginTop: 6, marginLeft: 2 },
-  placeholderText: { color: '#9CA3AF' },
-  selectContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' },
+  placeholderText: { color: '#6B7280' },
+  selectContainer: { 
+    borderWidth: 1.5, 
+    borderColor: '#9CA3AF', 
+    borderRadius: 8, 
+    padding: 14, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    backgroundColor: '#fff' 
+  },
   selectText: { fontSize: 15, color: '#111' },
   selectArrow: { fontSize: 24, color: '#9CA3AF', fontWeight: '300' },
   dealTypeContainer: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  dealTypeButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center' },
+  dealTypeButton: { 
+    flex: 1, 
+    paddingVertical: 10, 
+    paddingHorizontal: 16, 
+    borderRadius: 20, 
+    backgroundColor: '#F3F4F6', 
+    alignItems: 'center' 
+  },
   dealTypeSell: { backgroundColor: '#1D4ED8' },
   dealTypeRent: { backgroundColor: '#C2410C' },
   dealTypeExchange: { backgroundColor: '#7E22CE' },
@@ -832,21 +930,59 @@ const styles = StyleSheet.create({
   switchContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchLabel: { fontSize: 14, color: '#111' },
   priceRow: { flexDirection: 'row', gap: 8 },
-  priceInputContainer: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
-  currencyContainer: { width: 60, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+  priceInputContainer: { 
+    flex: 1, 
+    borderWidth: 1.5, 
+    borderColor: '#9CA3AF', 
+    borderRadius: 8, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#fff' 
+  },
+  currencyContainer: { 
+    width: 60, 
+    borderWidth: 1.5, 
+    borderColor: '#9CA3AF', 
+    borderRadius: 8, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: '#F9FAFB' 
+  },
   currencyText: { fontSize: 14, color: '#111', fontWeight: '500' },
   conditionContainer: { flexDirection: 'row', gap: 8 },
-  conditionButton: { paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, backgroundColor: '#F3F4F6' },
+  conditionButton: { 
+    paddingVertical: 10, 
+    paddingHorizontal: 24, 
+    borderRadius: 20, 
+    backgroundColor: '#F3F4F6' 
+  },
   conditionActive: { backgroundColor: '#111' },
   conditionText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
   conditionTextActive: { color: '#fff' },
-  publishButton: { margin: 16, backgroundColor: '#10B981', padding: 16, borderRadius: 50, alignItems: 'center' },
+  publishButton: { 
+    margin: 16, 
+    backgroundColor: PRIMARY_TEAL, 
+    padding: 16, 
+    borderRadius: 50, 
+    alignItems: 'center' 
+  },
   publishButtonDisabled: { opacity: 0.6 },
   publishButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   uploadingText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '70%' },
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'flex-end' 
+  },
+  modalContent: { 
+    backgroundColor: '#fff', 
+    borderTopLeftRadius: 20, 
+    borderTopRightRadius: 20, 
+    padding: 20, 
+    maxHeight: '70%',
+    marginBottom: 20
+  },
   modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   modalScroll: { maxHeight: 400 },
   modalOption: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
@@ -877,7 +1013,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     flex: 1,
   },
-  modalClose: { marginTop: 16, padding: 16, backgroundColor: '#F3F4F6', borderRadius: 8, alignItems: 'center' },
+  modalClose: { 
+    marginTop: 16, 
+    padding: 16, 
+    backgroundColor: '#F3F4F6', 
+    borderRadius: 8, 
+    alignItems: 'center' 
+  },
   modalCloseText: { fontSize: 16, fontWeight: '600', color: '#111' },
 });
 

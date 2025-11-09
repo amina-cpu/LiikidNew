@@ -1,7 +1,6 @@
-// HomeScreen.tsx
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
+
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -21,7 +20,6 @@ import FontAwesome from "react-native-vector-icons/FontAwesome";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../lib/Supabase";
-// 💡 Import i18n and the helper function
 import i18n, { translateFilter } from '../../lib/i18n';
 
 const PRIMARY_TEAL = "#16A085";
@@ -30,13 +28,12 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 20;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 12; 
 
 const SAFE_AREA_PADDING = 40;
 const TAB_BAR_HEIGHT = 90;
 
-// Pagination constants
-const INITIAL_PRODUCT_LIMIT = 10;
+const INITIAL_PRODUCT_LIMIT = 14;
 const LOAD_MORE_INCREMENT = 10;
 
 type IconName =
@@ -124,7 +121,6 @@ const calculateDistance = (
   return R * c;
 };
 
-// 💡 Helper function to translate category names
 const getCategoryTranslation = (catName: string): string => {
   const normalized = catName.trim().toLowerCase();
 
@@ -156,7 +152,6 @@ const getCategoryTranslation = (catName: string): string => {
   return translated !== translationKey ? translated : catName;
 };
 
-
 const CategoryButton: React.FC<{
   category: Category;
   index: number;
@@ -187,18 +182,23 @@ const CategoryButton: React.FC<{
   };
 
   return (
-    <TouchableOpacity
-      style={[styles.categoryButton, { backgroundColor: bgColor }]}
-      onPress={handlePress}
-    >
-      {searchMode && category.hasResults && (
-        <View style={styles.redDot} />
-      )}
-      <FontAwesome name={getCategoryIcon(category.name)} size={22} color="white" />
-      <Text style={styles.categoryText}>{getCategoryTranslation(category.name)}</Text>
-    </TouchableOpacity>
-  );
-};
+  
+ <TouchableOpacity
+    style={[styles.categoryButton, { backgroundColor: bgColor }]}
+    onPress={handlePress}
+  >
+    {searchMode && category.hasResults && (
+      <View style={styles.redDot} />
+    )}
+    <FontAwesome 
+      name={getCategoryIcon(category.name)} 
+      size={28} 
+      color="white" 
+      style={{ zIndex: 2 }}
+    />
+    <Text style={styles.categoryText}>{getCategoryTranslation(category.name)}</Text>
+  </TouchableOpacity>
+);};
 
 const ProductCard: React.FC<{
   product: Product;
@@ -280,7 +280,7 @@ const ProductCard: React.FC<{
             source={{
               uri:
                 product.image_url ||
-                `https://placehold.co/180x180/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
+                `https://placehold.co/250x250/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
             }}
             style={styles.cardImage}
           />
@@ -295,7 +295,6 @@ const ProductCard: React.FC<{
             </View>
           )}
 
-          {/* 🔥 HIDE HEART IF IT'S THE USER'S OWN PRODUCT */}
           {!isOwnProduct && (
             <TouchableOpacity
               onPress={toggleLike}
@@ -424,10 +423,14 @@ export default function HomeScreen() {
   const [productLimit, setProductLimit] = useState(INITIAL_PRODUCT_LIMIT);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
 
-  // Sticky header state
   const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
-  const scrollY = useRef(new Animated.Value(0)).current;
+
   const [isSticky, setIsSticky] = useState(false);
+
+  // 🆕 Tab bar visibility state
+
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+
 
   const fetchBlockedUsers = useCallback(async (userId: number) => {
     try {
@@ -733,17 +736,74 @@ export default function HomeScreen() {
   const handleBackToHome = () => {
     router.push('/');
   };
+// put these at top of component
 
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: any) => {
-        const offsetY = event.nativeEvent.contentOffset.y;
-        setIsSticky(offsetY >= filterTabsLayout.y);
-      },
-    }
-  );
+
+const scrollY = useRef(new Animated.Value(0)).current;
+const lastScrollY = useRef(0);
+const tabBarVisible = useRef(true);
+const upGestureCount = useRef(0);
+const scrollDirection = useRef<'up' | 'down' | null>(null);
+const upDistance = useRef(0);
+
+const MIN_SCROLL_DELTA = 5;       // ignore micro scrolls
+const UP_GESTURE_DISTANCE = 100;  // pixels required per “gesture”
+
+const handleScroll = Animated.event(
+  [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+  {
+    useNativeDriver: false,
+    listener: (event: any) => {
+      const offsetY = event.nativeEvent.contentOffset.y;
+      const delta = offsetY - lastScrollY.current;
+
+      let direction: 'up' | 'down' = scrollDirection.current ?? 'down';
+      if (delta > MIN_SCROLL_DELTA) direction = 'down';
+      else if (delta < -MIN_SCROLL_DELTA) direction = 'up';
+
+      // Update sticky filter tabs
+      setIsSticky(offsetY >= filterTabsLayout.y);
+
+      // --- DOWN: hide immediately ---
+      if (direction === 'down' && offsetY > 50) {
+        if (tabBarVisible.current) {
+          tabBarVisible.current = false;
+          AsyncStorage.setItem('tabBarVisible', 'false');
+        }
+        upGestureCount.current = 0;
+        upDistance.current = 0;
+      }
+
+      // --- UP: accumulate distance ---
+      if (!tabBarVisible.current && direction === 'up') {
+        upDistance.current += Math.abs(delta);
+
+        // If the user scrolled up enough, count one gesture
+        if (upDistance.current >= UP_GESTURE_DISTANCE) {
+          upGestureCount.current += 1;
+          upDistance.current = 0; // reset for next gesture
+        }
+
+        // Show after 2 up gestures
+        if (upGestureCount.current >= 2) {
+          tabBarVisible.current = true;
+          AsyncStorage.setItem('tabBarVisible', 'true');
+          upGestureCount.current = 0;
+          upDistance.current = 0;
+        }
+      }
+
+      scrollDirection.current = direction;
+      lastScrollY.current = offsetY;
+    },
+  }
+);
+
+useEffect(() => {
+  return () => {
+    AsyncStorage.setItem('tabBarVisible', 'true');
+  };
+}, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -765,6 +825,17 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   }, [currentUserId, fetchData, fetchBlockedUsers]);
+
+  // 🆕 Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+      // Show tab bar when leaving screen
+      AsyncStorage.setItem('tabBarVisible', 'true');
+    };
+  }, []);
 
   if (loading && products.length === 0 && !refreshing) {
     return (
@@ -853,7 +924,7 @@ export default function HomeScreen() {
               <Ionicons
                 name="search"
                 size={20}
-                color="#999"
+                color="#9CA3AF"
                 style={styles.searchIcon}
               />
               <Text style={styles.searchInputPlaceholder}>
@@ -962,26 +1033,90 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
   },
+  
+  // 🔍 SEARCH BAR - Enhanced shadow
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 48,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    borderWidth: 0,
+    
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+
+  // 🎨 CATEGORY BUTTON - Natural 3D with soft outer shadow (like iOS)
+  categoryButton: {
+    width: 95,
+    height: 95,
+    borderRadius: 24,
+    marginRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 10,
+    position: 'relative',
+    
+    // Soft outer shadow for depth
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+
+  categoryText: {
+    color: "white",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 6,
+    textAlign: "center",
+    textShadowColor: 'rgba(0, 0, 0, 0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    zIndex: 2,
+  },
+
+  // 📦 PRODUCT CARD - Much bigger with minimal spacing
   cardContainer: {
     width: CARD_WIDTH,
-    marginBottom: 4,
-    borderRadius: 16,
-    marginHorizontal: 1,
+    marginBottom: 8,
+    borderRadius: 20,
     backgroundColor: "white",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
+
+  productGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
+  },
+
   imageWrapper: {
     width: "100%",
-    aspectRatio: 1,
+    aspectRatio: 0.8,
     backgroundColor: "#F7F7F7",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: "hidden",
   },
+
+  cardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+
   deliveryBadgeNew: {
     position: "absolute",
     bottom: 10,
@@ -990,10 +1125,11 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 4,
   },
+
   priceTag: {
     alignSelf: "flex-start",
     borderRadius: 6,
@@ -1001,46 +1137,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     marginBottom: 6,
   },
+
   priceText: {
     fontSize: 13,
     fontWeight: "700",
   },
+
   cardTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "500",
     color: "#333",
     minHeight: 34,
     marginBottom: 4,
   },
+
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 2,
   },
+
   cardDistance: {
     marginLeft: 4,
     marginRight: 4,
-    fontSize: 12,
+    fontSize: 13,
     color: "#666",
   },
+
   searchBarActive: {
     borderColor: PRIMARY_TEAL,
     borderWidth: 2,
     shadowColor: PRIMARY_TEAL,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
+
   loadingContainer: {
     justifyContent: "center",
     alignItems: "center",
   },
+
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: DARK_GRAY,
   },
+
   emptyText: {
     textAlign: "center",
     fontSize: 16,
@@ -1048,6 +1192,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     paddingHorizontal: 16,
   },
+
   noMoreText: {
     textAlign: "center",
     fontSize: 14,
@@ -1056,191 +1201,199 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '600'
   },
+
   contentContainer: {
     paddingBottom: 20,
   },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
+
   backButton: {
     marginRight: 10,
   },
+
   searchBarWrapper: {
     flex: 1,
     marginRight: 10,
   },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 48,
-    backgroundColor: "white",
-    borderRadius: 24,
-    paddingHorizontal: 15,
-    borderWidth: 1,
-    borderColor: LIGHT_GRAY,
-  },
+
   searchBarFocused: {
     borderColor: PRIMARY_TEAL,
     borderWidth: 2,
   },
+
   searchIcon: {
     marginRight: 8,
-    color: "#999",
   },
+
   searchInputPlaceholder: {
     flex: 1,
-    fontSize: 16,
-    color: "#999",
+    fontSize: 15,
+    color: "#6B7280",
   },
+
   locationContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
+
   locationText: {
     marginLeft: 4,
     fontSize: 14,
     fontWeight: "600",
     color: DARK_GRAY,
   },
+
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
     color: DARK_GRAY,
     paddingHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 12,
     marginTop: 10,
   },
+
   categoryScroll: {
     paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
-  categoryButton: {
-    width: 90,
-    height: 90,
-    borderRadius: 12,
-    marginRight: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    position: 'relative',
-  },
-  categoryText: {
-    color: "white",
-    fontSize: 10,
-    fontWeight: "600",
-    marginTop: 4,
-    textAlign: "center",
-  },
+
   filterTabsWrapper: {
     zIndex: 1,
     backgroundColor: 'white',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: LIGHT_GRAY,
+    paddingVertical: 14,
+    borderBottomWidth: 0,
   },
+
   stickyFilterTabsWrapper: {
     position: 'absolute',
-    top: 0,
+    top: SAFE_AREA_PADDING,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 20,
     backgroundColor: 'white',
-    paddingTop: SAFE_AREA_PADDING + 10,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: LIGHT_GRAY,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderRadius: 16,
+    marginHorizontal: 10,
+    marginTop: 10,
   },
+
   filterTabs: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: LIGHT_GRAY,
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
+
   filterButton: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 2,
   },
+
   filterButtonActive: {
-    backgroundColor: PRIMARY_TEAL,
+    backgroundColor: "#16A085",
+    shadowColor: "#16A085",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
+
   filterText: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_GRAY,
+    color: "#6B7280",
   },
+
   filterTextActive: {
     color: 'white',
+    fontWeight: '700',
   },
-  productGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 10,
-  },
+
   cardTouchable: {
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
     flex: 1,
   },
-  cardImage: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
+
   cardDetails: {
-    padding: 10,
+    padding: 12,
   },
+
   heartIcon: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
-    padding: 5,
+    padding: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
   },
+
   redDot: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 8,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: ACCENT_RED,
     zIndex: 2,
+    borderWidth: 2,
+    borderColor: 'white',
+    shadowColor: ACCENT_RED,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 5,
   },
+
   loadMoreContainer: {
     paddingHorizontal: 16,
     marginTop: 20,
     marginBottom: 40,
   },
+
   loadMoreButton: {
     backgroundColor: PRIMARY_TEAL,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: PRIMARY_TEAL,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
+
   loadMoreText: {
     color: 'white',
     fontSize: 16,

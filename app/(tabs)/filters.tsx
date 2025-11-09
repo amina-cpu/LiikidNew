@@ -13,6 +13,7 @@ import {
     View,
 } from 'react-native';
 import { supabase } from "../../lib/Supabase";
+import i18n from '../../lib/i18n';
 
 // --- Constants ---
 const PRIMARY_TEAL = '#16A085';
@@ -22,19 +23,41 @@ const LIGHT_GRAY = '#F5F5F5';
 const WHITE = '#FFFFFF';
 
 // --- Options ---
-const SORT_OPTIONS = ['Best Match', 'Most Recent', 'Lowest Price', 'Highest Price', 'Nearest'];
-const DELIVERY_METHODS = [
-    { label: 'All Methods', icon: 'apps-outline' },
-    { label: 'Pickup', icon: 'walk-outline' },
-    { label: 'Delivery', icon: 'bicycle-outline' },
-    { label: 'Shipping', icon: 'airplane-outline' }
+const getSortOptions = () => [
+    i18n.t('filterss.bestMatch'),
+    i18n.t('filterss.mostRecent'),
+    i18n.t('filterss.lowestPrice'),
+    i18n.t('filterss.highestPrice'),
+    i18n.t('filterss.nearest')
 ];
-const CONDITION_OPTIONS = ['All', 'New', 'Used'];
-const LOCATIONS = ['All Locations', 'Setif', 'Blida', 'Algiers', 'Oran', 'Constantine', 'Annaba'];
-const PRICE_UNITS = [
-    { label: 'DA', value: 1, display: 'DA' },
-    { label: 'Thousands', value: 1000, display: 'K DA' },
-    { label: 'Millions', value: 1000000, display: 'M DA' }
+
+const getDeliveryMethods = () => [
+    { label: i18n.t('filterss.allMethods'), icon: 'apps-outline' },
+    { label: i18n.t('filterss.pickup'), icon: 'walk-outline' },
+    { label: i18n.t('filterss.delivery'), icon: 'bicycle-outline' },
+    { label: i18n.t('filterss.shipping'), icon: 'airplane-outline' }
+];
+
+const getConditionOptions = () => [
+    i18n.t('filterss.all'),
+    i18n.t('filterss.new'),
+    i18n.t('filterss.used')
+];
+
+const getLocations = () => [
+    i18n.t('filterss.allLocations'),
+    'Setif',
+    'Blida',
+    'Algiers',
+    'Oran',
+    'Constantine',
+    'Annaba'
+];
+
+const getPriceUnits = () => [
+    { label: i18n.t('filterss.da'), value: 1, display: 'DA' },
+    { label: i18n.t('filterss.thousands'), value: 1000, display: 'K DA' },
+    { label: i18n.t('filterss.millions'), value: 1000000, display: 'M DA' }
 ];
 
 interface Category {
@@ -51,14 +74,14 @@ export default function FiltersScreen() {
     const searchMode = params.searchMode === 'true';
     const searchQuery = params.searchQuery as string || '';
     
-    const [selectedCategory, setSelectedCategory] = useState(params.category as string || 'All');
-    const [selectedSortBy, setSelectedSortBy] = useState(params.sortBy as string || 'Best Match');
-    const [selectedLocation, setSelectedLocation] = useState(params.location as string || 'All Locations');
-    const [selectedDelivery, setSelectedDelivery] = useState(params.delivery as string || 'All Methods');
+    const [selectedCategory, setSelectedCategory] = useState(params.category as string || i18n.t('filterss.all'));
+    const [selectedSortBy, setSelectedSortBy] = useState(params.sortBy as string || i18n.t('filterss.bestMatch'));
+    const [selectedLocation, setSelectedLocation] = useState(params.location as string || i18n.t('filterss.allLocations'));
+    const [selectedDelivery, setSelectedDelivery] = useState(params.delivery as string || i18n.t('filterss.allMethods'));
     const [minPrice, setMinPrice] = useState(params.minPrice as string || '');
     const [maxPrice, setMaxPrice] = useState(params.maxPrice as string || '');
-    const [priceUnit, setPriceUnit] = useState(PRICE_UNITS[0]);
-    const [selectedCondition, setSelectedCondition] = useState(params.condition as string || 'All');
+    const [priceUnit, setPriceUnit] = useState(getPriceUnits()[0]);
+    const [selectedCondition, setSelectedCondition] = useState(params.condition as string || i18n.t('filterss.all'));
     
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'category' | 'sortBy' | 'location' | 'delivery' | 'priceUnit' | null>(null);
@@ -80,7 +103,7 @@ export default function FiltersScreen() {
         if (error) {
             console.error("Error fetching categories:", error);
         } else {
-            setCategories([{ id: 0, name: 'All' }, ...(data || [])]);
+            setCategories([{ id: 0, name: i18n.t('filterss.all') }, ...(data || [])]);
         }
         setLoadingCategories(false);
     };
@@ -113,7 +136,7 @@ export default function FiltersScreen() {
         closeModal();
     };
 
-    const handlePriceUnitSelect = (unit: typeof PRICE_UNITS[0]) => {
+    const handlePriceUnitSelect = (unit: ReturnType<typeof getPriceUnits>[0]) => {
         setPriceUnit(unit);
         closeModal();
     };
@@ -126,9 +149,10 @@ export default function FiltersScreen() {
         let currentValue = '';
 
         if (modalType === 'priceUnit') {
+            const PRICE_UNITS = getPriceUnits();
             return (
                 <View style={modalStyles.contentContainer}>
-                    <Text style={modalStyles.title}>Price Unit</Text>
+                    <Text style={modalStyles.title}>{i18n.t('filterss.priceUnit')}</Text>
                     <ScrollView showsVerticalScrollIndicator={false}>
                         {PRICE_UNITS.map((unit) => (
                             <TouchableOpacity
@@ -139,7 +163,7 @@ export default function FiltersScreen() {
                                 <View>
                                     <Text style={modalStyles.rowText}>{unit.label}</Text>
                                     <Text style={modalStyles.rowSubtext}>
-                                        {unit.value === 1 ? 'Standard pricing' : 
+                                        {unit.value === 1 ? i18n.t('filterss.standardPricing') : 
                                          unit.value === 1000 ? '1K = 1,000 DA' : 
                                          '1M = 1,000,000 DA'}
                                     </Text>
@@ -155,9 +179,10 @@ export default function FiltersScreen() {
         }
 
         if (modalType === 'delivery') {
+            const DELIVERY_METHODS = getDeliveryMethods();
             return (
                 <View style={modalStyles.contentContainer}>
-                    <Text style={modalStyles.title}>Delivery Methods</Text>
+                    <Text style={modalStyles.title}>{i18n.t('filterss.deliveryMethods')}</Text>
                     <ScrollView showsVerticalScrollIndicator={false}>
                         {DELIVERY_METHODS.map((method) => (
                             <TouchableOpacity
@@ -187,18 +212,18 @@ export default function FiltersScreen() {
 
         switch (modalType) {
             case 'category':
-                title = 'Category';
+                title = i18n.t('filterss.category');
                 options = categories.map(cat => cat.name);
                 currentValue = selectedCategory;
                 break;
             case 'sortBy':
-                title = 'Sort By';
-                options = SORT_OPTIONS;
+                title = i18n.t('filterss.sortBy');
+                options = getSortOptions();
                 currentValue = selectedSortBy;
                 break;
             case 'location':
-                title = 'Location';
-                options = LOCATIONS;
+                title = i18n.t('filterss.location');
+                options = getLocations();
                 currentValue = selectedLocation;
                 break;
         }
@@ -236,14 +261,14 @@ export default function FiltersScreen() {
     };
 
     const handleReset = () => {
-        setSelectedCategory('All');
-        setSelectedSortBy('Best Match');
-        setSelectedLocation('All Locations');
-        setSelectedDelivery('All Methods');
+        setSelectedCategory(i18n.t('filterss.all'));
+        setSelectedSortBy(i18n.t('filterss.bestMatch'));
+        setSelectedLocation(i18n.t('filterss.allLocations'));
+        setSelectedDelivery(i18n.t('filterss.allMethods'));
         setMinPrice('');
         setMaxPrice('');
-        setPriceUnit(PRICE_UNITS[0]);
-        setSelectedCondition('All');
+        setPriceUnit(getPriceUnits()[0]);
+        setSelectedCondition(i18n.t('filterss.all'));
     };
 
     const handleBack = () => {
@@ -259,7 +284,6 @@ export default function FiltersScreen() {
             filterParams.id = categoryId;
         }
 
-        // Preserve search mode and query
         if (searchMode) {
             filterParams.searchMode = 'true';
         }
@@ -271,23 +295,22 @@ export default function FiltersScreen() {
             filterParams.listingType = listingType;
         }
 
-        if (selectedSortBy !== 'Best Match') {
+        if (selectedSortBy !== i18n.t('filterss.bestMatch')) {
             filterParams.sortBy = selectedSortBy;
         }
         
-        if (selectedLocation !== 'All Locations') {
+        if (selectedLocation !== i18n.t('filterss.allLocations')) {
             filterParams.location = selectedLocation;
         }
         
-        if (selectedDelivery !== 'All Methods') {
+        if (selectedDelivery !== i18n.t('filterss.allMethods')) {
             filterParams.delivery = selectedDelivery;
         }
         
-        if (selectedCondition !== 'All') {
+        if (selectedCondition !== i18n.t('filterss.all')) {
             filterParams.condition = selectedCondition;
         }
         
-        // Convert prices based on unit before sending
         if (minPrice) {
             const actualMinPrice = parseFloat(minPrice) * priceUnit.value;
             filterParams.minPrice = actualMinPrice;
@@ -298,7 +321,7 @@ export default function FiltersScreen() {
             filterParams.maxPrice = actualMaxPrice;
         }
         
-        if (selectedCategory && selectedCategory !== "All") {
+        if (selectedCategory && selectedCategory !== i18n.t('filterss.all')) {
             filterParams.category = selectedCategory;
         }
 
@@ -309,8 +332,8 @@ export default function FiltersScreen() {
         router.push(`/category?${queryString}`);
     };
 
-    // Get icon for selected delivery method
     const getDeliveryIcon = () => {
+        const DELIVERY_METHODS = getDeliveryMethods();
         const method = DELIVERY_METHODS.find(m => m.label === selectedDelivery);
         return method ? method.icon : 'apps-outline';
     };
@@ -322,9 +345,9 @@ export default function FiltersScreen() {
                 <TouchableOpacity onPress={handleBack}>
                     <Ionicons name="arrow-back" size={24} color={DARK_GRAY} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Filters</Text>
+                <Text style={styles.headerTitle}>{i18n.t('filterss.title')}</Text>
                 <TouchableOpacity onPress={handleReset}>
-                    <Text style={styles.resetText}>Reset</Text>
+                    <Text style={styles.resetText}>{i18n.t('filterss.reset')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -334,7 +357,7 @@ export default function FiltersScreen() {
                     <View style={styles.searchInfoBanner}>
                         <Ionicons name="search" size={18} color={PRIMARY_TEAL} />
                         <Text style={styles.searchInfoText}>
-                            Filtering results for: <Text style={styles.searchQueryText}>"{searchQuery}"</Text>
+                            {i18n.t('filters.filteringResults')}: <Text style={styles.searchQueryText}>"{searchQuery}"</Text>
                         </Text>
                     </View>
                 )}
@@ -342,17 +365,17 @@ export default function FiltersScreen() {
                 {/* Main Filters Section */}
                 <View style={styles.section}>
                     <FilterRow
-                        label="Sort By"
+                        label={i18n.t('filterss.sortBy')}
                         value={selectedSortBy}
                         onPress={() => openModal('sortBy')}
                     />
                     <FilterRow
-                        label="Location"
+                        label={i18n.t('filterss.location')}
                         value={selectedLocation}
                         onPress={() => openModal('location')}
                     />
                     <FilterRowWithIcon
-                        label="Delivery Methods"
+                        label={i18n.t('filterss.deliveryMethods')}
                         value={selectedDelivery}
                         icon={getDeliveryIcon()}
                         onPress={() => openModal('delivery')}
@@ -361,11 +384,11 @@ export default function FiltersScreen() {
 
                 {/* Price Range Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Price Range</Text>
+                    <Text style={styles.sectionTitle}>{i18n.t('filterss.priceRange')}</Text>
                     <View style={styles.priceContainer}>
                         <TextInput
                             style={styles.priceInput}
-                            placeholder="Min"
+                            placeholder={i18n.t('filterss.min')}
                             placeholderTextColor={TEXT_LIGHT}
                             value={minPrice}
                             onChangeText={setMinPrice}
@@ -373,7 +396,7 @@ export default function FiltersScreen() {
                         />
                         <TextInput
                             style={styles.priceInput}
-                            placeholder="Max"
+                            placeholder={i18n.t('filterss.max')}
                             placeholderTextColor={TEXT_LIGHT}
                             value={maxPrice}
                             onChangeText={setMaxPrice}
@@ -396,9 +419,9 @@ export default function FiltersScreen() {
 
                 {/* Item Condition Section */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Item Condition</Text>
+                    <Text style={styles.sectionTitle}>{i18n.t('filterss.itemCondition')}</Text>
                     <View style={styles.conditionContainer}>
-                        {CONDITION_OPTIONS.map((condition) => (
+                        {getConditionOptions().map((condition) => (
                             <TouchableOpacity
                                 key={condition}
                                 style={[
@@ -422,7 +445,7 @@ export default function FiltersScreen() {
             {/* See Results Button */}
             <View style={styles.footer}>
                 <TouchableOpacity style={styles.resultsButton} onPress={handleSeeResults}>
-                    <Text style={styles.resultsButtonText}>See Results</Text>
+                    <Text style={styles.resultsButtonText}>{i18n.t('filterss.seeResults')}</Text>
                 </TouchableOpacity>
             </View>
 
@@ -677,7 +700,7 @@ const modalStyles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: 16,
-        height:300,
+        height: 300,
     },
     title: {
         fontSize: 18,

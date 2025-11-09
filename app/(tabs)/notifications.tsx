@@ -49,7 +49,33 @@ interface NotificationSettings {
     marketplace: boolean;
     orders: boolean;
 }
+const deleteNotification = async (notificationId: number) => {
+        try {
+            // 1. Delete from Supabase
+            const { error } = await supabase
+                .from("notifications")
+                .delete()
+                .eq("notification_id", notificationId);
 
+            if (error) {
+                console.error("Error deleting notification:", error);
+                // Optionally throw the error or show a user-facing message
+                return false; // Deletion failed
+            }
+
+            // 2. Update local state to remove the item instantly
+            setNotifications(prev => 
+                prev.filter(n => n.notification_id !== notificationId)
+            );
+            
+            console.log(`Notification ${notificationId} deleted successfully.`);
+            return true; // Deletion successful
+
+        } catch (error) {
+            console.error("Exception during notification deletion:", error);
+            return false;
+        }
+    };
 const NotificationsScreen = () => {
     const router = useRouter();
     const { user } = useAuth();
@@ -380,6 +406,7 @@ const NotificationsScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginBottom:70,
         backgroundColor: "#fff",
     },
     centered: {
@@ -396,6 +423,36 @@ const styles = StyleSheet.create({
         marginTop:30,
         borderBottomColor: "#eee",
     },
+    // ... inside const styles = StyleSheet.create({ ...
+
+    // For the background that appears when swiping
+    rowBack: {
+        alignItems: 'center',
+        backgroundColor: 'red',
+        flex: 1,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingLeft: 15,
+        marginVertical: 10, // Adjust to match item spacing
+        borderRadius: 12,
+    },
+    backRightBtn: {
+        alignItems: 'center',
+        bottom: 0,
+        justifyContent: 'center',
+        position: 'absolute',
+        top: 0,
+        width: 75,
+        backgroundColor: 'transparent', // Will be covered by rowBack
+        right: 0, // Position on the right
+    },
+    backRightBtnRight: {
+        backgroundColor: '#FF3B30', // Red for delete
+        right: 0,
+        borderRadius: 12,
+        overflow: 'hidden', // To ensure the corner is rounded
+    },
+    // ... rest of your styles
     backButton: {
         padding: 8,
         width: 44,

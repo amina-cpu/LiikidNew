@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient'; // Assuming this is installed
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -18,6 +18,7 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../lib/Supabase";
+import i18n from '../../lib/i18n';
 
 interface ProductImage {
   image_url: string;
@@ -59,18 +60,18 @@ const COLORS = {
   textLight: "#8A8A8E",
   background: "#F5F5F5",
   white: "#FFFFFF",
-  sell: "#007AFF", // Blue color for Sell/Price
+  sell: "#007AFF",
   rent: "#F59E0B",
-  exchange: "#A855F7", // Purple color for Exchange
-  exchangeGradientStart: "#E0E7FF", // Light Blue for the start of the background gradient
-  exchangeGradientEnd: "#F3E8FF",   // Very Light Purple for the end of the background gradient
+  exchange: "#A855F7",
+  exchangeGradientStart: "#E0E7FF",
+  exchangeGradientEnd: "#F3E8FF",
 };
 
-// Format price helper function
+// Fixed price formatting function
 const formatPrice = (price: number): string => {
   if (price >= 1000000) {
     return `${(price / 1000000).toFixed(1)}M`;
-  } else if (price >= 10000) {
+  } else if (price >= 1000) {
     return `${(price / 1000).toFixed(0)}K`;
   }
   return price.toLocaleString();
@@ -148,7 +149,7 @@ const ProductDetailScreen = () => {
   useEffect(() => {
     if (!productId || Array.isArray(productId)) {
       setLoading(false);
-      setError("Invalid Product ID.");
+      setError(i18n.t('productDetail.productNotFound'));
       return;
     }
 
@@ -185,7 +186,7 @@ const ProductDetailScreen = () => {
             name: data.name,
             price: data.price,
             listing_type: data.listing_type,
-            description: data.description || "No description provided.",
+            description: data.description || i18n.t('productDetail.noDescription'),
             image_url: data.image_url,
             location_address: data.location_address,
             latitude: data.latitude,
@@ -209,11 +210,11 @@ const ProductDetailScreen = () => {
 
           await fetchLikesCount();
         } else {
-          setError("Product not found.");
+          setError(i18n.t('productDetail.productNotFound'));
         }
       } catch (e: any) {
-        Alert.alert("Error", e.message || "Failed to fetch product details.");
-        setError("Failed to load product.");
+        Alert.alert(i18n.t('productDetail.error'), e.message || i18n.t('productDetail.errorMessage'));
+        setError(i18n.t('productDetail.errorLoading'));
       } finally {
         setLoading(false);
       }
@@ -229,7 +230,7 @@ const ProductDetailScreen = () => {
 
   const toggleFavorite = async () => {
     if (!currentUserId) {
-      Alert.alert('Login Required', 'Please login to like products');
+      Alert.alert(i18n.t('productDetail.loginRequired'), i18n.t('productDetail.loginRequiredMessage'));
       return;
     }
 
@@ -259,13 +260,13 @@ const ProductDetailScreen = () => {
       }
     } catch (error: any) {
       console.error('Error toggling like:', error);
-      Alert.alert('Error', 'Failed to update like status');
+      Alert.alert(i18n.t('productDetail.error'), i18n.t('productDetail.failedToUpdateLike'));
     }
   };
 
   const navigateToSellerProfile = () => {
     if (!userInfo?.user_id) {
-      Alert.alert("Error", "Seller information is not available.");
+      Alert.alert(i18n.t('productDetail.error'), i18n.t('productDetail.sellerNotAvailable'));
       return;
     }
     
@@ -292,15 +293,15 @@ const ProductDetailScreen = () => {
 
   const handleDeleteProduct = () => {
     Alert.alert(
-      'Delete Product',
-      'Are you sure you want to delete this product? This action cannot be undone.',
+      i18n.t('productDetail.deleteTitle'),
+      i18n.t('productDetail.deleteMessage'),
       [
         {
-          text: 'Cancel',
+          text: i18n.t('productDetail.cancel'),
           style: 'cancel'
         },
         {
-          text: 'Delete',
+          text: i18n.t('productDetail.deleteConfirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -311,15 +312,15 @@ const ProductDetailScreen = () => {
 
               if (error) throw error;
 
-              Alert.alert('Success', 'Product deleted successfully', [
+              Alert.alert(i18n.t('productDetail.deleteSuccess'), i18n.t('productDetail.deleteSuccessMessage'), [
                 {
-                  text: 'OK',
+                  text: i18n.t('productDetail.ok'),
                   onPress: () => router.back()
                 }
               ]);
             } catch (error: any) {
               console.error('Error deleting product:', error);
-              Alert.alert('Error', 'Failed to delete product');
+              Alert.alert(i18n.t('productDetail.deleteError'), i18n.t('productDetail.deleteErrorMessage'));
             }
           }
         }
@@ -331,7 +332,7 @@ const ProductDetailScreen = () => {
     return (
       <View style={styles.flexCenter}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading product details...</Text>
+        <Text style={styles.loadingText}>{i18n.t('productDetail.loadingText')}</Text>
       </View>
     );
   }
@@ -340,7 +341,7 @@ const ProductDetailScreen = () => {
     return (
       <View style={styles.flexCenter}>
         <Ionicons name="alert-circle-outline" size={40} color={COLORS.textLight} />
-        <Text style={styles.errorText}>{error || "Product not found."}</Text>
+        <Text style={styles.errorText}>{error || i18n.t('productDetail.productNotFound')}</Text>
       </View>
     );
   }
@@ -363,16 +364,18 @@ const ProductDetailScreen = () => {
     const formattedPrice = formatPrice(product.price);
     
     if (product.listing_type === "rent") {
-      return `${formattedPrice} DA/month`;
+      return `${formattedPrice} DA${i18n.t('productDetail.perMonth')}`;
     }
     return `${formattedPrice} DA`;
   };
   
   const isExchangeDisplayActive = product.also_exchange || product.listing_type === "exchange";
 
-
   const getConditionText = () => {
-    if (!product.condition) return "Condition not specified";
+    if (!product.condition) return i18n.t('productDetail.conditionNotSpecified');
+    
+    if (product.condition === 'new') return i18n.t('productDetail.conditionNew');
+    if (product.condition === 'used') return i18n.t('productDetail.conditionUsed');
     
     return product.condition.charAt(0).toUpperCase() + product.condition.slice(1);
   };
@@ -389,7 +392,7 @@ const ProductDetailScreen = () => {
       const date = new Date(userInfo.created_at);
       return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     }
-    return 'Recently';
+    return i18n.t('productDetail.recently');
   };
 
   return (
@@ -459,9 +462,10 @@ const ProductDetailScreen = () => {
 
         <View style={styles.detailsCard}>
           <Text style={styles.title}>{product.name}</Text>
-          <Text style={styles.condition}>Conditon - {getConditionText()}</Text>
+          <Text style={styles.condition}>
+            {i18n.t('productDetail.condition')} - {getConditionText()}
+          </Text>
 
-          {/* Enhanced Price Display with Gradient for Exchange */}
           {isExchangeDisplayActive ? (
             <View style={styles.exchangePriceContainer}>
               <LinearGradient
@@ -470,14 +474,12 @@ const ProductDetailScreen = () => {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.exchangeGradient}
               >
-                {/* 1. Price is now styled with COLORS.sell (Blue) */}
                 <Text style={styles.exchangePriceTextBlue}> 
                   {formatPrice(product.price)} DA
                 </Text>
                 <View style={styles.exchangeDivider} />
-                 {/* 2. Label is now styled with COLORS.exchange (Purple) */}
                 <Text style={styles.exchangeLabelTextPurple}> 
-                  Exchange
+                  {i18n.t('productDetail.exchange')}
                 </Text>
               </LinearGradient>
             </View>
@@ -492,24 +494,26 @@ const ProductDetailScreen = () => {
           {product.hasShipping && (
             <View style={styles.shippingContainer}>
               <MaterialCommunityIcons name="truck-delivery" size={20} color={COLORS.primary} />
-              <Text style={styles.shippingText}>Shipping available</Text>
+              <Text style={styles.shippingText}>{i18n.t('productDetail.shippingAvailable')}</Text>
             </View>
           )}
         </View>
 
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeader}>Description</Text>
+          <Text style={styles.sectionHeader}>{i18n.t('productDetail.description')}</Text>
           <Text style={styles.descriptionText}>
             {product.description.length > 150
               ? product.description.substring(0, 150)
               : product.description}
             {product.description.length > 150 && (
-              <Text style={styles.seeMore}>... See more</Text>
+              <Text style={styles.seeMore}> {i18n.t('productDetail.seeMore')}</Text>
             )}
           </Text>
 
           <View style={styles.postedRow}>
-            <Text style={styles.postedDate}>Posted on {product.created_at}</Text>
+            <Text style={styles.postedDate}>
+              {i18n.t('productDetail.postedOn')} {product.created_at}
+            </Text>
             {likesCount > 0 && (
               <View style={styles.likesContainer}>
                 <Ionicons name="heart" size={16} color="#FF3B30" />
@@ -521,7 +525,7 @@ const ProductDetailScreen = () => {
 
         {userInfo && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionHeader}>Posted by</Text>
+            <Text style={styles.sectionHeader}>{i18n.t('productDetail.postedBy')}</Text>
             
             <TouchableOpacity 
               style={styles.userContainerWrapper}
@@ -543,7 +547,9 @@ const ProductDetailScreen = () => {
                   {userInfo.bio && (
                     <Text style={styles.userBio} numberOfLines={2}>{userInfo.bio}</Text>
                   )}
-                  <Text style={styles.userMeta}>Joined {getJoinedDate()}</Text>
+                  <Text style={styles.userMeta}>
+                    {i18n.t('productDetail.joined')} {getJoinedDate()}
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
               </View>
@@ -556,7 +562,7 @@ const ProductDetailScreen = () => {
             source={{ uri: "https://api.mapbox.com/styles/v1/mapbox/dark-v10/static/3.39,36.76,11,0/400x300@2x?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw" }}
             style={styles.mapImage}
           />
-          <Text style={styles.mapCaption}>Map is approximate to keep seller's location private.</Text>
+          <Text style={styles.mapCaption}>{i18n.t('productDetail.mapCaption')}</Text>
         </View>
 
         <View style={{ height: 100 }} />
@@ -565,10 +571,10 @@ const ProductDetailScreen = () => {
       {!isOwner && (
         <View style={styles.bottomButtons}>
           <TouchableOpacity style={styles.callButton}>
-            <Text style={styles.callButtonText}>Call</Text>
+            <Text style={styles.callButtonText}>{i18n.t('productDetail.call')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.chatButton}>
-            <Text style={styles.chatButtonText}>Chat</Text>
+            <Text style={styles.chatButtonText}>{i18n.t('productDetail.chat')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -577,11 +583,11 @@ const ProductDetailScreen = () => {
         <View style={styles.bottomButtons}>
           <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteProduct}>
             <Ionicons name="trash-outline" size={20} color="#EF4444" />
-            <Text style={styles.deleteButtonText}>Delete</Text>
+            <Text style={styles.deleteButtonText}>{i18n.t('productDetail.delete')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.editButton} onPress={handleEditProduct}>
             <Ionicons name="create-outline" size={20} color="#fff" />
-            <Text style={styles.editButtonText}>Edit Product</Text>
+            <Text style={styles.editButtonText}>{i18n.t('productDetail.editProduct')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -600,15 +606,15 @@ const ProductDetailScreen = () => {
           <View style={styles.bottomSheet}>
             <TouchableOpacity style={styles.menuItem}>
               <Ionicons name="share-social-outline" size={22} color={COLORS.secondary} />
-              <Text style={styles.menuText}>Share item</Text>
+              <Text style={styles.menuText}>{i18n.t('productDetail.shareItem')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem}>
               <Ionicons name="flag-outline" size={22} color={COLORS.secondary} />
-              <Text style={styles.menuText}>Report this item</Text>
+              <Text style={styles.menuText}>{i18n.t('productDetail.reportItem')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem}>
               <Ionicons name="link-outline" size={22} color={COLORS.secondary} />
-              <Text style={styles.menuText}>Copy link</Text>
+              <Text style={styles.menuText}>{i18n.t('productDetail.copyLink')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -617,12 +623,8 @@ const ProductDetailScreen = () => {
   );
 };
 
-// ---
-// Style Sheet
-// ---
-
 const styles = StyleSheet.create({
-  flexContainer: { flex: 1, backgroundColor: COLORS.background },
+  flexContainer: { flex: 1, marginBottom:70,backgroundColor: COLORS.background },
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
   loadingText: { marginTop: 10, color: COLORS.secondary },
@@ -710,7 +712,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   
-  // New Exchange Price Styles
   exchangePriceContainer: {
     marginBottom: 12,
     alignSelf: "flex-start",
@@ -723,14 +724,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 16,
-    // LinearGradient handles background
   },
   
-  // Custom style for the price text (Blue color)
   exchangePriceTextBlue: {
     fontSize: 20,
     fontWeight: "700",
-    color: COLORS.sell, // Use the primary blue color for the price
+    color: COLORS.sell,
   },
   
   exchangeDivider: {
@@ -741,35 +740,15 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   
-  // Custom style for the label text (Purple color)
   exchangeLabelTextPurple: {
     fontSize: 16,
     fontWeight: "600",
-    color: COLORS.exchange, // Use the exchange purple color for the label
-  },
-  
-  exchangeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-  },
-  
-  exchangeText: {
-    marginLeft: 6,
     color: COLORS.exchange,
-    fontWeight: "600",
-    fontSize: 14,
   },
-
+  
   shippingContainer: {
     flexDirection: "row",
     alignItems: "center",
-  
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -901,6 +880,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: COLORS.white,
     padding: 16,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderTopColor: "#E5E5E5",
     gap: 12,

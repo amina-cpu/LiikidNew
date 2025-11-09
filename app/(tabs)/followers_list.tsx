@@ -337,6 +337,7 @@ const FollowersList = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        marginBottom:70,
         backgroundColor: '#F5F5F5',
     },
     center: {

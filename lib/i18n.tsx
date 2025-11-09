@@ -5,6 +5,168 @@ type Language = 'en' | 'fr' | 'ar';
 
 const translations = {
   en: {
+search: {
+  "title": "Search",
+  "subtitle": "Search in Local Marketplace",
+  "placeholder": "Your search",
+  "allCategories": "All Categories",
+  "searchButton": "SEARCH",
+  "recentSearches": "Recent Searches",
+  "noRecentSearches": "No recent searches yet",
+  "emptySearchTitle": "Empty Search",
+  "emptySearchMessage": "Please enter a search term",
+  "noResultsTitle": "No Results",
+  "noResultsMessage": "No products found matching your search",
+  "errorTitle": "Error",
+  "errorMessage": "Failed to perform search: "
+},
+  
+  productDetail: {
+  // Loading & Errors
+  loadingText: "Loading product details...",
+  productNotFound: "Product not found.",
+  errorLoading: "Failed to load product.",
+  
+  // Header Actions
+  loginRequired: "Login Required",
+  loginRequiredMessage: "Please login to like products",
+  
+  // Product Info
+  condition: "Condition",
+  conditionNotSpecified: "Condition not specified",
+  conditionNew: "New",
+  conditionUsed: "Used",
+  
+  // Price & Exchange
+  perMonth: "/month",
+  exchange: "Exchange",
+  
+  // Badges
+  shippingAvailable: "Shipping available",
+  
+  // Sections
+  description: "Description",
+  seeMore: "... See more",
+  postedOn: "Posted on",
+  postedBy: "Posted by",
+  joined: "Joined",
+  recently: "Recently",
+  
+  // Map
+  mapCaption: "Map is approximate to keep seller's location private.",
+  
+  // Buttons
+  call: "Call",
+  chat: "Chat",
+  delete: "Delete",
+  editProduct: "Edit Product",
+  
+  // Delete Confirmation
+  deleteTitle: "Delete Product",
+  deleteMessage: "Are you sure you want to delete this product? This action cannot be undone.",
+  cancel: "Cancel",
+  deleteConfirm: "Delete",
+  deleteSuccess: "Success",
+  deleteSuccessMessage: "Product deleted successfully",
+  deleteError: "Error",
+  deleteErrorMessage: "Failed to delete product",
+  ok: "OK",
+  
+  // Menu Options
+  shareItem: "Share item",
+  reportItem: "Report this item",
+  copyLink: "Copy link",
+  
+  // Errors
+  error: "Error",
+  errorMessage: "Failed to fetch product details.",
+  sellerNotAvailable: "Seller information is not available.",
+  failedToUpdateLike: "Failed to update like status",
+},
+  addListing: {
+      addListing: "Add Listing",
+      photos: "Photos",
+      addPhoto: "Add Photo",
+      title: "Title",
+      titlePlaceholder: "e.g., iPhone 15 Pro Max 256GB",
+      description: "Description",
+      descriptionPlaceholder: "Describe your item, its condition, and any details.",
+      category: "Category",
+      selectCategory: "Select Category",
+      selectSubcategory: "Select Subcategory",
+      selectSubSubcategory: "Select Sub-subcategory",
+      selectCategoryPlaceholder: "Select a Category",
+      dealType: "Deal Type",
+      alsoExchange: "Also accept Exchange",
+      price: "Price",
+      pricePlaceholder: "Enter price (optional for exchange)",
+      phoneNumber: "Phone Number",
+      phoneNumberPlaceholder: "Your contact number (optional)",
+      condition: "Condition",
+      new: "New",
+      used: "Used",
+      deliveryMethod: "Delivery Method",
+      selectDeliveryMethod: "Select Delivery Method",
+      selectDeliveryPlaceholder: "Select delivery preference",
+      inPersonMeeting: "In-person Meeting",
+      delivery: "Delivery",
+      both: "Both",
+      close: "Close",
+      publishListing: "Publish Listing",
+      uploading: "Uploading",
+      photo: "photo",
+      photos: "photos",
+      ok: "OK",
+      
+      // Alerts & Errors
+      uploadInProgress: "Upload in Progress",
+      uploadInProgressMessage: "Please wait for the upload to complete before going back.",
+      discardChanges: "Discard Changes?",
+      discardChangesMessage: "You have unsaved changes. Are you sure you want to go back?",
+      cancel: "Cancel",
+      discard: "Discard",
+      continue: "Continue",
+      error: "Error",
+      success: "Success",
+      
+      // Validation Errors
+      errorAtLeastOnePhoto: "Please add at least one photo.",
+      errorEnterTitle: "Please enter a title.",
+      errorAddDescription: "Please add a description.",
+      errorEnterPrice: "Please enter a price.",
+      errorSelectCategory: "Please select a category.",
+      errorSelectDelivery: "Please select a delivery method.",
+      fillAllFields: "Please fill in all required fields.",
+      
+      // Upload Errors
+      permissionRequired: "Permission Required",
+      permissionRequiredMessage: "We need access to your photos to upload an image.",
+      imageTooLarge: "Image Too Large",
+      imageTooLargeMessage: "The image is too large. Please choose a smaller image.",
+      unableToSelectImage: "Unable to select image",
+      uploadError: "Upload Error",
+      failedToUploadImage: "Failed to upload image",
+      imageUploadFailed: "Image Upload Failed",
+      allImageUploadsFailed: "All image uploads failed.",
+      
+      // Loading & Success
+      loadingCategories: "Loading categories...",
+      pleaseLogin: "Please log in to create a listing",
+      listingPublished: "Listing published successfully!",
+      
+      // Database Errors
+      unableToLoadCategories: "Unable to load categories: ",
+      unableToLoadSubcategories: "Unable to load subcategories",
+      unableToLoadSubSubcategories: "Unable to load sub-subcategories",
+      mustBeLoggedIn: "You must be logged in to create a listing.",
+      userNotAuthenticated: "User not authenticated",
+      errorOccurred: "An error occurred: ",
+      unknownError: "Unknown error",
+      unableToAddProduct: "Unable to add product",
+      invalidCategory: "Invalid category or user reference.",
+      noPermission: "You do not have permission to add products",
+      productExists: "This product already exists"
+    },
     // <<< ADDED KEYS FOR LANGUAGE SCREEN >>>
     language: "Language",
     selectLanguage: "Select Language",
@@ -43,24 +205,37 @@ settingsScreen: {
       profile: "Profile",
     },
     // in lib/i18n.ts, inside the en: { ... } block
-filters: {
-  title: "Filters",
-  reset: "Reset",
-  sortBy: "Sort By",
-  location: "Location",
-  deliveryMethods: "Delivery Methods",
-  priceRange: "Price Range",
-  min: "Min",
-  max: "Max",
-  thousandHint: "1 = 1,000 DA",
-  millionHint: "1 = 1,000,000 DA",
-  itemCondition: "Item Condition",
-  condition: {
-    all: "All",
-    new: "New",
-    used: "Used",
-  },
-  seeResults: "See Results",
+filterss: {
+ "title": "Filters",
+  "reset": "Reset",
+  "all": "All",
+  "bestMatch": "Best Match",
+  "mostRecent": "Most Recent",
+  "lowestPrice": "Lowest Price",
+  "highestPrice": "Highest Price",
+  "nearest": "Nearest",
+  "allMethods": "All Methods",
+  "pickup": "Pickup",
+  "delivery": "Delivery",
+  "shipping": "Shipping",
+  "new": "New",
+  "used": "Used",
+  "allLocations": "All Locations",
+  "da": "DA",
+  "thousands": "Thousands",
+  "millions": "Millions",
+  "category": "Category",
+  "sortBy": "Sort By",
+  "location": "Location",
+  "deliveryMethods": "Delivery Methods",
+  "priceUnit": "Price Unit",
+  "standardPricing": "Standard pricing",
+  "priceRange": "Price Range",
+  "min": "Min",
+  "max": "Max",
+  "itemCondition": "Item Condition",
+  "seeResults": "See Results",
+  "filteringResults": "Filtering results for"
 },
 
 // ... other keys
@@ -82,22 +257,6 @@ notificationsScreen: {
 },
 
 // French
-notificationsScreen: {
-  title: "Notifications",
-  markAllRead: "Tout marquer comme lu",
-  noNotifications: "Aucune notification pour le moment",
-  emptySubtext: "Quand quelqu’un aime vos produits ou vous suit, cela apparaîtra ici",
-  justNow: "à l’instant",
-  minutesAgo: "il y a {{count}} min",
-  hoursAgo: "il y a {{count}} h",
-  daysAgo: "il y a {{count}} j",
-  weeksAgo: "il y a {{count}} sem",
-  likedProduct: "a aimé votre produit « {{product}} » ❤️",
-  likedGeneric: "a aimé votre produit ❤️",
-  startedFollowing: "a commencé à vous suivre 👤",
-  commented: "a commenté votre publication 💬",
-  mentioned: "vous a mentionné dans une publication 📣",
-},
 
 // <<< ADDED KEYS FOR PROFILE CONTENT >>>
 profileContent: {
@@ -133,31 +292,8 @@ profileContent: {
   HomemadeHandcrafted: "Homemade & Handcrafted",
 
 
-    addListing: {
-      addListing: "Add Listing",
-      photos: "Photos",
-      addPhoto: "Add Photo",
-      title: "Title",
-      titlePlaceholder: "e.g., iPhone 15 Pro Max 256GB",
-      description: "Description",
-      descriptionPlaceholder: "Describe your item, its condition, and any details.",
-      category: "Category",
-      selectCategoryPlaceholder: "Select a Category",
-      dealType: "Deal Type",
-      alsoExchange: "Also accept Exchange",
-      price: "Price",
-      pricePlaceholder: "Enter price (optional for exchange)",
-      phoneNumber: "Phone Number",
-      phoneNumberPlaceholder: "Your contact number (optional)",
-      condition: "Condition",
-      new: "New",
-      used: "Used",
-      deliveryMethod: "Delivery Method",
-      selectDeliveryPlaceholder: "Select delivery preference",
-      publishListing: "Publish Listing",
-      uploading: "Uploading",
-      photo: "photo",
-      photos: "photos",},
+
+    
       // Subcategories - Electronics
       Phones: "Phones",
       PhoneCases: "Phone Cases",
@@ -236,6 +372,21 @@ profileContent: {
   },
   
   fr: {
+  search: {
+  "title": "Rechercher",
+  "subtitle": "Rechercher dans le Marché Local",
+  "placeholder": "Votre recherche",
+  "allCategories": "Toutes les catégories",
+  "searchButton": "RECHERCHER",
+  "recentSearches": "Recherches récentes",
+  "noRecentSearches": "Aucune recherche récente",
+  "emptySearchTitle": "Recherche vide",
+  "emptySearchMessage": "Veuillez entrer un terme de recherche",
+  "noResultsTitle": "Aucun résultat",
+  "noResultsMessage": "Aucun produit trouvé correspondant à votre recherche",
+  "errorTitle": "Erreur",
+  "errorMessage": "Échec de la recherche : "
+},
     // <<< ADDED KEYS FOR LANGUAGE SCREEN >>>
     language: "Langue",
     selectLanguage: "Sélectionner la langue",
@@ -281,6 +432,100 @@ notificationsScreen: {
   commented: "a commenté votre publication 💬",
   mentioned: "vous a mentionné dans une publication 📣",
 },
+filterss: {
+  "title": "Filtres",
+  "reset": "Réinitialiser",
+  "all": "Tout",
+  "bestMatch": "Meilleure correspondance",
+  "mostRecent": "Plus récent",
+  "lowestPrice": "Prix le plus bas",
+  "highestPrice": "Prix le plus élevé",
+  "nearest": "Le plus proche",
+  "allMethods": "Toutes les méthodes",
+  "pickup": "Retrait",
+  "delivery": "Livraison",
+  "shipping": "Expédition",
+  "new": "Neuf",
+  "used": "Utilisé",
+  "allLocations": "Tous les emplacements",
+  "da": "DA",
+  "thousands": "Milliers",
+  "millions": "Millions",
+  "category": "Catégorie",
+  "sortBy": "Trier par",
+  "location": "Emplacement",
+  "deliveryMethods": "Méthodes de livraison",
+  "priceUnit": "Unité de prix",
+  "standardPricing": "Prix standard",
+  "priceRange": "Fourchette de prix",
+  "min": "Min",
+  "max": "Max",
+  "itemCondition": "État de l'article",
+  "seeResults": "Voir les résultats",
+  "filteringResults": "Filtrage des résultats pour"
+},
+productDetail: {
+  // Loading & Errors
+  loadingText: "Chargement des détails du produit...",
+  productNotFound: "Produit introuvable.",
+  errorLoading: "Échec du chargement du produit.",
+  
+  // Header Actions
+  loginRequired: "Connexion requise",
+  loginRequiredMessage: "Veuillez vous connecter pour aimer les produits",
+  
+  // Product Info
+  condition: "État",
+  conditionNotSpecified: "État non spécifié",
+  conditionNew: "Neuf",
+  conditionUsed: "Utilisé",
+  
+  // Price & Exchange
+  perMonth: "/mois",
+  exchange: "Échange",
+  
+  // Badges
+  shippingAvailable: "Livraison disponible",
+  
+  // Sections
+  description: "Description",
+  seeMore: "... Voir plus",
+  postedOn: "Publié le",
+  postedBy: "Publié par",
+  joined: "Inscrit",
+  recently: "Récemment",
+  
+  // Map
+  mapCaption: "La carte est approximative pour préserver la confidentialité du vendeur.",
+  
+  // Buttons
+  call: "Appeler",
+  chat: "Discuter",
+  delete: "Supprimer",
+  editProduct: "Modifier le produit",
+  
+  // Delete Confirmation
+  deleteTitle: "Supprimer le produit",
+  deleteMessage: "Êtes-vous sûr de vouloir supprimer ce produit ? Cette action ne peut pas être annulée.",
+  cancel: "Annuler",
+  deleteConfirm: "Supprimer",
+  deleteSuccess: "Succès",
+  deleteSuccessMessage: "Produit supprimé avec succès",
+  deleteError: "Erreur",
+  deleteErrorMessage: "Échec de la suppression du produit",
+  ok: "OK",
+  
+  // Menu Options
+  shareItem: "Partager l'article",
+  reportItem: "Signaler cet article",
+  copyLink: "Copier le lien",
+  
+  // Errors
+  error: "Erreur",
+  errorMessage: "Échec de la récupération des détails du produit.",
+  sellerNotAvailable: "Les informations du vendeur ne sont pas disponibles.",
+  failedToUpdateLike: "Échec de la mise à jour du statut j'aime",
+},
 // <<< ADDED KEYS FOR PROFILE CONTENT >>>
 profileContent: {
   posts: "Annonces",
@@ -306,33 +551,84 @@ profile: {
       notifications: "Notifications",
     },
     addListing: {
-      addListing: "Ajouter une Annonce",
-      photos: "Photos",
-      addPhoto: "Ajouter Photo",
-      title: "Titre",
-      titlePlaceholder: "ex: iPhone 15 Pro Max 256GB",
-      description: "Description",
-      descriptionPlaceholder: "Décrivez votre article, son état et tout détail.",
-      category: "Catégorie",
-      selectCategoryPlaceholder: "Sélectionner une Catégorie",
-      dealType: "Type d'Affaire",
-      alsoExchange: "Accepter également l'Échange",
-      price: "Prix",
-      pricePlaceholder: "Entrez le prix (optionnel pour échange)",
-      phoneNumber: "Numéro de Téléphone",
-      phoneNumberPlaceholder: "Votre numéro de contact (optionnel)",
-      condition: "État",
-      new: "Neuf",
-      used: "Utilisé",
-      deliveryMethod: "Méthode de Livraison",
-      selectDeliveryPlaceholder: "Sélectionner la préférence de livraison",
-      publishListing: "Publier l'Annonce",
-      uploading: "Téléchargement",
-      photo: "photo",
-      photos: "photos",},
-    // <<< ADDED KEYS FOR TAB BAR >>>
-    
-    // inside fr: { ... }
+      addListing: "Ajouter une annonce",
+      photos: "Photos",
+      addPhoto: "Ajouter une photo",
+      title: "Titre",
+      titlePlaceholder: "ex. iPhone 15 Pro Max 256Go",
+      description: "Description",
+      descriptionPlaceholder: "Décrivez votre article, son état et tout détail.",
+      category: "Catégorie",
+      selectCategory: "Sélectionner une catégorie",
+      selectSubcategory: "Sélectionner une sous-catégorie",
+      selectSubSubcategory: "Sélectionner une sous-sous-catégorie",
+      selectCategoryPlaceholder: "Sélectionner une catégorie",
+      dealType: "Type de transaction",
+      alsoExchange: "Accepte aussi l'échange",
+      price: "Prix",
+      pricePlaceholder: "Entrez le prix (facultatif pour échange)",
+      phoneNumber: "Numéro de téléphone",
+      phoneNumberPlaceholder: "Votre numéro de contact (facultatif)",
+      condition: "État",
+      new: "Neuf",
+      used: "Usagé",
+      deliveryMethod: "Méthode de livraison",
+      selectDeliveryMethod: "Sélectionner une méthode de livraison",
+      selectDeliveryPlaceholder: "Sélectionnez la préférence de livraison",
+      inPersonMeeting: "Rencontre en personne",
+      delivery: "Livraison",
+      both: "Les deux",
+      close: "Fermer",
+      publishListing: "Publier l'annonce",
+      uploading: "Téléchargement",
+      photo: "photo",
+      photos: "photos",
+      ok: "OK",
+      
+      uploadInProgress: "Téléchargement en cours",
+      uploadInProgressMessage: "Veuillez attendre la fin du téléchargement avant de revenir.",
+      discardChanges: "Abandonner les modifications ?",
+      discardChangesMessage: "Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir revenir ?",
+      cancel: "Annuler",
+      discard: "Abandonner",
+      continue: "Continuer",
+      error: "Erreur",
+      success: "Succès",
+      
+      errorAtLeastOnePhoto: "Veuillez ajouter au moins une photo.",
+      errorEnterTitle: "Veuillez saisir un titre.",
+      errorAddDescription: "Veuillez ajouter une description.",
+      errorEnterPrice: "Veuillez saisir un prix.",
+      errorSelectCategory: "Veuillez sélectionner une catégorie.",
+      errorSelectDelivery: "Veuillez sélectionner une méthode de livraison.",
+      fillAllFields: "Veuillez remplir tous les champs obligatoires.",
+      
+      permissionRequired: "Autorisation requise",
+      permissionRequiredMessage: "Nous avons besoin d'accéder à vos photos pour télécharger une image.",
+      imageTooLarge: "Image trop grande",
+      imageTooLargeMessage: "L'image est trop grande. Veuillez choisir une image plus petite.",
+      unableToSelectImage: "Impossible de sélectionner l'image",
+      uploadError: "Erreur de téléchargement",
+      failedToUploadImage: "Échec du téléchargement de l'image",
+      imageUploadFailed: "Échec du téléchargement de l'image",
+      allImageUploadsFailed: "Tous les téléchargements d'images ont échoué.",
+      
+      loadingCategories: "Chargement des catégories...",
+      pleaseLogin: "Veuillez vous connecter pour créer une annonce",
+      listingPublished: "Annonce publiée avec succès !",
+      
+      unableToLoadCategories: "Impossible de charger les catégories : ",
+      unableToLoadSubcategories: "Impossible de charger les sous-catégories",
+      unableToLoadSubSubcategories: "Impossible de charger les sous-sous-catégories",
+      mustBeLoggedIn: "Vous devez être connecté pour créer une annonce.",
+      userNotAuthenticated: "Utilisateur non authentifié",
+      errorOccurred: "Une erreur s'est produite : ",
+      unknownError: "Erreur inconnue",
+      unableToAddProduct: "Impossible d'ajouter le produit",
+      invalidCategory: "Catégorie ou référence utilisateur non valide.",
+      noPermission: "Vous n'avez pas la permission d'ajouter des produits",
+      productExists: "Ce produit existe déjà"
+    },
 settingsScreen: {
   general: "Général",
   notifications: "Notifications",
@@ -347,25 +643,6 @@ settingsScreen: {
   help: "Aide",
   version: "Version",
   areYouSureLogout: "Êtes-vous sûr de vouloir vous déconnecter ?",
-},
-filters: {
-  title: "Filtres",
-  reset: "Réinitialiser",
-  sortBy: "Trier par",
-  location: "Emplacement",
-  deliveryMethods: "Méthodes de livraison",
-  priceRange: "Fourchette de prix",
-  min: "Min",
-  max: "Max",
-  thousandHint: "1 = 1 000 DA",
-  millionHint: "1 = 1 000 000 DA",
-  itemCondition: "État de l'article",
-  condition: {
-    all: "Tous",
-    new: "Neuf",
-    used: "D'occasion",
-  },
-  seeResults: "Voir les résultats",
 },
 
 // Assuming these are at the root level:
@@ -549,25 +826,7 @@ notificationsScreen: {
   commented: "علق على منشورك 💬",
   mentioned: "ذكرَك في منشور 📣",
 },
-filters: {
-  title: "الفلاتر",
-  reset: "إعادة التعيين",
-  sortBy: "ترتيب حسب",
-  location: "الموقع",
-  deliveryMethods: "طرق التوصيل",
-  priceRange: "نطاق السعر",
-  min: "الأدنى",
-  max: "الأعلى",
-  thousandHint: "1 = 1,000 دج",
-  millionHint: "1 = 1,000,000 دج",
-  itemCondition: "حالة المنتج",
-  condition: {
-    all: "الكل",
-    new: "جديد",
-    used: "مستعمل",
-  },
-  seeResults: "عرض النتائج",
-},
+
 
 // ... (rest of the file)
     // 👇👇👇 ADD NEW KEYS FOR PROFILE SCREEN HERE 👇👇👇
@@ -581,32 +840,117 @@ filters: {
       editProfile: "تعديل الملف الشخصي", // Example: Edit Profile button
       notifications: "الإشعارات", // Example: Notification setting
     },
-   addListing: {
-      addListing: "إضافة إعلان",
-      photos: "الصور",
-      addPhoto: "إضافة صورة",
-      title: "العنوان",
-      titlePlaceholder: "مثال: ايفون 15 برو ماكس 256 جيجا",
-      description: "الوصف",
-      descriptionPlaceholder: "صف السلعة، حالتها، وأي تفاصيل أخرى.",
-      category: "الفئة",
-      selectCategoryPlaceholder: "اختر فئة",
-      dealType: "نوع الصفقة",
-      alsoExchange: "أقبل التبادل أيضاً",
-      price: "السعر",
-      pricePlaceholder: "أدخل السعر (اختياري للتبادل)",
-      phoneNumber: "رقم الهاتف",
-      phoneNumberPlaceholder: "رقم الاتصال الخاص بك (اختياري)",
-      condition: "الحالة",
-      new: "جديد",
-      used: "مستعمل",
-      deliveryMethod: "طريقة التسليم",
-      selectDeliveryPlaceholder: "اختر طريقة التسليم المفضلة",
-      publishListing: "نشر الإعلان",
-      uploading: "جاري التحميل",
-      photo: "صورة",
-      photos: "صور", },
-    // Categories
+filterss: {
+  title: "الفلاتر",
+  "reset": "إعادة تعيين",
+  "all": "الكل",
+  "bestMatch": "أفضل تطابق",
+  "mostRecent": "الأحدث",
+  "lowestPrice": "أقل سعر",
+  "highestPrice": "أعلى سعر",
+  "nearest": "الأقرب",
+  "allMethods": "جميع الطرق",
+  "pickup": "الاستلام",
+  "delivery": "التوصيل",
+  "shipping": "الشحن",
+  "new": "جديد",
+  "used": "مستعمل",
+  "allLocations": "جميع المواقع",
+  "da": "دج",
+  "thousands": "آلاف",
+  "millions": "ملايين",
+  "category": "الفئة",
+  "sortBy": "ترتيب حسب",
+  "location": "الموقع",
+  "deliveryMethods": "طرق التوصيل",
+  "priceUnit": "وحدة السعر",
+  "standardPricing": "تسعير قياسي",
+  "priceRange": "نطاق السعر",
+  "min": "الحد الأدنى",
+  "max": "الحد الأقصى",
+  "itemCondition": "حالة العنصر",
+  "seeResults": "عرض النتائج",
+  "filteringResults": "تصفية النتائج لـ"
+},
+   addListing: {
+      addListing: "إضافة إعلان",
+      photos: "الصور",
+      addPhoto: "إضافة صورة",
+      title: "العنوان",
+      titlePlaceholder: "مثال: iPhone 15 Pro Max 256GB",
+      description: "الوصف",
+      descriptionPlaceholder: "صف المنتج، حالته، وأي تفاصيل.",
+      category: "الفئة",
+      selectCategory: "اختر الفئة",
+      selectSubcategory: "اختر الفئة الفرعية",
+      selectSubSubcategory: "اختر الفئة الفرعية الفرعية",
+      selectCategoryPlaceholder: "اختر فئة",
+      dealType: "نوع الصفقة",
+      alsoExchange: "أقبل أيضًا المقايضة",
+      price: "السعر",
+      pricePlaceholder: "أدخل السعر (اختياري للمقايضة)",
+      phoneNumber: "رقم الهاتف",
+      phoneNumberPlaceholder: "رقم الاتصال الخاص بك (اختياري)",
+      condition: "الحالة",
+      new: "جديد",
+      used: "مستعمل",
+      deliveryMethod: "طريقة التسليم",
+      selectDeliveryMethod: "اختر طريقة التسليم",
+      selectDeliveryPlaceholder: "اختر تفضيل التسليم",
+      inPersonMeeting: "لقاء شخصي",
+      delivery: "توصيل",
+      both: "كلاهما",
+      close: "إغلاق",
+      publishListing: "نشر الإعلان",
+      uploading: "جاري الرفع",
+      photo: "صورة",
+      photos: "صور",
+      ok: "حسنًا",
+      
+      uploadInProgress: "جاري الرفع",
+      uploadInProgressMessage: "يرجى الانتظار حتى يكتمل الرفع قبل العودة.",
+      discardChanges: "تجاهل التغييرات؟",
+      discardChangesMessage: "لديك تغييرات غير محفوظة. هل أنت متأكد أنك تريد العودة؟",
+      cancel: "إلغاء",
+      discard: "تجاهل",
+      continue: "متابعة",
+      error: "خطأ",
+      success: "نجاح",
+      
+      errorAtLeastOnePhoto: "الرجاء إضافة صورة واحدة على الأقل.",
+      errorEnterTitle: "الرجاء إدخال العنوان.",
+      errorAddDescription: "الرجاء إضافة وصف.",
+      errorEnterPrice: "الرجاء إدخال السعر.",
+      errorSelectCategory: "الرجاء اختيار فئة.",
+      errorSelectDelivery: "الرجاء اختيار طريقة التسليم.",
+      fillAllFields: "الرجاء ملء جميع الحقول المطلوبة.",
+      
+      permissionRequired: "الإذن مطلوب",
+      permissionRequiredMessage: "نحتاج إلى الوصول إلى صورك لرفع صورة.",
+      imageTooLarge: "الصورة كبيرة جدًا",
+      imageTooLargeMessage: "الصورة كبيرة جدًا. الرجاء اختيار صورة أصغر.",
+      unableToSelectImage: "تعذر تحديد الصورة",
+      uploadError: "خطأ في الرفع",
+      failedToUploadImage: "فشل رفع الصورة",
+      imageUploadFailed: "فشل رفع الصورة",
+      allImageUploadsFailed: "فشلت جميع عمليات رفع الصور.",
+      
+      loadingCategories: "جاري تحميل الفئات...",
+      pleaseLogin: "يرجى تسجيل الدخول لإنشاء إعلان",
+      listingPublished: "تم نشر الإعلان بنجاح!",
+      
+      unableToLoadCategories: "تعذر تحميل الفئات: ",
+      unableToLoadSubcategories: "تعذر تحميل الفئات الفرعية",
+      unableToLoadSubSubcategories: "تعذر تحميل الفئات الفرعية الفرعية",
+      mustBeLoggedIn: "يجب تسجيل الدخول لإنشاء إعلان.",
+      userNotAuthenticated: "المستخدم غير مصادق عليه",
+      errorOccurred: "حدث خطأ: ",
+      unknownError: "خطأ غير معروف",
+      unableToAddProduct: "تعذر إضافة المنتج",
+      invalidCategory: "فئة أو مرجع مستخدم غير صالح.",
+      noPermission: "ليس لديك إذن لإضافة منتجات",
+      productExists: "هذا المنتج موجود بالفعل"
+    },
     categories: {
   Food: "طعام",
   ComputersAccessories: "حواسيب وإكسسوارات",
@@ -664,7 +1008,83 @@ filters: {
       WashingMachine: "غسالات",
       FullPack: "حزمة كاملة",
     },
-    
+    productDetail: {
+  // Loading & Errors
+  loadingText: "جارٍ تحميل تفاصيل المنتج...",
+  productNotFound: "لم يتم العثور على المنتج.",
+  errorLoading: "فشل تحميل المنتج.",
+  
+  // Header Actions
+  loginRequired: "تسجيل الدخول مطلوب",
+  loginRequiredMessage: "يرجى تسجيل الدخول للإعجاب بالمنتجات",
+  
+  // Product Info
+  condition: "الحالة",
+  conditionNotSpecified: "الحالة غير محددة",
+  conditionNew: "جديد",
+  conditionUsed: "مستعمل",
+  
+  // Price & Exchange
+  perMonth: "/شهر",
+  exchange: "مقايضة",
+  
+  // Badges
+  shippingAvailable: "الشحن متوفر",
+  
+  // Sections
+  description: "الوصف",
+  seeMore: "... عرض المزيد",
+  postedOn: "نُشر في",
+  postedBy: "نُشر بواسطة",
+  joined: "انضم",
+  recently: "مؤخراً",
+  
+  // Map
+  mapCaption: "الخريطة تقريبية للحفاظ على خصوصية موقع البائع.",
+  
+  // Buttons
+  call: "اتصال",
+  chat: "محادثة",
+  delete: "حذف",
+  editProduct: "تعديل المنتج",
+  
+  // Delete Confirmation
+  deleteTitle: "حذف المنتج",
+  deleteMessage: "هل أنت متأكد من رغبتك في حذف هذا المنتج؟ لا يمكن التراجع عن هذا الإجراء.",
+  cancel: "إلغاء",
+  deleteConfirm: "حذف",
+  deleteSuccess: "نجح",
+  deleteSuccessMessage: "تم حذف المنتج بنجاح",
+  deleteError: "خطأ",
+  deleteErrorMessage: "فشل حذف المنتج",
+  ok: "حسناً",
+  
+  // Menu Options
+  shareItem: "مشاركة العنصر",
+  reportItem: "الإبلاغ عن هذا العنصر",
+  copyLink: "نسخ الرابط",
+  
+  // Errors
+  error: "خطأ",
+  errorMessage: "فشل في جلب تفاصيل المنتج.",
+  sellerNotAvailable: "معلومات البائع غير متوفرة.",
+  failedToUpdateLike: "فشل تحديث حالة الإعجاب",
+},
+search: {
+  "title": "بحث",
+  "subtitle": "البحث في السوق المحلي",
+  "placeholder": "بحثك",
+  "allCategories": "جميع الفئات",
+  "searchButton": "بحث",
+  "recentSearches": "عمليات البحث الأخيرة",
+  "noRecentSearches": "لا توجد عمليات بحث حديثة",
+  "emptySearchTitle": "بحث فارغ",
+  "emptySearchMessage": "الرجاء إدخال مصطلح بحث",
+  "noResultsTitle": "لا توجد نتائج",
+  "noResultsMessage": "لم يتم العثور على منتجات تطابق بحثك",
+  "errorTitle": "خطأ",
+  "errorMessage": "فشل في تنفيذ البحث: "
+},
     // Filter tabs
     filters: {
       All: "الكل",

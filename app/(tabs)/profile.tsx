@@ -84,14 +84,7 @@ const ProductCard: React.FC<{
     const tagColors = getTagColor();
 
     const formatPrice = () => {
-        // **TRANSLATION APPLIED HERE for 'exchange'**
-        // Inside ProductCard's formatPrice function:
-if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
-        
-        // This is a complex format string. **DA/mo** and **DA** currency symbols 
-        // should ideally be configured for the locale, but for a quick fix, 
-        // we'll assume they are part of a template that might be passed to i18n later.
-        // For now, only 'exchange' is translated as requested.
+        if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
         
         if (product.price >= 10000) {
             const millions = product.price / 10000;
@@ -106,19 +99,15 @@ if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
             }
             
             if (product.listing_type === "rent") {
-                // Hardcoded " million DA/mo" - consider i18n.t('priceFormatRent', { value: formattedMillions, currency: 'DA' })
-                return `${formattedMillions} million DA/mo`; 
+                return `${formattedMillions} million ${i18n.t('product.priceSuffixDAMonth')}`;
             }
-            // Hardcoded " million DA" - consider i18n.t('priceFormatSell', { value: formattedMillions, currency: 'DA' })
-            return `${formattedMillions} million DA`; 
+            return `${formattedMillions} million ${i18n.t('product.priceSuffixDA')}`;
         }
         
         if (product.listing_type === "rent") {
-            // Hardcoded " DA/mo"
-            return `${product.price.toLocaleString()} DA/mo`;
+            return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDAMonth')}`;
         }
-        // Hardcoded " DA"
-        return `${product.price.toLocaleString()} DA`;
+        return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDA')}`;
     };
 
     const handleUnlike = async () => {
@@ -136,7 +125,7 @@ if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
                 <View style={styles.imageWrapper}>
                     <Image
                         source={{
-                            uri: product.image_url || "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+                            uri: product.image_url || `https://placehold.co/250x250/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
                         }}
                         style={styles.cardImage}
                     />
@@ -157,7 +146,7 @@ if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity 
-                            style={styles.heartIconFilled}
+                            style={styles.heartIcon}
                             onPress={handleUnlike}
                         >
                             <Ionicons name="heart" size={22} color="#FF5B5B" />
@@ -180,6 +169,7 @@ if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
         </View>
     );
 };
+
 
 const ProfileScreen = () => {
     const router = useRouter();
@@ -526,7 +516,7 @@ const ProfileScreen = () => {
                         onPress={() => setActiveTab('Post')}
                     >
                         {/* ✅ TRANSLATED: Posts */}
-                        <Text style={[styles.tabText, activeTab === 'Post' && styles.tabTextActive]}>{i18n.t('posts')}</Text>
+                        <Text style={[styles.tabText, activeTab === 'Post' && styles.tabTextActive]}>{i18n.t('profileContent.posts')}</Text>
                     </TouchableOpacity>
                     
                     {/* Liked Tab Button */}
@@ -591,8 +581,107 @@ const ProfileScreen = () => {
 
 // ... (Rest of the StyleSheet remains the same)
 const styles = StyleSheet.create({
+    cardContainer: {
+        width: CARD_WIDTH,
+        marginBottom: 8,
+        borderRadius: 20,
+        backgroundColor: "white",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    
+    cardTouchable: {
+        borderRadius: 20,
+        overflow: 'hidden',
+        flex: 1,
+    },
+    
+    imageWrapper: {
+        width: "100%",
+        aspectRatio: 0.8,
+        backgroundColor: "#F7F7F7",
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        overflow: "hidden",
+    },
+    
+    cardImage: {
+        width: "100%",
+        height: "100%",
+        resizeMode: "cover",
+    },
+    
+    deliveryBadgeNew: {
+        position: "absolute",
+        bottom: 10,
+        left: 10,
+        backgroundColor: "white",
+        padding: 6,
+        borderRadius: 8,
+        shadowColor: "#000",
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    
+    threeDotsMenu: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+        padding: 6,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    
+    heartIcon: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+        padding: 6,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    
+    cardDetails: {
+        padding: 12,
+    },
+    
+    priceTag: {
+        alignSelf: "flex-start",
+        borderRadius: 6,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        marginBottom: 6,
+    },
+    
+    priceText: {
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    
+    cardTitle: {
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#333",
+        minHeight: 34,
+        marginBottom: 4,
+    },
     container: {
         flex: 1,
+        paddingBottom:50,
         // *** CHANGE 1: Main screen background to white (#FFFFFF) ***
         backgroundColor: '#FFFFFF', 
     },
@@ -800,52 +889,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 0,
     },
-    cardContainer: {
-        width: CARD_WIDTH,
-        marginBottom: 16,
-        borderRadius: 12,
-        backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    cardTouchable: {
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    imageWrapper: {
-        position: 'relative',
-    },
-    cardImage: {
-        width: '100%',
-        height: CARD_WIDTH,
-        backgroundColor: '#E0E0E0',
-    },
-    deliveryBadgeNew: {
-        position: 'absolute',
-        bottom: 8,
-        left: 8,
-        backgroundColor: '#D1FAE5', // Light green
-        borderRadius: 10,
-        paddingHorizontal: 6,
-        paddingVertical: 4,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    threeDotsMenu: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        borderRadius: 15,
-        width: 30,
-        height: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    
     heartIconFilled: {
         position: 'absolute',
         top: 8,
@@ -862,27 +906,7 @@ const styles = StyleSheet.create({
         shadowRadius: 2,
         elevation: 3,
     },
-    cardDetails: {
-        padding: 8,
-    },
-    priceTag: {
-        alignSelf: 'flex-start',
-        borderRadius: 6,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        marginBottom: 4,
-    },
-    priceText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    cardTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#333',
-        height: 40, // Ensure two lines can be shown
-        lineHeight: 20,
-    },
+    
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',

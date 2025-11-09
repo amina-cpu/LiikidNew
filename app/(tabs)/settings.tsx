@@ -2,15 +2,15 @@ import { AntDesign, FontAwesome5, Ionicons, MaterialIcons } from "@expo/vector-i
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    Alert,
-    I18nManager,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  I18nManager,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import I18n from "../../lib/i18n";
 import { supabase } from "../../lib/Supabase";
@@ -200,7 +200,7 @@ const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#fff",marginBottom:70, },
   header: {
     flexDirection: "row",
     alignItems: "center",

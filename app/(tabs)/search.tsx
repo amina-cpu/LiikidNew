@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import i18n from '../../lib/i18n';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,7 +28,7 @@ const SearchScreen = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedCategoryName, setSelectedCategoryName] = useState('All Categories');
+  const [selectedCategoryName, setSelectedCategoryName] = useState(i18n.t('search.allCategories'));
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -37,7 +38,7 @@ const SearchScreen = () => {
     useCallback(() => {
       setSearch('');
       setSelectedCategoryId(null);
-      setSelectedCategoryName('All Categories');
+      setSelectedCategoryName(i18n.t('search.allCategories'));
       setShowCategoryPicker(false);
       
       if (user) {
@@ -131,7 +132,7 @@ const SearchScreen = () => {
 
   const handleSearch = async () => {
     if (!search.trim()) {
-      Alert.alert('Empty Search', 'Please enter a search term');
+      Alert.alert(i18n.t('search.emptySearchTitle'), i18n.t('search.emptySearchMessage'));
       return;
     }
 
@@ -178,11 +179,11 @@ const SearchScreen = () => {
             });
           }
         } else {
-          Alert.alert('No Results', 'No products found matching your search');
+          Alert.alert(i18n.t('search.noResultsTitle'), i18n.t('search.noResultsMessage'));
         }
       }
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to perform search: ' + error.message);
+      Alert.alert(i18n.t('search.errorTitle'), i18n.t('search.errorMessage') + error.message);
     } finally {
       setLoading(false);
     }
@@ -217,7 +218,7 @@ const SearchScreen = () => {
       setSelectedCategoryName(cat.name);
     } else {
       setSelectedCategoryId(null);
-      setSelectedCategoryName('All Categories');
+      setSelectedCategoryName(i18n.t('search.allCategories'));
     }
     setShowCategoryPicker(false);
   };
@@ -225,18 +226,18 @@ const SearchScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Search</Text>
+        <Text style={styles.headerTitle}>{i18n.t('search.title')}</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <Ionicons name="close" size={22} color="#000" />
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionLabel}>Search in Local Marketplace</Text>
+      <Text style={styles.sectionLabel}>{i18n.t('search.subtitle')}</Text>
 
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color="#999" />
         <TextInput
-          placeholder="Your search"
+          placeholder={i18n.t('search.placeholder')}
           placeholderTextColor="#999"
           style={styles.input}
           value={search}
@@ -268,7 +269,7 @@ const SearchScreen = () => {
               styles.categoryOptionText,
               !selectedCategoryId && styles.categoryOptionTextActive
             ]}>
-              All Categories
+              {i18n.t('search.allCategories')}
             </Text>
             {!selectedCategoryId && (
               <Ionicons name="checkmark" size={20} color={PRIMARY_TEAL} />
@@ -304,30 +305,37 @@ const SearchScreen = () => {
         ) : (
           <>
             <Ionicons name="search" size={18} color="#fff" />
-            <Text style={styles.searchBtnText}>SEARCH</Text>
+            <Text style={styles.searchBtnText}>{i18n.t('search.searchButton')}</Text>
           </>
         )}
       </TouchableOpacity>
 
-      <Text style={styles.recentLabel}>Recent Searches</Text>
+      <Text style={styles.recentLabel}>{i18n.t('search.recentSearches')}</Text>
 
-      <FlatList
-        data={recentSearches}
-        keyExtractor={(item, index) => `${item}-${index}`}
-        contentContainerStyle={styles.recentList}
-        numColumns={2}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.recentItem}
-            onPress={() => handleRecentSearchTap(item)}
-          >
-            <Text style={styles.recentText}>{item}</Text>
-            <TouchableOpacity onPress={() => removeRecent(item)}>
-              <Ionicons name="close" size={14} color="#777" />
+      {recentSearches.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="time-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyStateText}>{i18n.t('search.noRecentSearches')}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recentSearches}
+          keyExtractor={(item, index) => `${item}-${index}`}
+          contentContainerStyle={styles.recentList}
+          numColumns={2}
+          renderItem={({ item }) => (
+            <TouchableOpacity 
+              style={styles.recentItem}
+              onPress={() => handleRecentSearchTap(item)}
+            >
+              <Text style={styles.recentText} numberOfLines={1}>{item}</Text>
+              <TouchableOpacity onPress={() => removeRecent(item)}>
+                <Ionicons name="close" size={14} color="#777" />
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        )}
-      />
+          )}
+        />
+      )}
     </View>
   );
 };
@@ -465,10 +473,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginRight: 8,
     marginBottom: 8,
+    maxWidth: '48%',
   },
   recentText: {
     fontSize: 13,
     color: '#333',
     marginRight: 4,
+    flex: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 60,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 12,
   },
 });

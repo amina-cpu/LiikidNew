@@ -19,7 +19,7 @@ import {
     View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase'; // Ensure this path is correct
-
+import { getOrCreateConversation } from '../../lib/messaging';
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
 
 // --- Interface Declarations ---
@@ -52,7 +52,6 @@ interface Category {
     delivery: boolean;
 }
 
-// --- ProductCard Component (Unchanged) ---
 const ProductCard: React.FC<{
     product: Product;
     categories: Category[];
@@ -72,12 +71,15 @@ const ProductCard: React.FC<{
         }
     };
 
-    const getPriceLabel = (price: number, type: "sell" | "rent" | "exchange") => {
-        if (type === "exchange") return "Exchange";
-        const suffix = type === "rent" ? "/mo" : "";
-        if (price >= 10000) {
-            const millions = price / 10000;
+    const tagColors = getTagColor();
+
+    const formatPrice = () => {
+        if (product.listing_type === "exchange") return "Exchange";
+        
+        if (product.price >= 10000) {
+            const millions = product.price / 10000;
             let formattedMillions;
+            
             if (millions % 1 === 0) {
                 formattedMillions = millions.toString();
             } else if (millions >= 10) {
@@ -85,12 +87,18 @@ const ProductCard: React.FC<{
             } else {
                 formattedMillions = millions.toFixed(1);
             }
-            return `${formattedMillions} million DA${suffix}`;
+            
+            if (product.listing_type === "rent") {
+                return `${formattedMillions} million DA/mo`;
+            }
+            return `${formattedMillions} million DA`;
         }
-        return `${price.toLocaleString()} DA${suffix}`;
+        
+        if (product.listing_type === "rent") {
+            return `${product.price.toLocaleString()} DA/mo`;
+        }
+        return `${product.price.toLocaleString()} DA`;
     };
-
-    const tagColors = getTagColor();
 
     return (
         <View style={styles.cardContainer}>
@@ -101,10 +109,11 @@ const ProductCard: React.FC<{
                 <View style={styles.imageWrapper}>
                     <Image
                         source={{
-                            uri: product.image_url || "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+                            uri: product.image_url || "https://placehold.co/250x250/E0E0E0/333333?text=No+Image",
                         }}
                         style={styles.cardImage}
                     />
+                    
                     {categoryAcceptsDelivery && (
                         <View style={styles.deliveryBadgeNew}>
                             <MaterialCommunityIcons
@@ -114,16 +123,19 @@ const ProductCard: React.FC<{
                             />
                         </View>
                     )}
+                    
                     <TouchableOpacity style={styles.threeDotsMenu}>
                         <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                     </TouchableOpacity>
                 </View>
+                
                 <View style={styles.cardDetails}>
                     <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
                         <Text style={[styles.priceText, { color: tagColors.text }]}>
-                            {getPriceLabel(product.price, product.listing_type)}
+                            {formatPrice()}
                         </Text>
                     </View>
+                    
                     <Text style={styles.cardTitle} numberOfLines={2}>
                         {product.name}
                     </Text>
@@ -132,7 +144,6 @@ const ProductCard: React.FC<{
         </View>
     );
 };
-
 // --- ActionSheetModal Component (Unchanged) ---
 const ActionSheetModal: React.FC<{
     isVisible: boolean;
@@ -420,7 +431,60 @@ const SomeonesProfileScreen = () => {
             loadProfileData(true);
         }
     }, [currentUserId, targetUserId, isFollowing, loadProfileData]);
+// In your SomeonesProfileScreen file (app/someones_profile/[userId].tsx or similar)
+// Find this section (around line 365 in your current code):
 
+
+// REPLACE IT WITH THIS NEW CODE:
+const handleChatPress = async () => {
+    if (!currentUserId || !targetUserId) {
+        Alert.alert('Error', 'Cannot start conversation. Please log in.');
+        return;
+    }
+
+    console.log('💬 === STARTING CHAT ===');
+    console.log('💬 Current User ID:', currentUserId);
+    console.log('💬 Target User ID:', targetUserId);
+
+    try {
+        console.log('📞 Calling getOrCreateConversation...');
+        const conversationId = await getOrCreateConversation(currentUserId, targetUserId);
+        
+        console.log('📋 Result from getOrCreateConversation:', conversationId);
+        console.log('📋 Type:', typeof conversationId);
+        
+        // Check if we got a valid conversation ID
+        if (!conversationId) {
+            console.error('❌ No conversation ID returned (null/undefined)');
+            Alert.alert('Error', 'Could not create or find conversation. Please check your database.');
+            return;
+        }
+
+        // Validate it's a number
+        if (typeof conversationId !== 'number' || isNaN(conversationId) || conversationId <= 0) {
+            console.error('❌ Invalid conversation ID:', conversationId);
+            Alert.alert('Error', `Invalid conversation ID: ${conversationId}`);
+            return;
+        }
+
+        console.log('✅ Valid conversation ID received:', conversationId);
+        console.log('🚀 Navigating to /chat/' + conversationId);
+        
+        // Navigate to chat
+        router.push(`/chat/${conversationId}`);
+        
+    } catch (error: any) {
+        console.error('❌ === ERROR IN CHAT PRESS ===');
+        console.error('❌ Error type:', error?.constructor?.name);
+        console.error('❌ Error message:', error?.message);
+        console.error('❌ Full error:', error);
+        
+        Alert.alert(
+            'Error', 
+            `Failed to start chat: ${error?.message || 'Unknown error'}. Check console for details.`
+        );
+    }
+};
 
     // ⭐ MODIFIED: Handle Block User
     const handleBlockUser = async () => {
@@ -701,12 +765,12 @@ const SomeonesProfileScreen = () => {
                                         </Text>
                                     </TouchableOpacity>
 
-                                    <TouchableOpacity 
-                                        style={styles.chatButton} 
-                                        onPress={() => Alert.alert("Chat", `Starting chat with ${profileData.username}`)}
-                                    >
-                                        <Text style={styles.chatButtonText}>Chat</Text>
-                                    </TouchableOpacity>
+                                  <TouchableOpacity 
+    style={styles.chatButton} 
+    onPress={handleChatPress}  // Changed from Alert to handleChatPress
+>
+    <Text style={styles.chatButtonText}>Chat</Text>
+</TouchableOpacity>
                                 </>
                             )}
                         </View>
@@ -776,6 +840,7 @@ const SomeonesProfileScreen = () => {
 
 // --- Action Sheet Styles (Unchanged) ---
 const modalStyles = StyleSheet.create({
+    
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -829,8 +894,94 @@ const modalStyles = StyleSheet.create({
 
 // --- Styles (Added Blocked-specific styles) ---
 const styles = StyleSheet.create({
+     cardContainer: {
+        width: CARD_WIDTH,
+        marginBottom: 8,
+        borderRadius: 20,
+        backgroundColor: "white",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    
+    cardTouchable: {
+        borderRadius: 20,
+        overflow: 'hidden',
+        flex: 1,
+    },
+    
+    imageWrapper: {
+        width: "100%",
+        aspectRatio: 0.8,
+        backgroundColor: "#F7F7F7",
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        overflow: "hidden",
+        position: 'relative',
+    },
+    
+    cardImage: {
+        width: "100%",
+        height: "100%",
+        resizeMode: "cover",
+    },
+    
+    deliveryBadgeNew: {
+        position: "absolute",
+        bottom: 10,
+        left: 10,
+        backgroundColor: "white",
+        padding: 6,
+        borderRadius: 8,
+        shadowColor: "#000",
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    
+    threeDotsMenu: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 20,
+        padding: 6,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    
+    cardDetails: {
+        padding: 12,
+    },
+    
+    priceTag: {
+        alignSelf: "flex-start",
+        borderRadius: 6,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        marginBottom: 6,
+    },
+    
+    priceText: {
+        fontSize: 13,
+        fontWeight: "700",
+    },
+    
+    cardTitle: {
+        fontSize: 14,
+        fontWeight: "500",
+        color: "#333",
+        minHeight: 34,
+        marginBottom: 4,
+    },
     container: {
         flex: 1,
+        marginBottom:70,
         backgroundColor: '#F5F5F5',
     },
     centerContent: {
@@ -1058,73 +1209,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 0,
     },
-    cardContainer: {
-        width: CARD_WIDTH,
-        marginBottom: 16,
-        borderRadius: 12,
-        backgroundColor: '#fff',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    cardTouchable: {
-        borderRadius: 12,
-        overflow: 'hidden',
-    },
-    imageWrapper: {
-        position: 'relative',
-    },
-    cardImage: {
-        width: '100%',
-        height: CARD_WIDTH,
-        backgroundColor: '#E0E0E0',
-    },
-    deliveryBadgeNew: {
-        position: 'absolute',
-        bottom: 8,
-        left: 8,
-        backgroundColor: '#D1FAE5',
-        borderRadius: 10,
-        paddingHorizontal: 6,
-        paddingVertical: 4,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
-    },
-    threeDotsMenu: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: 'rgba(0,0,0,0.4)',
-        borderRadius: 15,
-        width: 30,
-        height: 30,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cardDetails: {
-        padding: 8,
-    },
-    priceTag: {
-        alignSelf: 'flex-start',
-        borderRadius: 6,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        marginBottom: 4,
-    },
-    priceText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    cardTitle: {
-        fontSize: 14,
-        fontWeight: '500',
-        color: '#333',
-        height: 40,
-        lineHeight: 20,
-    },
+    
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',

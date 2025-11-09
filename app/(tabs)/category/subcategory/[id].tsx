@@ -27,7 +27,7 @@ const DARK_GRAY = "#333333";
 const ACCENT_RED = "#FF5B5B";
 const ORANGE = "#FF6B35";
 const BLUE = "#4A90E2";
-const CARD_WIDTH = Dimensions.get("window").width / 2 - 20;
+const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
 const SAFE_AREA_PADDING = 40;
 
 const INITIAL_PRODUCT_LIMIT = 8;
@@ -549,7 +549,7 @@ export default function SubcategoryScreen() {
               />
               <TextInput
                 ref={searchInputRef}
-                style={styles.searchInputExpanded}
+                style={styles.searchPlaceholder}
                 placeholder={`Search in ${subcategory?.name || 'this subcategory'}`}
                 placeholderTextColor="#999"
                 value={searchQuery}
@@ -627,7 +627,7 @@ export default function SubcategoryScreen() {
                   color={searchQuery.trim() ? SEARCH_GREEN : "#999"}
                   style={styles.searchIcon}
                 />
-                <Text style={styles.searchPlaceholder} numberOfLines={1}>
+                <Text style={styles.searchInputPlaceholder} numberOfLines={1}>
                   {searchQuery.trim() || `Search in ${subcategory?.name}`}
                 </Text>
               </View>
@@ -774,6 +774,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "white",
+    marginBottom:70,
     paddingTop: SAFE_AREA_PADDING,
   },
   loadingContainer: {
@@ -803,11 +804,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     height: 48,
-    backgroundColor: LIGHT_GRAY,
+    backgroundColor: "#F3F4F6",
     borderRadius: 24,
-    paddingHorizontal: 15,
-    borderWidth: 2,
-    borderColor: "transparent",
+    paddingHorizontal: 16,
+    borderWidth: 0,
+    
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
   },
   searchBarFocused: {
     borderColor: SEARCH_GREEN,
@@ -817,7 +823,7 @@ const styles = StyleSheet.create({
   },
   searchPlaceholder: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: "#999",
   },
   locationContainer: {
@@ -929,77 +935,97 @@ const styles = StyleSheet.create({
     color: "white",
   },
   filterTabsWrapper: {
+    zIndex: 1,
+    backgroundColor: 'white',
     paddingHorizontal: 16,
-    marginBottom: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 0,
   },
-    stickyFilterTabsWrapper: {
-    position: "absolute",
-    top: SAFE_AREA_PADDING ,
+  stickyFilterTabsWrapper: {
+    position: 'absolute',
+    top: SAFE_AREA_PADDING,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "white",
+    zIndex: 20,
+    backgroundColor: 'white',
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
-    zIndex: 100,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+    borderRadius: 16,
+    marginHorizontal: 10,
+    marginTop: 10,
   },
   filterTabs: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: LIGHT_GRAY,
-    borderRadius: 12,
-    padding: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   filterButton: {
     flex: 1,
     paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 2,
   },
   filterButtonActive: {
-    backgroundColor: DARK_GRAY,
+    backgroundColor: "#16A085",
+    shadowColor: "#16A085",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   filterText: {
-    fontWeight: "600",
     fontSize: 14,
-    color: "#666",
+    fontWeight: '600',
+    color: "#6B7280",
   },
   filterTextActive: {
-    color: "white",
+    color: 'white',
+    fontWeight: '700',
   },
+  // 📦 UPDATED PRODUCT GRID - Match homepage spacing
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
+    paddingHorizontal: 8, // Changed from 16 to 8
   },
+  // 📦 UPDATED PRODUCT CARD - Match homepage design
   cardContainer: {
     width: CARD_WIDTH,
-    marginBottom: 16,
-    borderRadius: 16,
+    marginBottom: 8, // Changed from 16 to 8
+    borderRadius: 20, // Changed from 16 to 20
     backgroundColor: "white",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 }, // Increased shadow
+    shadowOpacity: 0.15, // Increased shadow
+    shadowRadius: 12, // Increased shadow
+    elevation: 8, // Increased elevation
   },
   cardTouchable: {
-    borderRadius: 16,
+    borderRadius: 20, // Changed from 16 to 20
     overflow: "hidden",
+    flex: 1,
   },
   imageWrapper: {
     width: "100%",
-    aspectRatio: 1,
+    aspectRatio: 0.8, // Changed from 1 to 0.8 (taller cards)
     backgroundColor: "#F7F7F7",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 20, // Changed from 16 to 20
+    borderTopRightRadius: 20, // Changed from 16 to 20
     overflow: "hidden",
   },
   cardImage: {
@@ -1015,15 +1041,22 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2, // Increased shadow
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 4, // Increased elevation
   },
   heartIcon: {
     position: "absolute",
-    top: 10,
-    right: 10,
-    padding: 5,
+    top: 12, // Changed from 10 to 12
+    right: 12, // Changed from 10 to 12
+    backgroundColor: 'rgba(0,0,0,0.5)', // Added background
+    borderRadius: 20,
+    padding: 6, // Changed from 5 to 6
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
   },
   cardDetails: {
     padding: 12,
@@ -1033,51 +1066,58 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    marginBottom: 6,
+    marginBottom: 6, // Changed from 8 to 6
   },
   priceText: {
-    fontSize: 13,
+    fontSize: 13, // Keep as 13
     fontWeight: "700",
   },
   cardTitle: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 13, // Keep as 13
+    fontWeight: "500", // Changed from 600 to 500
     color: "#333",
-    minHeight: 34,
-    marginBottom: 4,
+    minHeight: 34, // Keep as 34
+    marginBottom: 4, // Keep as 4
   },
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 2, // Keep as 2
   },
   cardDistance: {
     marginLeft: 4,
-    fontSize: 12,
+    marginRight: 4,
+    fontSize: 13,
     color: "#666",
+  },
+  searchInputPlaceholder: {
+    flex: 1,
+    fontSize: 15,
+    color: "#6B7280",
   },
   emptyText: {
     textAlign: "center",
     fontSize: 16,
     color: "#999",
     marginVertical: 20,
+    paddingHorizontal: 16,
   },
   loadMoreContainer: {
-    marginHorizontal: 16,
+    paddingHorizontal: 16,
     marginTop: 20,
-    marginBottom: 20,
-    shadowColor: PRIMARY_TEAL,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 40, // Increased bottom margin
   },
   loadMoreButton: {
     backgroundColor: PRIMARY_TEAL,
-    borderRadius: 30,
+    borderRadius: 14, // Changed from 30 to 14
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: PRIMARY_TEAL,
+    shadowOffset: { width: 0, height: 6 }, // Increased shadow
+    shadowOpacity: 0.4, // Increased shadow
+    shadowRadius: 10, // Increased shadow
+    elevation: 8, // Increased elevation
   },
   loadMoreText: {
     color: "white",

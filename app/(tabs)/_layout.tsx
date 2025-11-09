@@ -1,14 +1,17 @@
+// In your _layout.tsx - Updated to include chat folder
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from 'expo-router';
-import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import i18n from '../../lib/i18n';
 
-const ACTIVE_COLOR = '#00C853'; // green active icon/text
-// --- REVERTED/UPDATED: Both are set to pure black for maximum visibility ---
-const INACTIVE_COLOR = '#545151ff'; // Darkest possible color for inactive icon (was #9E9E9E)
-const TEXT_COLOR = '#000000'; // Darkest possible color for inactive text (was #1C1C1C)
+const ACTIVE_COLOR = '#00C853';
+const INACTIVE_COLOR = '#545151ff';
+const TEXT_COLOR = '#000000';
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 90 : 80;
 
 const TwoChatsIcon = ({ color, size }: { color: string; size: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -42,7 +45,50 @@ export default function TabLayout() {
   const currentRoute = segments.join('/');
   const isHome = currentRoute === '' || currentRoute === 'index';
 
+  const tabBarTranslateY = useRef(new Animated.Value(0)).current;
+  const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+
   const handleHomePress = () => router.push('/');
+
+  // ✅ FIX: Reset tab bar visibility when route changes
+  useEffect(() => {
+    // If not on home screen, always show tab bar
+    if (!isHome) {
+      AsyncStorage.setItem('tabBarVisible', 'true');
+      setIsTabBarVisible(true);
+      Animated.spring(tabBarTranslateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 10,
+      }).start();
+    }
+  }, [currentRoute, isHome]);
+
+  // Listen to visibility changes from AsyncStorage
+  useEffect(() => {
+    const checkVisibility = setInterval(async () => {
+      try {
+        const visibleStr = await AsyncStorage.getItem('tabBarVisible');
+        const visible = visibleStr !== 'false';
+        
+        if (visible !== isTabBarVisible) {
+          setIsTabBarVisible(visible);
+          
+          Animated.spring(tabBarTranslateY, {
+            toValue: visible ? 0 : TAB_BAR_HEIGHT,
+            useNativeDriver: true,
+            tension: 80,
+            friction: 10,
+          }).start();
+        }
+      } catch (error) {
+        console.error('Error reading tab bar visibility:', error);
+      }
+    }, 100);
+
+    return () => clearInterval(checkVisibility);
+  }, [isTabBarVisible]);
 
   return (
     <Tabs
@@ -52,14 +98,19 @@ export default function TabLayout() {
           backgroundColor: 'white',
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
-          height: Platform.OS === 'ios' ? 150 : 100,
-          paddingBottom: Platform.OS === 'ios' ? 30 : 20,
-          paddingTop: 15,
-          elevation: 0,
+          height: TAB_BAR_HEIGHT,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+          paddingTop: 10,
+          elevation: 8,
           shadowColor: '#000',
           shadowOpacity: 0.1,
           shadowRadius: 4,
           shadowOffset: { width: 0, height: -2 },
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          transform: [{ translateY: tabBarTranslateY }],
         },
       }}
     >
@@ -73,13 +124,12 @@ export default function TabLayout() {
                 <Icon
                   name="home-variant"
                   size={26}
-                  color={isHome ? ACTIVE_COLOR : INACTIVE_COLOR} // Uses INACTIVE_COLOR (#000000)
+                  color={isHome ? ACTIVE_COLOR : INACTIVE_COLOR}
                 />
                 <Text
                   style={[
                     styles.tabLabel,
-                    // *** REVERTED: Now uses TEXT_COLOR (#000000) for consistency, same as INACTIVE_COLOR ***
-                    { color: isHome ? ACTIVE_COLOR : TEXT_COLOR }, 
+                    { color: isHome ? ACTIVE_COLOR : TEXT_COLOR },
                   ]}
                 >
                   {i18n.t('tabs.home')}
@@ -95,14 +145,13 @@ export default function TabLayout() {
         name="map"
         options={{
           tabBarIcon: ({ focused }) => (
-            <Icon name="map" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+            <Icon name="map" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} />
           ),
           tabBarLabel: ({ focused }) => (
             <Text
               style={[
                 styles.tabLabel,
-                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
-                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR },
               ]}
             >
               {i18n.t('tabs.map')}
@@ -116,14 +165,13 @@ export default function TabLayout() {
         name="add"
         options={{
           tabBarIcon: ({ focused }) => (
-            <Icon name="plus" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+            <Icon name="plus" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} />
           ),
           tabBarLabel: ({ focused }) => (
             <Text
               style={[
                 styles.tabLabel,
-                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
-                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR },
               ]}
             >
               {i18n.t('tabs.add')}
@@ -138,7 +186,7 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ focused }) => (
             <View>
-              <TwoChatsIcon color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} size={26} /> 
+              <TwoChatsIcon color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} size={26} />
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>3</Text>
               </View>
@@ -148,8 +196,7 @@ export default function TabLayout() {
             <Text
               style={[
                 styles.tabLabel,
-                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
-                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR },
               ]}
             >
               {i18n.t('tabs.messages')}
@@ -163,14 +210,13 @@ export default function TabLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ focused }) => (
-            <Icon name="account" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} /> // Uses INACTIVE_COLOR (#000000)
+            <Icon name="account" size={26} color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} />
           ),
           tabBarLabel: ({ focused }) => (
             <Text
               style={[
                 styles.tabLabel,
-                // *** REVERTED: Now uses TEXT_COLOR (#000000) ***
-                { color: focused ? ACTIVE_COLOR : TEXT_COLOR }, 
+                { color: focused ? ACTIVE_COLOR : TEXT_COLOR },
               ]}
             >
               {i18n.t('tabs.profile')}
@@ -191,8 +237,27 @@ export default function TabLayout() {
       <Tabs.Screen name="notifications" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="followers_list" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
-      <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="notification_settings" options={{ headerShown: false, href: null }} />
+      <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
+      {/* <Tabs.Screen name="chat" options={{ headerShown: false, href: null }} /> */}
+      
+      {/* ✅ FIXED: Add chat as a folder, not a single screen */}
+      <Tabs.Screen 
+        name="chat" 
+        options={{ 
+          headerShown: false, 
+          href: null 
+        }} 
+      />
+      
+      {/* ✅ ADD: conversations folder */}
+      <Tabs.Screen 
+        name="conversations" 
+        options={{ 
+          headerShown: false, 
+          href: null 
+        }} 
+      />
     </Tabs>
   );
 }
@@ -210,12 +275,12 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 12,
-    fontWeight: '700', // makes text stronger
+    fontWeight: '700',
     marginTop: 3,
-    color: TEXT_COLOR, // This will use the pure black TEXT_COLOR
+    color: TEXT_COLOR,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-    opacity: 1, // Full opacity
+    opacity: 1,
   },
   badge: {
     position: 'absolute',
