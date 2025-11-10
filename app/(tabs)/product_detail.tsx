@@ -67,12 +67,26 @@ const COLORS = {
   exchangeGradientEnd: "#F3E8FF",
 };
 
-// Fixed price formatting function
+/**
+ * UPDATED: Price formatting function to use K (thousands) and M (millions) 
+ * correctly, ensuring clean display for round numbers like 1000 -> 1K, 
+ * and using one decimal place for others.
+ */
 const formatPrice = (price: number): string => {
   if (price >= 1000000) {
+    // For millions (M) - e.g., 9000000 -> 9.0M
     return `${(price / 1000000).toFixed(1)}M`;
   } else if (price >= 1000) {
-    return `${(price / 1000).toFixed(0)}K`;
+    // For thousands (K) - e.g., 1000 -> 1K, 1234 -> 1.2K, 90000 -> 90K
+    const divided = price / 1000;
+    
+    // Check if it's a clean thousand (e.g., 1000, 50000)
+    if (divided % 1 === 0) {
+      return `${divided}K`;
+    } else {
+      // Use one decimal place for non-clean thousands
+      return `${divided.toFixed(1)}K`;
+    }
   }
   return price.toLocaleString();
 };
@@ -140,6 +154,7 @@ const ProductDetailScreen = () => {
           setIsFavorite(true);
         }
       } catch (error) {
+        // If query fails or returns no data, it means the product is not liked, which is handled by initial state (false)
         console.log('Product not liked');
       }
     };
@@ -404,6 +419,7 @@ const ProductDetailScreen = () => {
         <View style={styles.rightIcons}>
           {!isOwner && (
             <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
+              {/* Correctly renders filled red heart if isFavorite is true, and outlined dark heart otherwise */}
               <Ionicons
                 name={isFavorite ? "heart" : "heart-outline"}
                 size={22}

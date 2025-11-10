@@ -57,7 +57,7 @@ const getLocations = () => [
 const getPriceUnits = () => [
     { label: i18n.t('filterss.da'), value: 1, display: 'DA' },
     { label: i18n.t('filterss.thousands'), value: 1000, display: 'K DA' },
-    { label: i18n.t('filterss.millions'), value: 1000000, display: 'M DA' }
+    { label: i18n.t('filterss.millions'), value: 10000, display: 'M DA' }
 ];
 
 interface Category {
@@ -164,8 +164,8 @@ export default function FiltersScreen() {
                                     <Text style={modalStyles.rowText}>{unit.label}</Text>
                                     <Text style={modalStyles.rowSubtext}>
                                         {unit.value === 1 ? i18n.t('filterss.standardPricing') : 
-                                         unit.value === 1000 ? '1K = 1,000 DA' : 
-                                         '1M = 1,000,000 DA'}
+                                         unit.value === 1000 ? '1K = 1000 DA' : 
+                                         '1M = 10000 DA'}
                                     </Text>
                                 </View>
                                 {priceUnit.label === unit.label && (
@@ -511,6 +511,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: LIGHT_GRAY,
+        marginBottom:90
     },
     header: {
         flexDirection: 'row',

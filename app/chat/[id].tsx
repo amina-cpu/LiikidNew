@@ -1,4 +1,4 @@
-// app/chat/[id].tsx - FIXED VERSION
+// app/chat/[id].tsx - COMPLETE FIX
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -20,9 +20,9 @@ import {
   getConversationMessages,
   markConversationAsRead,
   sendMessage,
-} from "../../../lib/messaging";
-import { supabase } from "../../../lib/Supabase";
-import { useAuth } from "../../context/AuthContext";
+} from "../../lib/messaging";
+import { supabase } from "../../lib/Supabase";
+import { useAuth } from "../context/AuthContext";
 
 interface Message {
   message_id: number;
@@ -37,7 +37,6 @@ interface Message {
     avatar_url: string | null;
     profile_image_url: string | null;
   };
-  isPending?: boolean;
 }
 
 interface ConversationInfo {
@@ -91,13 +90,14 @@ const ChatScreen = () => {
     }
   }, [conversationId, user?.user_id]);
 
-  // Load messages
+  // Load messages - FIX: Include sender_id
   const loadMessages = useCallback(async () => {
     try {
       console.log('📥 Loading messages for conversation:', conversationId);
       const data = await getConversationMessages(conversationId);
       if (data) {
         console.log('✅ Loaded', data.length, 'messages');
+        console.log('First message sender_id:', data[0]?.sender_id);
         setMessages(data as Message[]);
       }
     } catch (error) {
@@ -107,30 +107,26 @@ const ChatScreen = () => {
     }
   }, [conversationId]);
 
-  // Initial load
   useEffect(() => {
     loadConversationInfo();
     loadMessages();
   }, [loadConversationInfo, loadMessages]);
 
-  // Mark messages as read when screen is focused
+  // Mark messages as read when screen is focused - DISABLED FOR NOW
   useFocusEffect(
     useCallback(() => {
-      if (user?.user_id) {
-        console.log('👁️ Screen focused - marking messages as read');
-        // Add a small delay to ensure messages are loaded
-        setTimeout(() => {
-          markConversationAsRead(conversationId, user.user_id);
-        }, 500);
-      }
+      // Commenting out read receipts for now
+      // if (user?.user_id) {
+      //   setTimeout(() => {
+      //     markConversationAsRead(conversationId, user.user_id);
+      //   }, 500);
+      // }
     }, [conversationId, user?.user_id])
   );
 
-  // Subscribe to new messages and updates
+  // Subscribe to new messages - IMPROVED: Better duplicate handling
   useEffect(() => {
     if (!user?.user_id) return;
-
-    console.log('🔔 Setting up real-time subscriptions');
 
     const channel = supabase
       .channel(`conversation-${conversationId}`)
@@ -143,9 +139,9 @@ const ChatScreen = () => {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload) => {
-          console.log("📨 New message INSERT event:", payload.new);
+          console.log("📨 New message event:", payload.new);
           
-          // Fetch the complete message with sender info
+          // Fetch complete message with sender info
           const { data, error } = await supabase
             .from("messages")
             .select(`
@@ -166,30 +162,28 @@ const ChatScreen = () => {
             .single();
 
           if (!error && data) {
-            console.log('✅ Fetched complete message:', data);
+            console.log('✅ Received message from:', data.sender_id);
             
             setMessages((prev) => {
-              // Remove any pending messages
-              const withoutPending = prev.filter(m => !m.isPending);
+              // Remove any temporary messages
+              const withoutTemp = prev.filter(m => m.message_id > 1000000000000);
               
-              // Check if message already exists
-              if (withoutPending.some(m => m.message_id === data.message_id)) {
-                console.log('⚠️ Message already exists, skipping');
-                return withoutPending;
+              // Check if real message already exists
+              if (withoutTemp.some(m => m.message_id === data.message_id)) {
+                console.log('Message already exists, skipping');
+                return prev;
               }
               
-              console.log('➕ Adding new message to state');
-              return [...withoutPending, data as Message];
+              console.log('Adding new message to list');
+              return [...withoutTemp, data as Message];
             });
             
-            // Auto-scroll to bottom
             setTimeout(() => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
 
-            // If message is from other user, mark it as read immediately
+            // Mark as read if from other user
             if (data.sender_id !== user.user_id) {
-              console.log('📖 Message from other user - marking as read');
               setTimeout(() => {
                 markConversationAsRead(conversationId, user.user_id);
               }, 500);
@@ -206,8 +200,7 @@ const ChatScreen = () => {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          console.log("📝 Message UPDATE event (read receipt):", payload.new);
-          
+          console.log("📝 Message updated (read receipt)");
           setMessages((prev) =>
             prev.map((msg) =>
               msg.message_id === payload.new.message_id
@@ -217,14 +210,9 @@ const ChatScreen = () => {
           );
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Subscription status:', status);
-      });
+      .subscribe();
 
-    return () => {
-      console.log('🔌 Unsubscribing from channel');
-      channel.unsubscribe();
-    };
+    return () => channel.unsubscribe();
   }, [conversationId, user?.user_id]);
 
   const handleSend = async () => {
@@ -232,18 +220,15 @@ const ChatScreen = () => {
 
     setIsSending(true);
     const messageText = inputText.trim();
-    setInputText("");
-    setInputHeight(40); // Reset height when sending
-
+    const tempId = Date.now(); // Temporary ID for optimistic update
+    
     // Create optimistic message
-    const tempId = Date.now();
     const optimisticMessage: Message = {
       message_id: tempId,
       message_text: messageText,
       created_at: new Date().toISOString(),
       is_read: false,
       sender_id: user.user_id,
-      isPending: true,
       sender: {
         user_id: user.user_id,
         username: user.username || '',
@@ -253,30 +238,35 @@ const ChatScreen = () => {
       },
     };
 
-    // Add optimistic message
-    setMessages((prev) => [...prev, optimisticMessage]);
-    
+    // Add message immediately to UI
+    setMessages(prev => [...prev, optimisticMessage]);
+    setInputText("");
+    setInputHeight(40);
+
+    // Scroll to bottom
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
     try {
-      console.log('📤 Sending message...');
       const result = await sendMessage(conversationId, user.user_id, messageText);
       
       if (!result) {
-        console.error('❌ Failed to send message');
-        setMessages((prev) => prev.filter((m) => m.message_id !== tempId));
+        // Remove optimistic message on failure
+        setMessages(prev => prev.filter(m => m.message_id !== tempId));
         setInputText(messageText);
-        Alert.alert('Error', 'Failed to send message. Please try again.');
+        Alert.alert('Error', 'Failed to send message');
       } else {
-        console.log('✅ Message sent successfully:', result.message_id);
+        // Replace optimistic message with real one
+        setMessages(prev => 
+          prev.map(m => m.message_id === tempId ? { ...result, sender: optimisticMessage.sender } as Message : m)
+        );
       }
     } catch (error) {
-      console.error("❌ Error sending message:", error);
-      setMessages((prev) => prev.filter((m) => m.message_id !== tempId));
+      console.error("Error sending message:", error);
+      setMessages(prev => prev.filter(m => m.message_id !== tempId));
       setInputText(messageText);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      Alert.alert('Error', 'Failed to send message');
     } finally {
       setIsSending(false);
     }
@@ -284,13 +274,6 @@ const ChatScreen = () => {
 
   const formatMessageTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    
     const hours = date.getHours();
     const minutes = date.getMinutes();
     const ampm = hours >= 12 ? "PM" : "AM";
@@ -300,13 +283,14 @@ const ChatScreen = () => {
 
   const getAvatarUrl = (message: Message) => {
     return (
-      message.sender.avatar_url ||
-      message.sender.profile_image_url ||
+      message.sender?.avatar_url ||
+      message.sender?.profile_image_url ||
       "https://via.placeholder.com/32"
     );
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+    // FIX: Use sender_id to determine if it's your message
     const isMyMessage = item.sender_id === user?.user_id;
     const previousMessage = index > 0 ? messages[index - 1] : null;
     const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
@@ -315,7 +299,6 @@ const ChatScreen = () => {
       !isMyMessage &&
       (!previousMessage || previousMessage.sender_id !== item.sender_id);
 
-    // Show read status only for the last message sent by current user
     const isLastMyMessage = isMyMessage && 
       (!nextMessage || nextMessage.sender_id !== user?.user_id);
 
@@ -340,7 +323,6 @@ const ChatScreen = () => {
             style={[
               styles.messageBubble,
               isMyMessage ? styles.myMessageBubble : styles.theirMessageBubble,
-              item.isPending && styles.pendingMessageBubble,
             ]}
           >
             <Text
@@ -360,24 +342,14 @@ const ChatScreen = () => {
               >
                 {formatMessageTime(item.created_at)}
               </Text>
-              {isMyMessage && isLastMyMessage && !item.isPending && (
+              {isMyMessage && isLastMyMessage && (
                 <View style={styles.readStatusContainer}>
                   <Ionicons
                     name={item.is_read ? "checkmark-done" : "checkmark"}
                     size={14}
                     color={item.is_read ? "#34C759" : "rgba(255, 255, 255, 0.7)"}
                   />
-                  {item.is_read && (
-                    <Text style={styles.readText}>Read</Text>
-                  )}
                 </View>
-              )}
-              {item.isPending && (
-                <ActivityIndicator 
-                  size="small" 
-                  color="rgba(255, 255, 255, 0.7)" 
-                  style={styles.sendingIndicator} 
-                />
               )}
             </View>
           </View>
@@ -399,10 +371,7 @@ const ChatScreen = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Conversation not found</Text>
-          <TouchableOpacity 
-            onPress={() => router.back()} 
-            style={styles.backButtonError}
-          >
+          <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -414,8 +383,8 @@ const ChatScreen = () => {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -438,13 +407,9 @@ const ChatScreen = () => {
                   {conversationInfo.other_user_full_name ||
                     conversationInfo.other_user_name}
                 </Text>
-                <Text style={styles.headerStatus}>Active now</Text>
               </View>
             </>
           )}
-          <TouchableOpacity style={styles.moreButton}>
-            <Ionicons name="ellipsis-vertical" size={24} color="#000" />
-          </TouchableOpacity>
         </View>
 
         {/* Messages */}
@@ -463,38 +428,49 @@ const ChatScreen = () => {
             onContentSizeChange={() =>
               flatListRef.current?.scrollToEnd({ animated: false })
             }
-            keyboardDismissMode="interactive"
           />
         )}
 
-        {/* Input - FIXED: Better visibility when typing */}
+        {/* Input - FIXED FOR VISIBILITY */}
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TouchableOpacity style={styles.attachButton}>
-              <Ionicons name="add-circle-outline" size={28} color="#007AFF" />
+          <View style={styles.inputRow}>
+            <TouchableOpacity style={styles.plusButton}>
+              <Ionicons name="add-circle" size={30} color="#007AFF" />
             </TouchableOpacity>
-            <TextInput
-              style={[styles.input, { height: Math.max(40, Math.min(inputHeight, 120)) }]}
-              placeholder="Type a message..."
-              placeholderTextColor="#999"
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={1000}
-              textAlignVertical="top"
-              onContentSizeChange={(e) => {
-                setInputHeight(e.nativeEvent.contentSize.height);
-              }}
-            />
+            
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                style={[
+                  styles.textInput,
+                  { height: Math.max(36, Math.min(inputHeight, 100)) }
+                ]}
+                placeholder="Message"
+                placeholderTextColor="#999"
+                value={inputText}
+                onChangeText={(text) => {
+                  setInputText(text);
+                }}
+                multiline
+                maxLength={1000}
+                onContentSizeChange={(e) => {
+                  setInputHeight(e.nativeEvent.contentSize.height);
+                }}
+              />
+            </View>
+
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!inputText.trim() || isSending) && styles.sendButtonDisabled,
+                !inputText.trim() && styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
               disabled={!inputText.trim() || isSending}
             >
-              <Ionicons name="send" size={20} color="#fff" />
+              {isSending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="arrow-up" size={22} color="#fff" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -506,8 +482,8 @@ const ChatScreen = () => {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: "#F8F8F8",
-    marginBottom:90
+    backgroundColor: "#fff",
+    marginBottom:40
   },
   keyboardView: {
     flex: 1,
@@ -515,19 +491,17 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E5EA",
-    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#ccc",
+    backgroundColor: "#F9F9F9",
     marginTop: 40,
   },
-  backButton: { marginRight: 10 },
-  headerAvatar: { width: 40, height: 40, borderRadius: 20 },
-  headerInfo: { flex: 1, marginLeft: 12 },
-  headerName: { fontSize: 16, fontWeight: "600" },
-  headerStatus: { fontSize: 12, color: "#666", marginTop: 2 },
-  moreButton: { padding: 4 },
+  backButton: { marginRight: 8 },
+  headerAvatar: { width: 36, height: 36, borderRadius: 18 },
+  headerInfo: { flex: 1, marginLeft: 10 },
+  headerName: { fontSize: 17, fontWeight: "600" },
 
   loadingContainer: {
     flex: 1,
@@ -538,139 +512,115 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 40,
   },
-  errorText: { fontSize: 18, fontWeight: "600", color: "#333", marginBottom: 20 },
-  backButtonError: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: "#007AFF",
-    borderRadius: 8,
-  },
-  backButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  errorText: { fontSize: 18, marginBottom: 20 },
+  backButtonText: { color: "#007AFF", fontSize: 16 },
 
   messagesList: { 
-    paddingVertical: 10, 
-    paddingHorizontal: 15,
+    paddingVertical: 12, 
+    paddingHorizontal: 12,
     flexGrow: 1,
   },
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 100,
   },
   emptyStateText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
-    marginTop: 16,
+    marginTop: 12,
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: "#666",
-    marginTop: 8,
+    marginTop: 6,
   },
 
   messageContainer: { 
     flexDirection: "row", 
-    marginBottom: 12,
+    marginBottom: 8,
   },
   myMessageContainer: { justifyContent: "flex-end" },
   theirMessageContainer: { justifyContent: "flex-start" },
 
-  avatarContainer: { marginRight: 8 },
-  messageAvatar: { width: 32, height: 32, borderRadius: 16 },
-  avatarSpacer: { width: 32 },
+  avatarContainer: { marginRight: 6 },
+  messageAvatar: { width: 28, height: 28, borderRadius: 14 },
+  avatarSpacer: { width: 28 },
 
   messageBubbleContainer: { maxWidth: "75%" },
   messageBubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
   },
   myMessageBubble: { backgroundColor: "#007AFF" },
-  theirMessageBubble: { backgroundColor: "#fff" },
-  pendingMessageBubble: { opacity: 0.7 },
+  theirMessageBubble: { backgroundColor: "#E9E9EB" },
 
-  messageText: { fontSize: 16, lineHeight: 22 },
+  messageText: { fontSize: 16, lineHeight: 20 },
   myMessageText: { color: "#fff" },
   theirMessageText: { color: "#000" },
 
   messageFooter: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
-    gap: 4,
+    marginTop: 2,
+    gap: 3,
   },
   messageTime: { fontSize: 11 },
-  myMessageTime: { color: "rgba(255, 255, 255, 0.8)" },
-  theirMessageTime: { color: "#999" },
+  myMessageTime: { color: "rgba(255, 255, 255, 0.7)" },
+  theirMessageTime: { color: "#666" },
 
   readStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 4,
-  },
-  readText: {
-    fontSize: 11,
-    color: "#34C759",
     marginLeft: 2,
-    fontWeight: "500",
-  },
-  sendingIndicator: {
-    marginLeft: 4,
   },
 
-  // FIXED: Better input container styling with dynamic height
+  // ✅ FIXED INPUT STYLES - PERFECTLY VISIBLE
   inputContainer: {
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#E5E5EA",
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === "ios" ? 20 : 8,
+    backgroundColor: "#F9F9F9",
+    borderTopWidth: 0.5,
+    borderTopColor: "#ccc",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    paddingBottom: Platform.OS === "ios" ? 24 : 20,
   },
-  inputWrapper: {
+  inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 8,
+    gap: 6,
   },
-  attachButton: { 
-    paddingBottom: 8,
+  plusButton: {
+    paddingBottom: 3,
   },
-  inputTextContainer: {
+  textInputWrapper: {
     flex: 1,
-    maxHeight: 120,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#F2F2F7",
+    backgroundColor: "#fff",
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 36,
+    maxHeight: 100,
+    justifyContent: "center",
+  },
+  textInput: {
     fontSize: 16,
-    minHeight: 40,
-    maxHeight: 120,
     color: "#000",
+    padding: 0,
+    margin: 0,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#007AFF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 2,
   },
   sendButtonDisabled: {
-    backgroundColor: "#C7C7CC",
+    backgroundColor: "#ccc",
   },
 });
 

@@ -140,7 +140,7 @@ const ProductCard: React.FC<{
                         </View>
                     )}
 
-                    {showMenu ? (
+                    {/* {showMenu ? (
                         <TouchableOpacity style={styles.threeDotsMenu}>
                             <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
                         </TouchableOpacity>
@@ -151,7 +151,7 @@ const ProductCard: React.FC<{
                         >
                             <Ionicons name="heart" size={22} color="#FF5B5B" />
                         </TouchableOpacity>
-                    )}
+                    )} */}
                 </View>
 
                 <View style={styles.cardDetails}>
@@ -540,19 +540,19 @@ const ProfileScreen = () => {
                             <Text style={styles.emptyTextCustom}>
                                 {/* ✅ TRANSLATED: emptyPostMsg OR emptyLikedMsg */}
                                 {activeTab === 'Post' 
-                                    ? i18n.t('emptyPostMsg') 
-                                    : i18n.t('emptyLikedMsg')
+                                    ? i18n.t('profileContent.emptyPostMsg') 
+                                    : i18n.t('profileContent.emptyLikedMsg')
                                 }
                             </Text>
                             <TouchableOpacity 
                                 style={styles.addButton}
-                                onPress={() => router.push(activeTab === 'Post' ? '/addproduct' : '/(tabs)/home')} 
+                                onPress={() => router.push(activeTab === 'Post' ? '/add' : '/(tabs)')} 
                             >
                                 <Text style={styles.addButtonText}>
                                     {/* ✅ TRANSLATED: addToCollection OR startBrowsing */}
                                     {activeTab === 'Post' 
-                                        ? i18n.t('addToCollection') 
-                                        : i18n.t('startBrowsing')
+                                        ? i18n.t('profileContent.addToCollection') 
+                                        : i18n.t('profileContent.startBrowsing')
                                     }
                                 </Text>
                             </TouchableOpacity>
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
     },
     activeTab: {
-        backgroundColor: '#FFFFFF', // Active tab background white
+        backgroundColor: '#16A085', // Active tab background white
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.08,
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
         color: '#666',
     },
     tabTextActive: {
-        color: '#000',
+        color: '#ffffffff',
     },
     productsBackground: {
         flex: 1,

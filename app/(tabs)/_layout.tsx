@@ -224,6 +224,16 @@ export default function TabLayout() {
           ),
         }}
       />
+      
+   {/* <Tabs.Screen 
+  name="chat"
+  options={{
+    href: null,
+    headerShown: false,
+    tabBarStyle: { display: 'none' },
+  }}
+/> */}
+
 
       {/* Hidden Screens */}
       <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
@@ -239,18 +249,7 @@ export default function TabLayout() {
       <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="notification_settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
-      {/* <Tabs.Screen name="chat" options={{ headerShown: false, href: null }} /> */}
-      
-      {/* ✅ FIXED: Add chat as a folder, not a single screen */}
-      <Tabs.Screen 
-        name="chat" 
-        options={{ 
-          headerShown: false, 
-          href: null 
-        }} 
-      />
-      
-      {/* ✅ ADD: conversations folder */}
+
       <Tabs.Screen 
         name="conversations" 
         options={{ 
@@ -266,6 +265,7 @@ const styles = StyleSheet.create({
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
+   
   },
   homeButton: {
     flex: 1,

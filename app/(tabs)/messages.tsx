@@ -1,23 +1,34 @@
-// app/(tabs)/messages.tsx - Replace your existing messages.tsx with this
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    RefreshControl,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  Image,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { getUserConversations } from "../../lib/messaging";
+import {
+  GestureHandlerRootView,
+  Swipeable,
+} from "react-native-gesture-handler";
+// Check your path and import: assuming this path is correct
+import {
+  getUserConversations,
+  updateConversationPinStatus
+} from "../../lib/messaging";
 import { supabase } from "../../lib/Supabase";
 import { useAuth } from "../context/AuthContext";
 
+// Re-defining the Conversation interface
 interface Conversation {
+  // Fields coming from your 'conversation_list_view' or custom query
   conversation_id: number;
   other_user_id: number;
   other_user_name: string;
@@ -28,20 +39,159 @@ interface Conversation {
   last_message_time: string | null;
   last_message_sender_id: number | null;
   unread_count: number;
-  is_pinned: boolean;
+  is_pinned: boolean; // Must be present in your view/query
+  is_premium: boolean; 
+  listing_image_url: string | null;
+}
+
+// Interface for Notification Settings 
+interface NotificationSettings {
+    likes: boolean;
+    // ... other settings can be added here
 }
 
 const MessagesScreen = () => {
   const router = useRouter();
   const { user } = useAuth();
+  
+  const row = useRef<Array<Swipeable | null>>([]);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  
+  const [isGrouped, setIsGrouped] = useState(false); 
+  const toggleAnim = useRef(new Animated.Value(isGrouped ? 1 : 0)).current;
 
-  // Load conversations
+  // Animate the toggle circle's position
+  useEffect(() => {
+    Animated.timing(toggleAnim, {
+      toValue: isGrouped ? 1 : 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [isGrouped, toggleAnim]);
+
+  const handleToggle = () => {
+    setIsGrouped(prev => !prev);
+  };
+  
+  const toggleTranslateX = toggleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, 22], 
+  });
+
+  // --- DELETE/PIN LOGIC ---
+  const deleteConversation = async (conversationId: number) => {
+    try {
+        Alert.alert(
+            "Delete Conversation",
+            "Are you sure you want to delete this conversation? This action cannot be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Delete", 
+                    style: "destructive", 
+                    onPress: () => {
+                        // Implement DB deletion here
+                        setConversations(prev => 
+                            prev.filter(c => c.conversation_id !== conversationId)
+                        );
+                        console.log(`Conversation ${conversationId} marked as deleted.`);
+                    }
+                }
+            ]
+        );
+        
+    } catch (error) {
+      console.error("Exception during conversation deletion:", error);
+      return false;
+    }
+  };
+  
+  // MODIFIED: Uses the new updateConversationPinStatus signature
+  const pinConversation = async (conversationId: number, currentPinStatus: boolean) => {
+      if (!user?.user_id) return;
+      
+      const newPinStatus = !currentPinStatus;
+
+      // Optimistic update
+      setConversations(prev => 
+          prev.map(c => 
+              c.conversation_id === conversationId ? { ...c, is_pinned: newPinStatus } : c
+          )
+      );
+
+      // Database update: Pass the current user's ID to update the participants table
+      const success = await updateConversationPinStatus(
+          conversationId, 
+          user.user_id, 
+          newPinStatus
+      );
+
+      if (!success) {
+        Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
+        // Revert on failure (pessimistic update)
+        setConversations(prev => 
+            prev.map(c => 
+                c.conversation_id === conversationId ? { ...c, is_pinned: currentPinStatus } : c
+            )
+        );
+      }
+  };
+  // --- END DELETE/PIN LOGIC ---
+
+
+  // --- Data Fetching and Real-time Logic ---
+  const fetchUnreadNotificationsCount = useCallback(async () => {
+    if (!user?.user_id) return;
+    try {
+        // 1. Fetch user's notification settings
+        const { data: userProfile, error: profileError } = await supabase
+            .from('users')
+            .select('notification_settings')
+            .eq('user_id', user.user_id)
+            .single();
+
+        let showLikes = true; 
+        if (!profileError && userProfile?.notification_settings) {
+            const settings = userProfile.notification_settings as NotificationSettings;
+            // Check if 'likes' is explicitly set to false
+            if (settings.likes === false) {
+                showLikes = false; 
+            }
+        }
+
+        // 2. Build the query to count unread notifications
+        let query = supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('receiver_id', user.user_id)
+            .eq('is_read', false);
+
+        // CONDITIONAL FILTERING: If showLikes is false, exclude 'like' notifications from the count
+        if (!showLikes) {
+            query = query.not('type', 'eq', 'like');
+        }
+
+        const { count, error } = await query;
+
+        if (error) {
+            console.error('Error fetching unread count:', error);
+            setUnreadNotificationsCount(0);
+            return;
+        }
+        setUnreadNotificationsCount(count || 0); 
+
+    } catch (error) {
+      console.error('Exception fetching unread count:', error);
+      setUnreadNotificationsCount(0);
+    }
+  }, [user?.user_id]);
+
   const loadConversations = useCallback(async (isRefreshing = false) => {
     if (!user?.user_id) {
-      console.log('⚠️ No user ID, cannot load conversations');
       setIsLoading(false);
       return;
     }
@@ -51,18 +201,17 @@ const MessagesScreen = () => {
         setIsLoading(true);
       }
       
-      console.log('📬 Loading conversations for user:', user.user_id);
+      // Uses the getUserConversations which fetches from your conversation_list_view
       const data = await getUserConversations(user.user_id);
       
       if (data) {
-        console.log('✅ Loaded', data.length, 'conversations');
-        setConversations(data as Conversation[]);
+        setConversations(data as Conversation[]); 
       } else {
-        console.log('⚠️ No conversations found');
         setConversations([]);
       }
     } catch (error) {
-      console.error("❌ Error loading conversations:", error);
+      Alert.alert('Error', 'Failed to load messages.');
+      setConversations([]);
     } finally {
       setIsLoading(false);
       if (isRefreshing) {
@@ -71,230 +220,317 @@ const MessagesScreen = () => {
     }
   }, [user?.user_id]);
 
-  // Load on focus
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 Messages screen focused, loading conversations');
       loadConversations();
-    }, [loadConversations])
+      fetchUnreadNotificationsCount(); 
+    }, [loadConversations, fetchUnreadNotificationsCount])
   );
-
-  // Subscribe to real-time message updates
-  React.useEffect(() => {
-    if (!user?.user_id) return;
-
-    console.log('🔔 Setting up real-time subscription for messages');
-    
-    const channel = supabase
-      .channel("user-messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-        },
-        (payload) => {
-          console.log("🆕 New message event, refreshing conversations");
-          loadConversations(true);
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Messages subscription status:', status);
-      });
-
-    return () => {
-      console.log('🔌 Unsubscribing from messages');
-      channel.unsubscribe();
-    };
-  }, [user?.user_id, loadConversations]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadConversations(true);
-  }, [loadConversations]);
+    fetchUnreadNotificationsCount();
+  }, [loadConversations, fetchUnreadNotificationsCount]);
 
-  const formatTime = (timestamp: string | null) => {
-    if (!timestamp) return "";
+  // --- Utility Functions (Retained) ---
+  const formatTime = (timestamp: string | null) => { 
+    if (!timestamp) return '';
+    const diff = new Date().getTime() - new Date(timestamp).getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    if (hours < 24) return `${hours} hours ago`;
+    return `${days} days ago`;
+  }; 
+  const getAvatarUrl = (conversation: Conversation) => { return conversation.other_user_avatar || "https://via.placeholder.com/56"; };
+  const getDisplayName = (conversation: Conversation) => { return conversation.other_user_full_name || conversation.other_user_name || "Unknown User"; };
+  const getLastMessagePreview = (conversation: Conversation) => { return conversation.last_message || "No messages yet"; };
+  const handleConversationPress = (conversationId: number) => { router.push(`/chat/${conversationId}`); };
+  const handleNotificationPress = () => { router.push('/(tabs)/notifications'); };
 
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  // Sort pinned conversations before unpinned ones
+  const sortedConversations = conversations.sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime();
+  });
+  
+  const pinnedConversations = sortedConversations.filter(c => c.is_pinned);
+  const unpinnedConversations = sortedConversations.filter(c => !c.is_pinned);
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
+
+  // --- Swipeable Actions (Pin/Delete) ---
+  const renderRightActions = (
+    progress: Animated.AnimatedInterpolation<number>,
+    dragX: Animated.AnimatedInterpolation<number>,
+    item: Conversation,
+    index: number,
+  ) => {
+    const isPinned = item.is_pinned;
     
-    // Show date for older messages
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const getAvatarUrl = (conversation: Conversation) => {
+    const scale = dragX.interpolate({
+        inputRange: [-160, -80, 0], 
+        outputRange: [1, 1, 0],
+        extrapolate: 'clamp',
+    });
+    
     return (
-      conversation.other_user_avatar ||
-      conversation.other_user_profile_image ||
-      "https://via.placeholder.com/50"
-    );
-  };
-
-  const getDisplayName = (conversation: Conversation) => {
-    return conversation.other_user_full_name || conversation.other_user_name;
-  };
-
-  const getLastMessagePreview = (conversation: Conversation) => {
-    if (!conversation.last_message) return "No messages yet";
-    
-    // Show "You: " prefix if the current user sent the last message
-    const isMyMessage = conversation.last_message_sender_id === user?.user_id;
-    const prefix = isMyMessage ? "You: " : "";
-    
-    // Truncate long messages
-    const maxLength = 50;
-    const message = conversation.last_message.length > maxLength 
-      ? conversation.last_message.substring(0, maxLength) + "..." 
-      : conversation.last_message;
-    
-    return `${prefix}${message}`;
-  };
-
-  const handleConversationPress = (conversationId: number) => {
-    console.log('💬 Opening conversation:', conversationId);
-    console.log('📍 Current route:', router);
-    
-    // Validate conversation ID
-    if (!conversationId || isNaN(conversationId)) {
-      console.error('❌ Invalid conversation ID:', conversationId);
-      Alert.alert('Error', 'Invalid conversation ID');
-      return;
-    }
-    
-    try {
-      // Navigate to chat screen
-      const path = `/(tabs)/chat/${conversationId}`;
-      console.log('🚀 Navigating to:', path);
-      router.push(path);
-    } catch (error) {
-      console.error('❌ Navigation error:', error);
-      Alert.alert('Error', 'Failed to open conversation');
-    }
-  };
-
-  const renderConversation = ({ item }: { item: Conversation }) => {
-    const hasUnread = item.unread_count > 0;
-
-    return (
-      <TouchableOpacity
-        style={styles.conversationItem}
-        onPress={() => handleConversationPress(item.conversation_id)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: getAvatarUrl(item) }} style={styles.avatar} />
-          {hasUnread && <View style={styles.onlineDot} />}
-        </View>
-
-        <View style={styles.conversationInfo}>
-          <View style={styles.conversationHeader}>
-            <Text style={[styles.userName, hasUnread && styles.userNameUnread]}>
-              {getDisplayName(item)}
-            </Text>
-            <Text style={styles.messageTime}>
-              {formatTime(item.last_message_time)}
-            </Text>
-          </View>
-
-          <View style={styles.messagePreviewContainer}>
-            <Text
-              style={[
-                styles.messagePreview,
-                hasUnread && styles.messagePreviewUnread,
-              ]}
-              numberOfLines={1}
+        <View style={styles.swipeActionsContainer}>
+            {/* PIN/UNPIN Action (Dark Gray) */}
+            <TouchableOpacity 
+                style={[styles.actionButtonContainer, styles.pinAction]}
+                onPress={() => {
+                    row.current[index]?.close(); 
+                    pinConversation(item.conversation_id, isPinned);
+                }}
             >
-              {getLastMessagePreview(item)}
-            </Text>
-            {hasUnread && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadCount}>
-                  {item.unread_count > 99 ? "99+" : item.unread_count}
-                </Text>
-              </View>
-            )}
-          </View>
+                <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
+                    <Ionicons name={isPinned ? "bookmark-outline" : "pin-outline"} size={24} color="white" />
+                    <Text style={styles.actionButtonText}>{isPinned ? "Unpin" : "Pin"}</Text>
+                </Animated.View>
+            </TouchableOpacity>
+
+            {/* DELETE Action (Red) */}
+            <TouchableOpacity 
+                style={[styles.actionButtonContainer, styles.deleteAction]}
+                onPress={() => {
+                    row.current[index]?.close(); 
+                    deleteConversation(item.conversation_id);
+                }}
+            >
+                <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
+                    <Ionicons name="trash-outline" size={24} color="white" />
+                    <Text style={styles.actionButtonText}>Delete</Text>
+                </Animated.View>
+            </TouchableOpacity>
         </View>
-      </TouchableOpacity>
     );
   };
+  // --- END Swipeable Actions ---
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="chatbubbles-outline" size={80} color="#ccc" />
-      <Text style={styles.emptyStateTitle}>No conversations yet</Text>
-      <Text style={styles.emptyStateText}>
-        Start chatting by visiting someone's profile!
-      </Text>
+  // --- Rendering Components ---
+  
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Inbox</Text>
+      <TouchableOpacity 
+        style={styles.notificationButton}
+        onPress={handleNotificationPress}
+      >
+        <Ionicons name="notifications-outline" size={26} color="#000" /> 
+        {/* The badge is hidden if unreadNotificationsCount is 0, correctly respecting the settings logic */}
+        {unreadNotificationsCount > 0 && (
+          <View style={styles.notificationBadge}>
+            <Text style={styles.badgeText}>
+              {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount} 
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
     </View>
   );
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>Messages</Text>
-      <View style={styles.headerButtons}>
+  const renderGroupBy = () => ( /* ... (retained) */
+    <View style={styles.groupByContainer}>
+      <View style={styles.groupByToggleRow}>
         <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={() => loadConversations()}
+            onPress={handleToggle} 
+            style={[styles.togglePlaceholder, isGrouped ? styles.toggleActive : styles.toggleInactive]}
+            activeOpacity={0.8}
         >
-          <Ionicons name="refresh-outline" size={24} color="#007AFF" />
+          <Animated.View style={[styles.toggleCircle, { transform: [{ translateX: toggleTranslateX }] }]} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="create-outline" size={24} color="#007AFF" />
+        <Text style={styles.groupByText}>Group by listing</Text>
+      </View>
+      
+      <View style={styles.premiumRow}>
+        <Ionicons name="diamond-outline" size={16} color="#7B4DFF" />
+        <Text style={styles.premiumText}>Get faster responses.</Text>
+        <TouchableOpacity style={styles.tryFreeButton}>
+          <Text style={styles.tryFreeText}>Try for FREE</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {renderHeader()}
-
-      {isLoading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={conversations}
-          renderItem={renderConversation}
-          keyExtractor={(item) => item.conversation_id.toString()}
-          contentContainerStyle={
-            conversations.length === 0 ? styles.emptyListContainer : styles.listContainer
-          }
-          ListEmptyComponent={renderEmptyState}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#007AFF"
-              colors={["#007AFF"]}
-            />
-          }
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
+  const renderSectionHeader = (title: string, actionText?: string) => (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleContainer}>
+        {title === "Pinned" && (
+          <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />
+        )}
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {actionText && (
+        <TouchableOpacity>
+          <Text style={styles.sectionAction}>{actionText}</Text>
+        </TouchableOpacity>
       )}
-    </SafeAreaView>
+    </View>
+  );
+
+  const renderEditSortButtons = () => (
+    <View style={styles.editSortRow}>
+      <TouchableOpacity style={styles.editButton}>
+        <Ionicons name="create-outline" size={20} color="#000" />
+        <Text style={styles.editText}>Edit</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={styles.sortButton}>
+        <Ionicons name="options-outline" size={16} color="#000" style={styles.sortIcon} />
+        <Text style={styles.sortText}>Sort: Default</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderConversationItem = ({ item, index }: { item: Conversation, index: number }) => {
+    const hasUnread = item.unread_count > 0;
+
+    const renderContent = () => (
+      <TouchableOpacity
+        style={[styles.conversationItem, hasUnread && styles.conversationItemUnread]}
+        onPress={() => handleConversationPress(item.conversation_id)}
+        activeOpacity={1} 
+      >
+        <View style={styles.avatarContainer}>
+          <Image 
+            source={{ uri: getAvatarUrl(item) }} 
+            style={[styles.avatar, item.other_user_avatar ? null : {backgroundColor: '#D1D1D6'}]}
+          />
+          {item.is_premium && (
+            <View style={styles.premiumLabelContainer}>
+              <Text style={styles.premiumLabelText}>PREMIUM</Text>
+            </View>
+          )}
+          {/* Green dot for UNREAD messages (inside the avatar container) */}
+          {hasUnread && <View style={styles.unreadDot} />}
+        </View>
+
+        <View style={styles.conversationInfo}>
+          <View style={styles.conversationHeader}>
+            <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
+              {getDisplayName(item)}
+            </Text>
+            <Text style={styles.messageTime}>
+              {formatTime(item.last_message_time)} 
+            </Text>
+          </View>
+
+          <Text
+            style={[
+              styles.messagePreview,
+              hasUnread && styles.messagePreviewUnread,
+            ]}
+            numberOfLines={1}
+          >
+            {getLastMessagePreview(item)}
+          </Text>
+        </View>
+        
+        {/* Rightmost image thumbnail */}
+        {item.listing_image_url && (
+          <Image 
+            source={{ uri: item.listing_image_url }} 
+            style={styles.messageThumbnail} 
+          />
+        )}
+      </TouchableOpacity>
+    );
+
+    return (
+      <Swipeable
+        ref={(ref) => row.current[index] = ref}
+        friction={2}
+        rightThreshold={40}
+        renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item, index)}
+        onSwipeableOpen={(direction) => {
+            if (direction === 'right') {
+                row.current.forEach((ref, i) => {
+                    if (i !== index && ref) {
+                        ref.close();
+                    }
+                });
+            }
+        }}
+        overshootRight={false}
+      >
+        {renderContent()}
+      </Swipeable>
+    );
+  };
+  
+  const ListHeader = () => (
+    <View style={{ backgroundColor: '#fff' }}>
+        {renderGroupBy()}
+        
+        {/* Pinned Section */}
+        {pinnedConversations.length > 0 && (
+            <>
+                {renderSectionHeader("Pinned", "View all")}
+                {pinnedConversations.map((item, index) => (
+                    <React.Fragment key={`pinned-item-${item.conversation_id}`}>
+                        {renderConversationItem({ item, index })}
+                        {index < pinnedConversations.length - 1 && <View style={styles.separator} />}
+                    </React.Fragment>
+                ))}
+                {pinnedConversations.length > 0 && <View style={styles.separator} />}
+            </>
+        )}
+        
+        {/* All Section Header and Edit/Sort Buttons */}
+        {renderSectionHeader("All")}
+        {renderEditSortButtons()} 
+        
+        {/* Separator before the unpinned/main list items start */}
+        {unpinnedConversations.length > 0 && <View style={styles.separator} />}
+    </View>
+  );
+
+  const unpinnedStartIndex = pinnedConversations.length; 
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        {renderHeader()}
+
+        {isLoading && !refreshing ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.loadingText}>Loading conversations...</Text>
+          </View>
+        ) : conversations.length === 0 && !refreshing ? (
+          <>
+            {renderGroupBy()} 
+            <View style={{ flex: 1, backgroundColor: '#fff' }}> 
+                <Text style={styles.emptyStateTitle}>No messages</Text>
+            </View>
+          </>
+        ) : (
+          <FlatList
+            data={unpinnedConversations} 
+            renderItem={({ item, index }) => renderConversationItem({ item, index: index + unpinnedStartIndex })} 
+            keyExtractor={(item) => `unpinned-${item.conversation_id.toString()}`}
+            ListHeaderComponent={ListHeader} 
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#007AFF"
+                colors={["#007AFF"]}
+              />
+            }
+          />
+        )}
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    
+    backgroundColor: "#F5F5F5",
   },
   header: {
     flexDirection: "row",
@@ -302,66 +538,190 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-    marginTop: 40,
+    backgroundColor: "#fff",
+    marginTop: 40, 
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "700",
+    color: "#000",
   },
-  headerButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  headerButton: {
+  notificationButton: {
+    position: 'relative',
     padding: 4,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF3B30', 
+    borderRadius: 10,
+    minWidth: 18, 
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2, 
+    borderColor: '#fff',
   },
-  loadingText: {
-    marginTop: 12,
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  
+  // --- GROUP BY SECTION STYLES (RETAINED) ---
+  groupByContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  groupByToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  groupByText: {
+    fontSize: 17,
+    color: '#000',
+    fontWeight: '400',
+    marginLeft: 12, 
+  },
+  togglePlaceholder: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    padding: 2,
+    justifyContent: 'center', 
+  },
+  toggleInactive: {
+    backgroundColor: '#E5E5EA', 
+  },
+  toggleActive: {
+    backgroundColor: "#16A085", 
+  },
+  toggleCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
+    elevation: 2,
+    position: 'absolute', 
+    left: 2, 
+  },
+  premiumRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F2FF', 
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  premiumText: {
+    marginLeft: 6,
     fontSize: 14,
-    color: "#666",
+    fontWeight: '500',
+    color: '#7B4DFF', 
   },
-  listContainer: {
+  tryFreeButton: {
+    backgroundColor: '#7B4DFF', 
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    marginLeft: 'auto', 
+  },
+  tryFreeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  // --- END GROUP BY STYLES ---
+
+  pinIcon: {
+    marginRight: 6,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F5F5F5',
+  },
+  sectionTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18, 
+    fontWeight: '700',
+    color: '#000',
+  },
+  sectionAction: {
+    fontSize: 16,
+    color: '#00A86B', 
+    fontWeight: '500',
+  },
+  
+  // --- EDIT/SORT BUTTONS STYLES (RETAINED) ---
+  editSortRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 8,
+    backgroundColor: '#F5F5F5', 
   },
-  emptyListContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
   },
-  emptyState: {
-    alignItems: "center",
-    paddingHorizontal: 40,
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E9F6E9', 
+    borderRadius: 20, 
+    paddingVertical: 8, 
+    paddingHorizontal: 14, 
   },
-  emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: "600",
-    color: "#333",
-    marginTop: 20,
-    marginBottom: 8,
+  sortIcon: {
+    marginRight: 4, 
   },
-  emptyStateText: {
-    fontSize: 15,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 22,
+  editText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginLeft: 4,
   },
+  sortText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000', 
+  },
+  // --- END EDIT/SORT STYLES ---
+
+  // --- CONVERSATION/UNREAD STYLES (RETAINED) ---
   conversationItem: {
     flexDirection: "row",
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
+    paddingVertical: 10,
+    backgroundColor: "#fff", 
+    alignItems: 'center',
+  },
+  conversationItemUnread: {
+    backgroundColor: '#E6F7E6', 
   },
   separator: {
     height: 1,
-    backgroundColor: "#f0f0f0",
-    marginLeft: 76,
+    backgroundColor: "#E5E5E5",
+    marginLeft: 84, 
+    marginRight: 16,
   },
   avatarContainer: {
     position: "relative",
@@ -373,16 +733,35 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     backgroundColor: "#E5E5EA",
   },
-  onlineDot: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 16,
-    height: 16,
+  premiumLabelContainer: {
+    position: 'absolute',
+    bottom: -4,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderColor: "#16A085",
+    borderWidth: 1,
     borderRadius: 8,
-    backgroundColor: "#34C759",
-    borderWidth: 2,
-    borderColor: "#fff",
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
+  premiumLabelText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#7B4DFF',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00A86B', 
+    borderWidth: 1,
+    borderColor: '#fff',
   },
   conversationInfo: {
     flex: 1,
@@ -392,7 +771,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   userName: {
     fontSize: 16,
@@ -408,34 +787,73 @@ const styles = StyleSheet.create({
     color: "#8E8E93",
     marginLeft: 8,
   },
-  messagePreviewContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
   messagePreview: {
     fontSize: 15,
     color: "#8E8E93",
-    flex: 1,
   },
   messagePreviewUnread: {
     fontWeight: "500",
     color: "#000",
   },
-  unreadBadge: {
-    backgroundColor: "#007AFF",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
+  messageThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: 8,
+    marginLeft: 10,
+    backgroundColor: '#E5E5EA',
+  },
+  
+  // --- SWIPE ACTIONS STYLES (MATCHING IMAGE) ---
+  swipeActionsContainer: {
+      flexDirection: 'row',
+      width: 160, 
+      backgroundColor: '#F5F5F5',
+  },
+  actionButtonContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80, 
+    height: '100%',
+  },
+  actionButton: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // Dark Gray for Pin
+  pinAction: {
+    backgroundColor: '#4A4A4A', 
+  },
+  // Red for Delete
+  deleteAction: {
+    backgroundColor: '#E53E3E', 
+  },
+  
+  loadingContainer: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
+    backgroundColor: '#fff',
   },
-  unreadCount: {
-    fontSize: 12,
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: "#666",
+  },
+  emptyStateTitle: {
+    fontSize: 22,
     fontWeight: "600",
-    color: "#fff",
+    color: "#333",
+    marginTop: 20,
+    marginBottom: 8,
+    textAlign: 'center',
   },
 });
 

@@ -275,6 +275,8 @@ profileContent: {
     // Categories
     categories: {
   Food: "Food",
+ 
+HomeandFurniture:"Home & Furniture",
   ComputersAccessories: "Computers & Accessories",
   RealEstate: "Real Estate",
   ElectronicsHomeAppliance: "Electronics & Home Appliance",
@@ -290,6 +292,7 @@ profileContent: {
   ClothingFashion: "Clothing & Fashion",
   HealthBeauty: "Health & Beauty",
   HomemadeHandcrafted: "Homemade & Handcrafted",
+   AnimalShop:"Animal Shop",
 
 
 
@@ -651,6 +654,8 @@ errorFailedLogout: "Erreur, échec de la déconnexion. Veuillez réessayer.",
     // Categories
     categories: {
   Food: "Alimentation",
+  HomeandFurniture:"Maison et Meubles",
+  AnimalShop:"Boutique d'animaux",
   ComputersAccessories: "Ordinateurs et Accessoires",
   RealEstate: "Immobilier",
   ElectronicsHomeAppliance: "Électronique et Électroménager",
@@ -953,6 +958,8 @@ filterss: {
     },
     categories: {
   Food: "طعام",
+  HomeandFurniture:"المنزل والأثاث",
+  AnimalShop:"متجر الحيوانات",
   ComputersAccessories: "حواسيب وإكسسوارات",
   RealEstate: "عقارات",
   ElectronicsHomeAppliance: "إلكترونيات وأجهزة منزلية",

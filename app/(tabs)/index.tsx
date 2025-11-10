@@ -125,7 +125,10 @@ const getCategoryTranslation = (catName: string): string => {
   const normalized = catName.trim().toLowerCase();
 
   const categoryMap: { [key: string]: string } = {
+     'Animal Shop': 'AnimalShop',
     'food': 'Food',
+    
+     'home & furniture':'HomeandFurniture',
     'computers & accessories': 'ComputersAccessories',
     'real estate': 'RealEstate',
     'electronics & home appliance': 'ElectronicsHomeAppliance',
@@ -764,7 +767,20 @@ const handleScroll = Animated.event(
       // Update sticky filter tabs
       setIsSticky(offsetY >= filterTabsLayout.y);
 
-      // --- DOWN: hide immediately ---
+      // ALWAYS show tab bar when at the top
+      if (offsetY <= 50) {
+        if (!tabBarVisible.current) {
+          tabBarVisible.current = true;
+          AsyncStorage.setItem('tabBarVisible', 'true');
+        }
+        upGestureCount.current = 0;
+        upDistance.current = 0;
+        scrollDirection.current = direction;
+        lastScrollY.current = offsetY;
+        return;
+      }
+
+      // --- DOWN: hide immediately (only when scrolled past 50) ---
       if (direction === 'down' && offsetY > 50) {
         if (tabBarVisible.current) {
           tabBarVisible.current = false;
@@ -798,7 +814,6 @@ const handleScroll = Animated.event(
     },
   }
 );
-
 useEffect(() => {
   return () => {
     AsyncStorage.setItem('tabBarVisible', 'true');

@@ -3,10 +3,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useSegments } from 'expo-router';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { I18nManager } from 'react-native';
-import { setLocale } from '../../lib/i18n';
-import { supabase } from '../../lib/Supabase';
 
+// Updated interface - removed is_seller and is_verified to match your database
 interface UserProfile {
     user_id: number;
     username: string;
@@ -50,90 +48,24 @@ function useProtectedRoute(user: UserProfile | null, isLoading: boolean) {
         const isAuthenticated = !!user;
         const inAuthGroup = segments[0] === '(auth)';
         const inTabsGroup = segments[0] === '(tabs)';
-        const onWelcomeScreen = segments.length === 0 || segments[0] === 'index';
         
         console.log('🔐 Auth Check:', { 
             isAuthenticated, 
             inAuthGroup,
             inTabsGroup,
-            onWelcomeScreen,
             segments: segments.join('/'),
             userEmail: user?.email 
         });
 
-        // ONLY protect tabs - let index page handle its own routing
+        // ONLY redirect if user is trying to access protected tabs without auth
         if (!isAuthenticated && inTabsGroup) {
-            console.log("❌ Redirecting unauthenticated user to signup");
+            console.log("❌ Redirecting unauthenticated user to Login");
             router.replace('/(auth)/signup');
         }
-    }, [user, isLoading, segments, router]);
-}
-
-// Helper function to load and apply user settings
-async function loadAndApplyUserSettings(userId: number): Promise<void> {
-    try {
-        console.log('⚙️ Loading user settings for user:', userId);
         
-        const { data, error } = await supabase
-            .from('user_settings')
-            .select('language_code, theme')
-            .eq('user_id', userId)
-            .single();
-
-        if (error && error.code !== 'PGRST116') {
-            console.error('❌ Error loading user settings:', error);
-            return;
-        }
-
-        if (data) {
-            console.log('✅ User settings loaded:', data);
-            
-            // Apply saved language
-            await setLocale(data.language_code);
-            console.log('✅ Language applied:', data.language_code);
-
-            // Apply RTL for Arabic
-            if (data.language_code === 'ar') {
-                I18nManager.allowRTL(true);
-                I18nManager.forceRTL(true);
-                console.log('✅ RTL enabled for Arabic');
-            } else {
-                I18nManager.allowRTL(false);
-                I18nManager.forceRTL(false);
-                console.log('✅ LTR enabled');
-            }
-        } else {
-            // Create default settings if none exist
-            console.log('ℹ️ No settings found, creating defaults...');
-            await createDefaultUserSettings(userId);
-        }
-    } catch (error) {
-        console.error('❌ Error in loadAndApplyUserSettings:', error);
-    }
-}
-
-// Helper function to create default user settings
-async function createDefaultUserSettings(userId: number): Promise<void> {
-    try {
-        const { error } = await supabase
-            .from('user_settings')
-            .insert({
-                user_id: userId,
-                theme: 'light',
-                language_code: 'en',
-                data_saver_mode: false,
-                two_factor_enabled: false,
-                activity_status_visibility: 'public',
-            });
-
-        if (error) {
-            console.error('❌ Error creating default settings:', error);
-        } else {
-            console.log('✅ Default settings created for user:', userId);
-        }
-    } catch (error) {
-        console.error('❌ Error in createDefaultUserSettings:', error);
-    }
+        // Do NOT redirect authenticated users from auth screens
+        // Let the signup/login screens handle navigation after successful auth
+    }, [user, isLoading, segments, router]);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -150,11 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (isLoggedIn === 'true' && userJson) {
                     const loadedUser = JSON.parse(userJson) as UserProfile;
                     console.log('✅ User loaded from storage:', loadedUser.email);
-                    console.log('✅ User ID loaded:', loadedUser.user_id);
                     setUser(loadedUser);
-                    
-                    // Load and apply user settings
-                    await loadAndApplyUserSettings(loadedUser.user_id);
                 } else {
                     console.log('ℹ️ No user in storage');
                 }
@@ -170,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const updateUser = async (newUser: UserProfile) => {
         try {
             console.log('💾 Storing user in AsyncStorage:', newUser.email);
-            console.log('💾 User ID being stored:', newUser.user_id);
+            console.log('💾 User ID being stored:', newUser.user_id); // IMPORTANT LOG
             console.log('💾 Full user object:', JSON.stringify(newUser, null, 2));
             
             await AsyncStorage.setItem('user', JSON.stringify(newUser));
@@ -180,9 +108,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(newUser);
             console.log('✅ User updated in context');
             console.log('✅ Stored userId:', newUser.user_id.toString());
-            
-            // Load and apply user settings when user is updated
-            await loadAndApplyUserSettings(newUser.user_id);
         } catch (error) {
             console.error('❌ Error updating user:', error);
             throw error;
@@ -194,13 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('👋 Signing out...');
             await AsyncStorage.multiRemove(['user', 'isLoggedIn', 'userId']);
             setUser(null);
-            
-            // Reset to default language and LTR on logout
-            await setLocale('en');
-            I18nManager.allowRTL(false);
-            I18nManager.forceRTL(false);
-            console.log('✅ Settings reset to defaults');
-            
             console.log('✅ User signed out');
         } catch (error) {
             console.error('❌ Error signing out:', error);
