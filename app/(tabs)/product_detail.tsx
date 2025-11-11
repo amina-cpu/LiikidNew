@@ -68,23 +68,27 @@ const COLORS = {
 };
 
 /**
- * UPDATED: Price formatting function to use K (thousands) and M (millions) 
- * correctly, ensuring clean display for round numbers like 1000 -> 1K, 
- * and using one decimal place for others.
+ * FIXED: Price formatting function to use K (thousands) and M (millions) 
+ * correctly, ensuring clean display for round numbers (e.g., 90000 -> 90K, 9000000 -> 9M).
  */
 const formatPrice = (price: number): string => {
   if (price >= 1000000) {
-    // For millions (M) - e.g., 9000000 -> 9.0M
-    return `${(price / 1000000).toFixed(1)}M`;
+    const divided = price / 1000000;
+    // Check if it's a clean million (e.g., 9000000)
+    if (divided % 1 === 0) {
+      return `${Math.floor(divided)}M`;
+    } else {
+      // Use one decimal place for non-clean millions (e.g., 9200000 -> 9.2M)
+      return `${divided.toFixed(1)}M`;
+    }
   } else if (price >= 1000) {
-    // For thousands (K) - e.g., 1000 -> 1K, 1234 -> 1.2K, 90000 -> 90K
     const divided = price / 1000;
     
-    // Check if it's a clean thousand (e.g., 1000, 50000)
+    // Check if it's a clean thousand (e.g., 1000, 50000). This handles 5-digit numbers correctly.
     if (divided % 1 === 0) {
-      return `${divided}K`;
+      return `${Math.floor(divided)}K`;
     } else {
-      // Use one decimal place for non-clean thousands
+      // Use one decimal place for non-clean thousands (e.g., 1234 -> 1.2K)
       return `${divided.toFixed(1)}K`;
     }
   }
@@ -150,12 +154,22 @@ const ProductDetailScreen = () => {
           .eq('product_id', productId)
           .single();
 
+        // FIX: Explicitly check for data. If data is present, it's liked.
         if (data) {
           setIsFavorite(true);
+        } else {
+          setIsFavorite(false); // Explicitly set to false if no like record is found.
         }
+
+        // Handle actual errors (PGRST116 is the "Expected 1 row but found 0" error we expect for unliked products)
+        if (error && error.code !== 'PGRST116') {
+            throw error;
+        }
+
       } catch (error) {
-        // If query fails or returns no data, it means the product is not liked, which is handled by initial state (false)
-        console.log('Product not liked');
+        // Fallback catch: ensures isFavorite is false if any check fails
+        setIsFavorite(false);
+        // console.log('Product not liked or error occurred during check:', error); 
       }
     };
     checkIfLiked();

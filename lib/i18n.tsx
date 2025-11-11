@@ -20,7 +20,89 @@ search: {
   "errorTitle": "Error",
   "errorMessage": "Failed to perform search: "
 },
+ 
+  "blockedUsers": {
+    "title": "Blocked Users",
+    "unblockButton": "Unblock",
+    "unknownUser": "Unknown User",
+    
+    "errorTitle": "Error",
+    "successTitle": "Success",
+    "failedToLoad": "Failed to load blocked users list.",
+    "loginRequired": "Please login to unblock users.",
+    
+    "unblockAlertTitle": "Unblock User",
+    "unblockAlertMessage": "Are you sure you want to unblock this user? Their products may reappear in your feed.",
+    "cancel": "Cancel",
+    
+    "unblockSuccess": "User unblocked successfully.",
+    "unblockFailed": "Failed to unblock user.",
+    
+    "emptyMessage": "You haven't blocked any users yet.",
+    "emptySubtext": "Users you block will not be able to see your products, and you will not see theirs."
+  },
+someonesProfile: {
+  // Header & Navigation
+  profileTitleSuffix: "'s Profile",
   
+  // Stats
+  posts: "Posts",
+  following: "Following",
+  followers: "Followers",
+  
+  // Buttons
+  followButton: "Follow",
+  unfollowButton: "Unfollow",
+  friendsButton: "Friends",
+  chatButton: "Chat",
+  blockButton: "Block",
+  unblockButton: "Unblock",
+  reportButton: "Report",
+  cancel: "Cancel",
+  
+  // Blocked State
+  blockedUserMessage: "You have blocked this user.",
+  blockedContentMessage: "You cannot view this user's content while they are blocked.",
+  postedItems: "Posted Items",
+  postedItemsBlocked: "Posted Items (0)",
+  
+  // Empty States
+  noPostsYet: "This user hasn't posted any items yet.",
+  profileNotFound: "Profile not found.",
+  
+  // Alerts - Login Required
+  loginRequiredTitle: "Login Required",
+  loginRequiredMessage: "You must be logged in to follow users.",
+  loginRequiredToBlock: "You must be logged in to block a user.",
+  
+  // Alerts - Block User
+  blockAlertTitle: "Block User",
+  blockAlertMessage: "Are you sure you want to block {{username}}? This will also remove all follow relationships.",
+  blockedTitle: "Blocked!",
+  blockedMessage: "{{username}} has been blocked.",
+  
+  // Alerts - Unblock User
+  unblockAlertTitle: "Unblock User",
+  unblockAlertMessage: "Are you sure you want to unblock {{username}}?",
+  unblockedTitle: "Unblocked!",
+  unblockedMessage: "{{username}} has been unblocked.",
+  
+  // Alerts - Report User
+  reportAlertTitle: "Report User",
+  reportAlertMessage: "You are reporting {{username}} for inappropriate content or behavior.",
+  
+  // Error Messages
+  errorTitle: "Error",
+  errorLoadingProfile: "Failed to load user profile.",
+  errorUpdatingFollow: "Failed to update follow status.",
+  errorStartingChat: "Cannot start conversation. Please log in.",
+  errorCreatingConversation: "Could not create or find conversation. Please check your database.",
+  errorBlockingUser: "Failed to block user. Please try again.",
+  errorUnblockingUser: "Cannot unblock user without IDs.",
+  invalidUserId: "Invalid user ID provided.",
+  invalidConversationId: "Invalid conversation ID",
+  unknownError: "Unknown error",
+},
   productDetail: {
   // Loading & Errors
   loadingText: "Loading product details...",
@@ -83,6 +165,98 @@ search: {
   sellerNotAvailable: "Seller information is not available.",
   failedToUpdateLike: "Failed to update like status",
 },
+// ... (inside the en: { ... } block)
+notificationsSettings: {
+    title: "Notifications",
+    social: "Social",
+    newFollowersTitle: "New Followers",
+    newFollowersDescription: "Get notified when someone follows you",
+    likesTitle: "Likes",
+    likesDescription: "Get notified when someone likes your product",
+    commentsTitle: "Comments",
+    commentsDescription: "Get notified when someone comments",
+    mentionsTitle: "Mentions",
+    mentionsDescription: "Get notified when someone mentions you",
+    recommendations: "Recommendations",
+    recommendedForYouTitle: "Recommended For You",
+    recommendedForYouDescription: "Get personalized product recommendations",
+    collectibleUpdatesTitle: "Collectible Updates",
+    collectibleUpdatesDescription: "Updates on collectibles you're interested in",
+    liveEvents: "Live Events",
+    bookmarkedLiveEventsTitle: "Bookmarked Live Events",
+    bookmarkedLiveEventsDescription: "Reminders for events you bookmarked",
+    suggestedLiveEventsTitle: "Suggested Live Events",
+    suggestedLiveEventsDescription: "Get notified about live events you might like",
+    shopping: "Shopping",
+    marketplaceTitle: "Marketplace",
+    marketplaceDescription: "Updates about marketplace items",
+    ordersTitle: "Orders",
+    ordersDescription: "Updates about your orders and purchases",
+},
+someonesProfile: {
+  // Header & Navigation
+  profileTitleSuffix: "",
+  
+  // Stats
+  posts: "Annonces",
+  following: "Abonnements",
+  followers: "Abonnés",
+  
+  // Buttons
+  followButton: "Suivre",
+  unfollowButton: "Ne plus suivre",
+  friendsButton: "Amis",
+  chatButton: "Discuter",
+  blockButton: "Bloquer",
+  unblockButton: "Débloquer",
+  reportButton: "Signaler",
+  cancel: "Annuler",
+  
+  // Blocked State
+  blockedUserMessage: "Vous avez bloqué cet utilisateur.",
+  blockedContentMessage: "Vous ne pouvez pas voir le contenu de cet utilisateur tant qu'il est bloqué.",
+  postedItems: "Articles publiés",
+  postedItemsBlocked: "Articles publiés (0)",
+  
+  // Empty States
+  noPostsYet: "Cet utilisateur n'a pas encore publié d'articles.",
+  profileNotFound: "Profil introuvable.",
+  
+  // Alerts - Login Required
+  loginRequiredTitle: "Connexion requise",
+  loginRequiredMessage: "Vous devez être connecté pour suivre des utilisateurs.",
+  loginRequiredToBlock: "Vous devez être connecté pour bloquer un utilisateur.",
+  
+  // Alerts - Block User
+  blockAlertTitle: "Bloquer l'utilisateur",
+  blockAlertMessage: "Êtes-vous sûr de vouloir bloquer {{username}} ? Cela supprimera également toutes les relations de suivi.",
+  blockedTitle: "Bloqué !",
+  blockedMessage: "{{username}} a été bloqué.",
+  
+  // Alerts - Unblock User
+  unblockAlertTitle: "Débloquer l'utilisateur",
+  unblockAlertMessage: "Êtes-vous sûr de vouloir débloquer {{username}} ?",
+  unblockedTitle: "Débloqué !",
+  unblockedMessage: "{{username}} a été débloqué.",
+  
+  // Alerts - Report User
+  reportAlertTitle: "Signaler l'utilisateur",
+  reportAlertMessage: "Vous signalez {{username}} pour contenu ou comportement inapproprié.",
+  
+  // Error Messages
+  errorTitle: "Erreur",
+  errorLoadingProfile: "Échec du chargement du profil utilisateur.",
+  errorUpdatingFollow: "Échec de la mise à jour du statut de suivi.",
+  errorStartingChat: "Impossible de démarrer la conversation. Veuillez vous connecter.",
+  errorCreatingConversation: "Impossible de créer ou de trouver la conversation. Veuillez vérifier votre base de données.",
+  errorBlockingUser: "Échec du blocage de l'utilisateur. Veuillez réessayer.",
+  errorUnblockingUser: "Impossible de débloquer l'utilisateur sans ID.",
+  invalidUserId: "ID utilisateur non valide fourni.",
+  invalidConversationId: "ID de conversation non valide",
+  unknownError: "Erreur inconnue",
+},
+
+// ... (rest of the en: block)
   addListing: {
       addListing: "Add Listing",
       photos: "Photos",
@@ -275,7 +449,7 @@ profileContent: {
     // Categories
     categories: {
   Food: "Food",
- 
+  AnimalShop:"Animals Shop",
 HomeandFurniture:"Home & Furniture",
   ComputersAccessories: "Computers & Accessories",
   RealEstate: "Real Estate",
@@ -292,7 +466,7 @@ HomeandFurniture:"Home & Furniture",
   ClothingFashion: "Clothing & Fashion",
   HealthBeauty: "Health & Beauty",
   HomemadeHandcrafted: "Homemade & Handcrafted",
-   AnimalShop:"Animal Shop",
+   
 
 
 
@@ -375,6 +549,36 @@ HomeandFurniture:"Home & Furniture",
   },
   
   fr: {
+
+  // ... (inside the fr: { ... } block)
+notificationsSettings: {
+    title: "Notifications",
+    social: "Social",
+    newFollowersTitle: "Nouveaux Abonnés",
+    newFollowersDescription: "Recevoir une notification quand quelqu'un vous suit",
+    likesTitle: "J'aime",
+    likesDescription: "Recevoir une notification quand quelqu'un aime votre produit",
+    commentsTitle: "Commentaires",
+    commentsDescription: "Recevoir une notification quand quelqu'un commente",
+    mentionsTitle: "Mentions",
+    mentionsDescription: "Recevoir une notification quand quelqu'un vous mentionne",
+    recommendations: "Recommandations",
+    recommendedForYouTitle: "Recommandé pour vous",
+    recommendedForYouDescription: "Recevoir des recommandations de produits personnalisées",
+    collectibleUpdatesTitle: "Mises à jour des Collectibles",
+    collectibleUpdatesDescription: "Mises à jour sur les collectibles qui vous intéressent",
+    liveEvents: "Événements en direct",
+    bookmarkedLiveEventsTitle: "Événements en direct enregistrés",
+    bookmarkedLiveEventsDescription: "Rappels pour les événements que vous avez enregistrés",
+    suggestedLiveEventsTitle: "Événements en direct suggérés",
+    suggestedLiveEventsDescription: "Recevoir une notification sur les événements en direct qui pourraient vous intéresser",
+    shopping: "Achats",
+    marketplaceTitle: "Place de Marché",
+    marketplaceDescription: "Mises à jour concernant les articles de la place de marché",
+    ordersTitle: "Commandes",
+    ordersDescription: "Mises à jour sur vos commandes et achats",
+},
+// ... (rest of the fr: block)
   search: {
   "title": "Rechercher",
   "subtitle": "Rechercher dans le Marché Local",
@@ -405,6 +609,7 @@ searchScreen: {
   title: "Recherche",
   searchLabel: "Rechercher dans le marché local",
   placeholder: "Votre recherche",
+language: "Langue",
   allCategories: "Toutes les catégories",
   searchButton: "RECHERCHER",
   recentLabel: "Recherches récentes",
@@ -632,6 +837,29 @@ profile: {
       noPermission: "Vous n'avez pas la permission d'ajouter des produits",
       productExists: "Ce produit existe déjà"
     },
+    
+   
+  "blockedUsers": {
+    "title": "Utilisateurs Bloqués",
+    "unblockButton": "Débloquer",
+    "unknownUser": "Utilisateur Inconnu",
+    
+    "errorTitle": "Erreur",
+    "successTitle": "Succès",
+    "failedToLoad": "Échec du chargement de la liste des utilisateurs bloqués.",
+    "loginRequired": "Veuillez vous connecter pour débloquer des utilisateurs.",
+    
+    "unblockAlertTitle": "Débloquer l'utilisateur",
+    "unblockAlertMessage": "Êtes-vous sûr de vouloir débloquer cet utilisateur ? Ses produits pourraient réapparaître dans votre fil d'actualité.",
+    "cancel": "Annuler",
+    
+    "unblockSuccess": "Utilisateur débloqué avec succès.",
+    "unblockFailed": "Échec du déblocage de l'utilisateur.",
+    
+    "emptyMessage": "Vous n'avez bloqué aucun utilisateur pour le moment.",
+    "emptySubtext": "Les utilisateurs que vous bloquez ne pourront pas voir vos produits, et vous ne verrez pas les leurs."
+  },
+
 settingsScreen: {
   general: "Général",
   notifications: "Notifications",
@@ -644,6 +872,7 @@ settingsScreen: {
   contact: "Contact",
   rateUs: "Nous Noter",
   help: "Aide",
+ language: "Langue",
   version: "Version",
   areYouSureLogout: "Êtes-vous sûr de vouloir vous déconnecter ?",
 },
@@ -654,8 +883,9 @@ errorFailedLogout: "Erreur, échec de la déconnexion. Veuillez réessayer.",
     // Categories
     categories: {
   Food: "Alimentation",
+    AnimalShop:"Boutique d'animaux",
   HomeandFurniture:"Maison et Meubles",
-  AnimalShop:"Boutique d'animaux",
+
   ComputersAccessories: "Ordinateurs et Accessoires",
   RealEstate: "Immobilier",
   ElectronicsHomeAppliance: "Électronique et Électroménager",
@@ -756,7 +986,8 @@ errorFailedLogout: "Erreur, échec de la déconnexion. Veuillez réessayer.",
     language: "اللغة",
     selectLanguage: "اختر اللغة",
     
-    // <<< ADDED KEYS FOR TAB BAR >>>
+    // <<< ADDED KEYS
+//  FOR TAB BAR >>>
     tabs: {
       home: "الرئيسية",
       map: "الخريطة",
@@ -778,6 +1009,7 @@ settingsScreen: {
   followTiktok: "تابعنا على تيك توك",
   followInstagram: "تابعنا على إنستغرام",
   contact: "اتصال",
+language: "اللغة",
   rateUs: "قيّم التطبيق",
   help: "مساعدة",
   version: "الإصدار",
@@ -845,6 +1077,69 @@ notificationsScreen: {
       editProfile: "تعديل الملف الشخصي", // Example: Edit Profile button
       notifications: "الإشعارات", // Example: Notification setting
     },
+
+someonesProfile: {
+  // Header & Navigation
+  profileTitleSuffix: "",
+  
+  // Stats
+  posts: "المنشورات",
+  following: "متابَعون",
+  followers: "متابِعون",
+  
+  // Buttons
+  followButton: "متابعة",
+  unfollowButton: "إلغاء المتابعة",
+  friendsButton: "أصدقاء",
+  chatButton: "محادثة",
+  blockButton: "حظر",
+  unblockButton: "إلغاء الحظر",
+  reportButton: "إبلاغ",
+  cancel: "إلغاء",
+  
+  // Blocked State
+  blockedUserMessage: "لقد قمت بحظر هذا المستخدم.",
+  blockedContentMessage: "لا يمكنك عرض محتوى هذا المستخدم أثناء حظره.",
+  postedItems: "العناصر المنشورة",
+  postedItemsBlocked: "العناصر المنشورة (0)",
+  
+  // Empty States
+  noPostsYet: "لم ينشر هذا المستخدم أي عناصر بعد.",
+  profileNotFound: "لم يتم العثور على الملف الشخصي.",
+  
+  // Alerts - Login Required
+  loginRequiredTitle: "تسجيل الدخول مطلوب",
+  loginRequiredMessage: "يجب تسجيل الدخول لمتابعة المستخدمين.",
+  loginRequiredToBlock: "يجب تسجيل الدخول لحظر مستخدم.",
+  
+  // Alerts - Block User
+  blockAlertTitle: "حظر المستخدم",
+  blockAlertMessage: "هل أنت متأكد من رغبتك في حظر {{username}}؟ سيؤدي هذا أيضًا إلى إزالة جميع علاقات المتابعة.",
+  blockedTitle: "تم الحظر!",
+  blockedMessage: "تم حظر {{username}}.",
+  
+  // Alerts - Unblock User
+  unblockAlertTitle: "إلغاء حظر المستخدم",
+  unblockAlertMessage: "هل أنت متأكد من رغبتك في إلغاء حظر {{username}}؟",
+  unblockedTitle: "تم إلغاء الحظر!",
+  unblockedMessage: "تم إلغاء حظر {{username}}.",
+  
+  // Alerts - Report User
+  reportAlertTitle: "الإبلاغ عن المستخدم",
+  reportAlertMessage: "أنت تبلغ عن {{username}} لمحتوى أو سلوك غير لائق.",
+  
+  // Error Messages
+  errorTitle: "خطأ",
+  errorLoadingProfile: "فشل تحميل ملف المستخدم الشخصي.",
+  errorUpdatingFollow: "فشل تحديث حالة المتابعة.",
+  errorStartingChat: "لا يمكن بدء المحادثة. يرجى تسجيل الدخول.",
+  errorCreatingConversation: "تعذر إنشاء المحادثة أو العثور عليها. يرجى التحقق من قاعدة البيانات.",
+  errorBlockingUser: "فشل حظر المستخدم. يرجى المحاولة مرة أخرى.",
+  errorUnblockingUser: "لا يمكن إلغاء حظر المستخدم بدون معرفات.",
+  invalidUserId: "معرّف مستخدم غير صالح تم توفيره.",
+  invalidConversationId: "معرّف محادثة غير صالح",
+  unknownError: "خطأ غير معروف",
+},
 filterss: {
   title: "الفلاتر",
   "reset": "إعادة تعيين",
@@ -958,8 +1253,9 @@ filterss: {
     },
     categories: {
   Food: "طعام",
-  HomeandFurniture:"المنزل والأثاث",
   AnimalShop:"متجر الحيوانات",
+  HomeandFurniture:"المنزل والأثاث",
+  
   ComputersAccessories: "حواسيب وإكسسوارات",
   RealEstate: "عقارات",
   ElectronicsHomeAppliance: "إلكترونيات وأجهزة منزلية",
@@ -1092,6 +1388,27 @@ search: {
   "errorTitle": "خطأ",
   "errorMessage": "فشل في تنفيذ البحث: "
 },
+
+  "blockedUsers": {
+    "title": "المستخدمون المحظورون",
+    "unblockButton": "إلغاء الحظر",
+    "unknownUser": "مستخدم غير معروف",
+    
+    "errorTitle": "خطأ",
+    "successTitle": "نجاح",
+    "failedToLoad": "فشل في تحميل قائمة المستخدمين المحظورين.",
+    "loginRequired": "يرجى تسجيل الدخول لإلغاء حظر المستخدمين.",
+    
+    "unblockAlertTitle": "إلغاء حظر المستخدم",
+    "unblockAlertMessage": "هل أنت متأكد أنك تريد إلغاء حظر هذا المستخدم؟ قد تظهر منتجاته مرة أخرى في موجزك.",
+    "cancel": "إلغاء",
+    
+    "unblockSuccess": "تم إلغاء حظر المستخدم بنجاح.",
+    "unblockFailed": "فشل في إلغاء حظر المستخدم.",
+    
+    "emptyMessage": "لم تقم بحظر أي مستخدم حتى الآن.",
+    "emptySubtext": "لن يتمكن المستخدمون الذين تحظرهم من رؤية منتجاتك، ولن تتمكن من رؤية منتجاتهم."
+  },
     // Filter tabs
     filters: {
       All: "الكل",

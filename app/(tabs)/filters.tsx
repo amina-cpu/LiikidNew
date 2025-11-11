@@ -701,7 +701,7 @@ const modalStyles = StyleSheet.create({
     },
     contentContainer: {
         paddingHorizontal: 16,
-        height: 300,
+        height: 400,
     },
     title: {
         fontSize: 18,
@@ -739,7 +739,7 @@ const modalStyles = StyleSheet.create({
     },
     deliveryIconContainer: {
         width: 40,
-        height: 40,
+        height: 30,
         borderRadius: 20,
         backgroundColor: LIGHT_GRAY,
         justifyContent: 'center',

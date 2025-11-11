@@ -672,7 +672,7 @@ const AddListingForm = () => {
               disabled={uploading}
             >
               <Text style={[styles.dealTypeText, dealType === 'sell' && styles.dealTypeTextActive]}>
-                {i18n.t('filters.sell')}
+                {i18n.t('filters.Sell')}
               </Text>
             </TouchableOpacity>
             
@@ -684,7 +684,7 @@ const AddListingForm = () => {
                   disabled={uploading}
                 >
                   <Text style={[styles.dealTypeText, dealType === 'rent' && styles.dealTypeTextActive]}>
-                    {i18n.t('filters.rent')}
+                    {i18n.t('filters.Rent')}
                   </Text>
                 </TouchableOpacity>
                 
@@ -694,7 +694,7 @@ const AddListingForm = () => {
                   disabled={uploading}
                 >
                   <Text style={[styles.dealTypeText, dealType === 'exchange' && styles.dealTypeTextActive]}>
-                    {i18n.t('filters.exchange')}
+                    {i18n.t('filters.Exchange')}
                   </Text>
                 </TouchableOpacity>
               </>

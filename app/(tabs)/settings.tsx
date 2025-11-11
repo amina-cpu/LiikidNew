@@ -1,7 +1,8 @@
 import { AntDesign, FontAwesome5, Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+    ActivityIndicator,
     Alert,
     SafeAreaView,
     ScrollView,
@@ -11,7 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import i18n from '../../lib/i18n'; // ASSUMED IMPORT PATH
+import i18n, { loadLocale } from '../../lib/i18n';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,29 +20,42 @@ const SettingsScreen = () => {
     const router = useRouter();
     const { user, signOut } = useAuth();
     const [unreadCount, setUnreadCount] = useState(0);
+    const [isI18nReady, setIsI18nReady] = useState(false);
+
+    // Initialize i18n on mount
+    useEffect(() => {
+        const initLanguage = async () => {
+            try {
+                await loadLocale();
+                setIsI18nReady(true);
+                console.log('✅ i18n loaded, current language:', i18n.getLanguage());
+            } catch (error) {
+                console.error('❌ Error loading i18n:', error);
+                setIsI18nReady(true); // Set to true anyway to prevent infinite loading
+            }
+        };
+        initLanguage();
+    }, []);
 
     const handleLogout = async () => {
         Alert.alert(
-            i18n.t('profile.logout'), // Use i18n key
-            i18n.t('settingsScreen.areYouSureLogout'), // Use i18n key
+            i18n.t('profile.logout'),
+            i18n.t('settingsScreen.areYouSureLogout'),
             [
-                { text: i18n.t('settingsScreen.cancel'), style: 'cancel' }, // Use i18n key
+                { text: i18n.t('settingsScreen.cancel'), style: 'cancel' },
                 {
-                    text: i18n.t('profile.logout'), // Use i18n key
+                    text: i18n.t('profile.logout'),
                     style: 'destructive',
                     onPress: async () => {
                         try {
                             console.log('🚪 Starting logout process...');
                             
-                            // Sign out from Supabase first
                             await supabase.auth.signOut();
                             console.log('✅ Signed out from Supabase');
                             
-                            // Sign out from context (clears AsyncStorage)
                             await signOut();
                             console.log('✅ Cleared AsyncStorage and user data');
                             
-                            // Navigate to login screen
                             setTimeout(() => {
                                 console.log('🚀 Navigating to login screen');
                                 router.replace('/(auth)/signup');
@@ -49,7 +63,10 @@ const SettingsScreen = () => {
                             
                         } catch (error) {
                             console.error('❌ Logout error:', error);
-                            Alert.alert(i18n.t('settingsScreen.error'), i18n.t('settingsScreen.logoutFailed')); // Use i18n keys
+                            Alert.alert(
+                                i18n.t('settingsScreen.error'), 
+                                i18n.t('settingsScreen.logoutFailed')
+                            );
                         }
                     },
                 },
@@ -95,6 +112,15 @@ const SettingsScreen = () => {
         </TouchableOpacity>
     );
 
+    // Show loading while i18n initializes
+    if (!isI18nReady) {
+        return (
+            <SafeAreaView style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color="#16A085" />
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
@@ -103,7 +129,7 @@ const SettingsScreen = () => {
                 <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.backButton}>
                     <Ionicons name="chevron-back" size={28} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{i18n.t('settingsScreen.title')}</Text> {/* Use i18n key */}
+                <Text style={styles.headerTitle}>{i18n.t('profile.settings')}</Text>
                 <View style={styles.placeholder} />
             </View>
 
@@ -124,7 +150,7 @@ const SettingsScreen = () => {
                     <SettingItem
                         IconComponent={Ionicons}
                         iconName="language-outline"
-                        title={i18n.t('language')} // New i18n key
+                        title={i18n.t('settingsScreen.language')}
                         onPress={() => {
                             router.push('/tenten/language');
                         }}
@@ -205,7 +231,11 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#fff',
-        marginBottom:30
+        marginBottom: 30
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     header: {
         flexDirection: 'row',

@@ -3,18 +3,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-  useColorScheme
+    ActivityIndicator,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
+    useColorScheme
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
+import i18n from '../../lib/i18n';
 
 interface NotificationSettings {
     newFollowers: boolean;
@@ -31,8 +32,8 @@ interface NotificationSettings {
 
 const NotificationSettingsScreen = () => {
     const router = useRouter();
-    const colorScheme = useColorScheme(); // <-- HOOK: Get current theme
-    const isDark = colorScheme === 'dark'; // <-- CHECK: Determine if dark mode is active
+    const colorScheme = useColorScheme();
+    const isDark = colorScheme === 'dark';
 
     const [userId, setUserId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -49,29 +50,25 @@ const NotificationSettingsScreen = () => {
         orders: true,
     });
 
-    // --- Dynamic Color Definitions ---
     const colors = {
-        background: isDark ? '#000000' : '#F2F2F7', // Main screen background
-        headerBackground: isDark ? '#000000' : '#FFFFFF', // Header background
-        text: isDark ? '#FFFFFF' : '#000000', // Primary text color
-        secondaryText: isDark ? '#AAAAAA' : '#6A6A6A', // Secondary text (titles, descriptions)
-        itemBackground: isDark ? '#1C1C1E' : '#FFFFFF', // Setting item background
-        itemBorder: isDark ? '#2C2C2E' : '#E5E5EA', // Setting item border
-        accent: '#00A78F', // Primary app accent color (Teal/Green)
-        switchOff: isDark ? '#3e3e3e' : '#D1D1D6', // Switch track color when false
+        background: isDark ? '#000000' : '#F2F2F7',
+        headerBackground: isDark ? '#000000' : '#FFFFFF',
+        text: isDark ? '#FFFFFF' : '#000000',
+        secondaryText: isDark ? '#AAAAAA' : '#6A6A6A',
+        itemBackground: isDark ? '#1C1C1E' : '#FFFFFF',
+        itemBorder: isDark ? '#2C2C2E' : '#E5E5EA',
+        accent: '#00A78F',
+        switchOff: isDark ? '#3e3e3e' : '#D1D1D6',
     };
 
-    // Load user and their settings from database
     useEffect(() => {
         loadUserSettings();
     }, []);
 
     const loadUserSettings = async () => {
         try {
-            // Get current user ID
             const userJson = await AsyncStorage.getItem('user');
             if (!userJson) {
-                // Using a fallback console log instead of Alert as per instructions
                 console.error('User not logged in.');
                 router.back();
                 return;
@@ -80,7 +77,6 @@ const NotificationSettingsScreen = () => {
             const user = JSON.parse(userJson);
             setUserId(user.user_id);
 
-            // Fetch notification settings from database
             const { data, error } = await supabase
                 .from('users')
                 .select('notification_settings')
@@ -111,12 +107,10 @@ const NotificationSettingsScreen = () => {
 
             if (error) {
                 console.error('Error saving notification settings:', error);
-                // Using console.log instead of Alert
                 console.log('Failed to save notification settings.');
             }
         } catch (error) {
             console.error('Error saving settings:', error);
-            // Using console.log instead of Alert
             console.log('Failed to save notification settings.');
         }
     };
@@ -127,7 +121,6 @@ const NotificationSettingsScreen = () => {
         saveSettings(newSettings);
     };
 
-    // --- Setting Item Component (using dynamic colors) ---
     const SettingItem = ({
         title,
         description,
@@ -168,94 +161,43 @@ const NotificationSettingsScreen = () => {
 
     return (
         <SafeAreaView style={[localStyles.container, { backgroundColor: colors.background }]}>
-            {/* Set StatusBar style based on current theme */}
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
             <View style={[localStyles.header, { backgroundColor: colors.headerBackground }]}>
-                <TouchableOpacity onPress={() =>  router.push('/(tabs)/settings')}  style={localStyles.backButton}>
+                <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={localStyles.backButton}>
                     <Ionicons name="chevron-back" size={28} color={colors.text} />
                 </TouchableOpacity>
-                <Text style={[localStyles.headerTitle, { color: colors.text }]}>Notifications</Text>
+                <Text style={[localStyles.headerTitle, { color: colors.text }]}>
+                    {i18n.t('notificationsSettings.title')}
+                </Text>
                 <View style={localStyles.placeholder} />
             </View>
 
             <ScrollView style={localStyles.content} showsVerticalScrollIndicator={false}>
                 <View style={localStyles.section}>
-                    <Text style={[localStyles.sectionTitle, { color: colors.secondaryText }]}>Social</Text>
+                    <Text style={[localStyles.sectionTitle, { color: colors.secondaryText }]}>
+                        {i18n.t('notificationsSettings.social')}
+                    </Text>
                     <SettingItem 
-                        title="New Followers" 
-                        description="Get notified when someone follows you"
+                        title={i18n.t('notificationsSettings.newFollowersTitle')}
+                        description={i18n.t('notificationsSettings.newFollowersDescription')}
                         settingKey="newFollowers" 
                     />
                     <SettingItem 
-                        title="Likes" 
-                        description="Get notified when someone likes your product"
+                        title={i18n.t('notificationsSettings.likesTitle')}
+                        description={i18n.t('notificationsSettings.likesDescription')}
                         settingKey="likes" 
                     />
-                    {/* <SettingItem 
-                        title="Comments" 
-                        description="Get notified when someone comments"
-                        settingKey="comments" 
-                    />
-                    <SettingItem 
-                        title="Mentions" 
-                        description="Get notified when someone mentions you"
-                        settingKey="mentions" 
-                    /> */}
                 </View>
-
-                {/* <View style={localStyles.section}>
-                    <Text style={[localStyles.sectionTitle, { color: colors.secondaryText }]}>Recommendations</Text>
-                    <SettingItem 
-                        title="Recommended For You" 
-                        description="Get personalized product recommendations"
-                        settingKey="recommendedForYou" 
-                    />
-                    <SettingItem 
-                        title="Collectible Updates" 
-                        description="Updates on collectibles you're interested in"
-                        settingKey="collectibleUpdates" 
-                    />
-                </View>
-
-                <View style={localStyles.section}>
-                    <Text style={[localStyles.sectionTitle, { color: colors.secondaryText }]}>Live Events</Text>
-                    <SettingItem 
-                        title="Bookmarked Live Events" 
-                        description="Reminders for events you bookmarked"
-                        settingKey="liveBookmarked" 
-                    />
-                    <SettingItem 
-                        title="Suggested Live Events" 
-                        description="Get notified about live events you might like"
-                        settingKey="liveMightBeInterested" 
-                    />
-                </View>
-
-                <View style={localStyles.section}>
-                    <Text style={[localStyles.sectionTitle, { color: colors.secondaryText }]}>Shopping</Text>
-                    <SettingItem 
-                        title="Marketplace" 
-                        description="Updates about marketplace items"
-                        settingKey="marketplace" 
-                    />
-                    <SettingItem 
-                        title="Orders" 
-                        description="Updates about your orders and purchases"
-                        settingKey="orders" 
-                    />
-                </View> */}
             </ScrollView>
         </SafeAreaView>
     );
 };
 
-// Static styles (structural/layout) that don't need to change based on theme
 const localStyles = StyleSheet.create({
     container: {
         flex: 1,
         marginBottom: 70,
-        // Background color is now set inline
     },
     centered: {
         justifyContent: 'center',
@@ -268,7 +210,6 @@ const localStyles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 16,
         marginTop: 30,
-        // Colors are now set inline
     },
     backButton: {
         padding: 8,
@@ -277,7 +218,6 @@ const localStyles = StyleSheet.create({
     headerTitle: {
         fontSize: 20,
         fontWeight: '600',
-        // Color is now set inline
     },
     placeholder: {
         width: 44,
@@ -293,7 +233,6 @@ const localStyles = StyleSheet.create({
     sectionTitle: {
         fontSize: 14,
         fontWeight: '600',
-        // Color is now set inline
         marginBottom: 12,
         marginLeft: 8,
         textTransform: 'uppercase',
@@ -308,7 +247,6 @@ const localStyles = StyleSheet.create({
         marginBottom: 8,
         borderRadius: 12,
         borderWidth: 1,
-        // Colors are now set inline
     },
     settingTextContainer: {
         flex: 1,
@@ -318,12 +256,10 @@ const localStyles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '500',
         marginBottom: 2,
-        // Color is now set inline
     },
     settingDescription: {
         fontSize: 13,
         marginTop: 2,
-        // Color is now set inline
     },
 });
 

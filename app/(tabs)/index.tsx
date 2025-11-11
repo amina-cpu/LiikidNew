@@ -125,26 +125,25 @@ const getCategoryTranslation = (catName: string): string => {
   const normalized = catName.trim().toLowerCase();
 
   const categoryMap: { [key: string]: string } = {
-     'Animal Shop': 'AnimalShop',
-    'food': 'Food',
-    
-     'home & furniture':'HomeandFurniture',
-    'computers & accessories': 'ComputersAccessories',
-    'real estate': 'RealEstate',
-    'electronics & home appliance': 'ElectronicsHomeAppliance',
-    'materials & equipment': 'MaterialsEquipment',
-    'repair parts': 'RepairParts',
-    'cars and vehicles': 'CarsVehicles',
-    'sports': 'Sports',
-    'phones & accessories': 'PhonesAccessories',
-    'travel': 'Travel',
-    'computers & laptops': 'ComputersLaptops',
-    'hobbies and entertainment': 'HobbiesEntertainment',
-    'baby essentials': 'BabyEssentials',
-    'clothing & fashion': 'ClothingFashion',
-    'health & beauty': 'HealthBeauty',
-    'homemade & handcrafted': 'HomemadeHandcrafted',
-  };
+  'food': 'Food',
+  'animals shop': 'AnimalShop', // ✅ fixed
+  'home & furniture': 'HomeandFurniture',
+  'computers & accessories': 'ComputersAccessories',
+  'real estate': 'RealEstate',
+  'electronics & home appliance': 'ElectronicsHomeAppliance',
+  'materials & equipment': 'MaterialsEquipment',
+  'repair parts': 'RepairParts',
+  'cars and vehicles': 'CarsVehicles',
+  'sports': 'Sports',
+  'phones & accessories': 'PhonesAccessories',
+  'travel': 'Travel',
+  'computers & laptops': 'ComputersLaptops',
+  'hobbies and entertainment': 'HobbiesEntertainment',
+  'baby essentials': 'BabyEssentials',
+  'clothing & fashion': 'ClothingFashion',
+  'health & beauty': 'HealthBeauty',
+  'homemade & handcrafted': 'HomemadeHandcrafted',
+};
 
   const mappedKey = categoryMap[normalized];
 

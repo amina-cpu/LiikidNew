@@ -17,6 +17,7 @@ import {
     GestureHandlerRootView,
     Swipeable,
 } from 'react-native-gesture-handler';
+import i18n from '../../lib/i18n'; // Import i18n
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
 
@@ -230,19 +231,19 @@ const NotificationsScreen = () => {
         fetchNotifications(true);
     };
     
-    // --- Helper Functions (Unchanged) ---
+    // Helper function to get translated notification text
     const getNotificationText = (item: NotificationItem) => {
         switch (item.type) {
             case 'like':
                 return item.product?.name  
-                    ? `liked your product "${item.product.name}" ❤️`
-                    : 'liked your product ❤️';
+                    ? i18n.t('notificationsScreen.likedProduct').replace('{{product}}', item.product.name)
+                    : i18n.t('notificationsScreen.likedGeneric');
             case 'follow':
-                return 'started following you 👤';
+                return i18n.t('notificationsScreen.startedFollowing');
             case 'comment':
-                return 'commented on your post 💬';
+                return i18n.t('notificationsScreen.commented');
             case 'mention':
-                return 'mentioned you in a post 📣';
+                return i18n.t('notificationsScreen.mentioned');
             default:
                 return item.type;
         }
@@ -253,11 +254,21 @@ const NotificationsScreen = () => {
         const now = new Date();
         const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-        if (seconds < 60) return 'just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-        return `${Math.floor(seconds / 604800)}w ago`;
+        if (seconds < 60) return i18n.t('notificationsScreen.justNow');
+        if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            return i18n.t('notificationsScreen.minutesAgo').replace('{{count}}', minutes.toString());
+        }
+        if (seconds < 86400) {
+            const hours = Math.floor(seconds / 3600);
+            return i18n.t('notificationsScreen.hoursAgo').replace('{{count}}', hours.toString());
+        }
+        if (seconds < 604800) {
+            const days = Math.floor(seconds / 86400);
+            return i18n.t('notificationsScreen.daysAgo').replace('{{count}}', days.toString());
+        }
+        const weeks = Math.floor(seconds / 604800);
+        return i18n.t('notificationsScreen.weeksAgo').replace('{{count}}', weeks.toString());
     };
 
     const markAsRead = async (notificationId: number) => {
@@ -294,14 +305,12 @@ const NotificationsScreen = () => {
         dragX: Animated.AnimatedInterpolation<number>,
         item: NotificationItem
     ) => {
-        // The scale animation makes the delete icon/text pop in as the user swipes
         const scale = dragX.interpolate({
             inputRange: [-80, 0], 
             outputRange: [1, 0],
             extrapolate: 'clamp',
         });
         
-        // This is the full red background view
         return (
             <TouchableOpacity 
                 style={styles.deleteBackground}
@@ -315,9 +324,7 @@ const NotificationsScreen = () => {
         );
     };
 
-    // MODIFIED: renderItem function to use Swipeable
     const renderItem = ({ item, index }: { item: NotificationItem, index: number }) => {
-        // This function renders the actual visible notification content
         const renderNotificationContent = () => (
             <TouchableOpacity
                 style={[styles.item, !item.is_read && styles.unread]}
@@ -361,7 +368,6 @@ const NotificationsScreen = () => {
             </TouchableOpacity>
         );
 
-        // This is the Swipeable wrapper
         return (
             <Swipeable
                 ref={(ref) => row.current[index] = ref}
@@ -370,7 +376,6 @@ const NotificationsScreen = () => {
                 renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
                 onSwipeableOpen={(direction) => {
                     if (direction === 'right') {
-                        // Close any other open rows
                         row.current.forEach((ref, i) => {
                             if (i !== index && ref) {
                                 ref.close();
@@ -378,15 +383,7 @@ const NotificationsScreen = () => {
                         });
                     }
                 }}
-                // ** FIX: REMOVED THE CODE THAT CAUSED THE ERROR **
-                // The library will automatically detect a committed swipe based on `rightThreshold`.
-                // For a more immediate 'full swipe to delete' experience, you can increase 
-                // `rightThreshold` to a high value (e.g., 200) and rely only on the tap, 
-                // or use a separate gesture detection library if you need more custom control.
-                onSwipeableWillOpen={() => {
-                    // This callback is fine, but accessing dragX caused the error.
-                    // Keep it empty or use for simple cleanup/logging.
-                }}
+                onSwipeableWillOpen={() => {}}
                 overshootRight={false}
             >
                 {renderNotificationContent()}
@@ -403,14 +400,13 @@ const NotificationsScreen = () => {
     }
 
     return (
-        // WRAP EVERYTHING in GestureHandlerRootView
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() =>  router.push('/(tabs)/messages')} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.backButton}>
                         <Ionicons name="chevron-back" size={28} color="#000" />
                     </TouchableOpacity>
-                    <Text style={styles.title}>Notifications</Text>
+                    <Text style={styles.title}>{i18n.t('notificationsScreen.title')}</Text>
                     <View style={styles.headerRight}>
                         {notifications.some(n => !n.is_read) && (
                             <TouchableOpacity
@@ -431,7 +427,7 @@ const NotificationsScreen = () => {
                                     }
                                 }}
                             >
-                                <Text style={styles.markAllRead}>Mark all read</Text>
+                                <Text style={styles.markAllRead}>{i18n.t('notificationsScreen.markAllRead')}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -453,9 +449,9 @@ const NotificationsScreen = () => {
                     ListEmptyComponent={() => (
                         <View style={styles.emptyContainer}>
                             <Ionicons name="notifications-off-outline" size={64} color="#ccc" />
-                            <Text style={styles.emptyText}>No notifications yet</Text>
+                            <Text style={styles.emptyText}>{i18n.t('notificationsScreen.noNotifications')}</Text>
                             <Text style={styles.emptySubtext}>
-                                When someone likes your products or follows you, you'll see it here
+                                {i18n.t('notificationsScreen.emptySubtext')}
                             </Text>
                         </View>
                     )}
@@ -465,11 +461,10 @@ const NotificationsScreen = () => {
     );
 };
 
-// ** STYLES (Unchanged from the previous full code) **
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        marginBottom:70,
+        marginBottom: 70,
         backgroundColor: "#fff",
     },
     centered: {
@@ -483,7 +478,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 8,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        marginTop:30,
+        marginTop: 30,
         borderBottomColor: "#eee",
     },
     backButton: {
@@ -510,8 +505,6 @@ const styles = StyleSheet.create({
         padding: 16,
         paddingBottom: 32,
     },
-    
-    // SWIPE ACTION STYLES
     deleteBackground: {
         backgroundColor: '#FF3B30',
         justifyContent: 'center',
@@ -532,8 +525,6 @@ const styles = StyleSheet.create({
         marginTop: 4,
         fontSize: 12,
     },
-    // END SWIPE ACTION STYLES
-
     item: {
         padding: 14,
         borderRadius: 12,
