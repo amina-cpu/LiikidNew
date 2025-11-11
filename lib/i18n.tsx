@@ -108,7 +108,8 @@ someonesProfile: {
   loadingText: "Loading product details...",
   productNotFound: "Product not found.",
   errorLoading: "Failed to load product.",
-  
+  "million": "million",       // <-- NEW KEY for million
+    "priceSuffixDA": "DA",
   // Header Actions
   loginRequired: "Login Required",
   loginRequiredMessage: "Please login to like products",
@@ -677,7 +678,8 @@ productDetail: {
   loadingText: "Chargement des détails du produit...",
   productNotFound: "Produit introuvable.",
   errorLoading: "Échec du chargement du produit.",
-  
+  million: "millions",
+  priceSuffixDA: "DA",
   // Header Actions
   loginRequired: "Connexion requise",
   loginRequiredMessage: "Veuillez vous connecter pour aimer les produits",
@@ -1251,6 +1253,34 @@ filterss: {
       noPermission: "ليس لديك إذن لإضافة منتجات",
       productExists: "هذا المنتج موجود بالفعل"
     },
+
+    notificationsSettings: {
+    title: "الإشعارات",
+    social: "اجتماعي",
+    newFollowersTitle: "متابعون جدد",
+    newFollowersDescription: "احصل على إشعار عندما يتابعك شخص ما",
+    likesTitle: "الإعجابات",
+    likesDescription: "احصل على إشعار عندما يعجب شخص ما بمنتجك",
+    commentsTitle: "التعليقات",
+    commentsDescription: "احصل على إشعار عندما يعلق شخص ما",
+    mentionsTitle: "الإشارات",
+    mentionsDescription: "احصل على إشعار عندما يشير إليك شخص ما",
+    recommendations: "التوصيات",
+    recommendedForYouTitle: "موصى به لك",
+    recommendedForYouDescription: "احصل على توصيات منتجات مخصصة",
+    collectibleUpdatesTitle: "تحديثات المقتنيات",
+    collectibleUpdatesDescription: "تحديثات حول المقتنيات التي تهتم بها",
+    liveEvents: "الأحداث المباشرة",
+    bookmarkedLiveEventsTitle: "الأحداث المباشرة المحفوظة",
+    bookmarkedLiveEventsDescription: "تذكيرات للأحداث التي قمت بحفظها",
+    suggestedLiveEventsTitle: "الأحداث المباشرة المقترحة",
+    suggestedLiveEventsDescription: "احصل على إشعار حول الأحداث المباشرة التي قد تعجبك",
+    shopping: "التسوق",
+    marketplaceTitle: "السوق",
+    marketplaceDescription: "تحديثات حول عناصر السوق",
+    ordersTitle: "الطلبات",
+    ordersDescription: "تحديثات حول طلباتك ومشترياتك",
+},
     categories: {
   Food: "طعام",
   AnimalShop:"متجر الحيوانات",
@@ -1316,7 +1346,8 @@ filterss: {
   loadingText: "جارٍ تحميل تفاصيل المنتج...",
   productNotFound: "لم يتم العثور على المنتج.",
   errorLoading: "فشل تحميل المنتج.",
-  
+  million: "مليون",
+    priceSuffixDA: "دج", // دينار جزائري (DA)
   // Header Actions
   loginRequired: "تسجيل الدخول مطلوب",
   loginRequiredMessage: "يرجى تسجيل الدخول للإعجاب بالمنتجات",

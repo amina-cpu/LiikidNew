@@ -3,26 +3,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    Image, // ✅ NEW: Imported Image component
 } from "react-native";
 import { supabase } from "../../../lib/Supabase";
-import i18n from "../../../lib/i18n"; // ADDED
+import i18n from "../../../lib/i18n";
 
 // Constants
 const PRIMARY_TEAL = "#16A085";
 const DARK_GRAY = "#333333";
 
-// Interface for a blockedUsers user entry
+// Interface for a blocked user entry
+// ✅ FIXED: Using 'blocked_id' and added 'profile_image_url'
 interface blockedUsersUser {
-    id: number;          // ID from the 'block' table
-    blockedUsers_id: number;  // The ID of the blockedUsers user
+    id: number;          // ID from the 'block' table
+    blocked_id: number;  // The ID of the blocked user (Matches SQL 'blocked_id')
     username: string;
+    profile_image_url: string | null; // ✅ New profile image URL
 }
 
 // Function to safely get the current user ID
@@ -55,17 +58,17 @@ export default function blockedUsersScreen() {
     const [loading, setLoading] = useState(true);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
-    // Function to fetch the list of blockedUsers users
+    // Function to fetch the list of blocked users
     const fetchblockedUsers = useCallback(async (userId: number) => {
         setLoading(true);
         try {
-            // Fetch the 'block' table data, joining it with the 'users' table
+            // ✅ FINAL QUERY FIX: No comments, uses 'blocked_id', and selects 'profile_image_url'
             const { data, error } = await supabase
                 .from('block')
                 .select(`
                     id, 
-                    blockedUsers_id, 
-                    blockedUsers_user:blockedUsers_id (username)
+                    blocked_id, 
+                    users!blocked_id(username, profile_image_url)
                 `)
                 .eq('blocker_id', userId)
                 .order('created_at', { ascending: false });
@@ -75,15 +78,16 @@ export default function blockedUsersScreen() {
             // Transform the data into the desired format
             const list: blockedUsersUser[] = (data || []).map(item => ({
                 id: item.id,
-                blockedUsers_id: item.blockedUsers_id,
-                username: item.blockedUsers_user?.username || i18n.t('blockedUsers.unknownUser'), // UPDATED
+                blocked_id: item.blocked_id, 
+                username: item.users?.username || i18n.t('blockedUsers.unknownUser'),
+                // ✅ MAPPING: Pull the image URL from the joined 'users' object
+                profile_image_url: item.users?.profile_image_url || null,
             }));
             
             setblockedUsers(list);
 
         } catch (error: any) {
-            console.error('Error fetching blockedUsers users:', error.message);
-            // UPDATED
+            console.error('Error fetching blocked users:', error.message); 
             Alert.alert(i18n.t('blockedUsers.errorTitle'), i18n.t('blockedUsers.failedToLoad')); 
         } finally {
             setLoading(false);
@@ -93,45 +97,38 @@ export default function blockedUsersScreen() {
     // Function to handle the unblock action
     const handleUnblockUser = async (userToUnblockId: number) => {
         if (!currentUserId) {
-            // UPDATED
             Alert.alert(i18n.t('blockedUsers.errorTitle'), i18n.t('blockedUsers.loginRequired')); 
             return;
         }
 
-        // UPDATED
         Alert.alert(
             i18n.t('blockedUsers.unblockAlertTitle'),
             i18n.t('blockedUsers.unblockAlertMessage'),
             [
                 {
-                    text: i18n.t('blockedUsers.cancel'), // UPDATED
+                    text: i18n.t('blockedUsers.cancel'),
                     style: "cancel",
                 },
                 {
-                    text: i18n.t('blockedUsers.unblockButton'), // UPDATED
+                    text: i18n.t('blockedUsers.unblockButton'),
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            // Delete the entry from the 'block' table
+                            // Delete logic uses 'blocked_id'
                             const { error } = await supabase.from('block')
                                 .delete()
                                 .eq('blocker_id', currentUserId)
-                                .eq('blockedUsers_id', userToUnblockId);
+                                .eq('blocked_id', userToUnblockId); 
 
                             if (error) throw error;
 
-                            // UPDATED
                             Alert.alert(i18n.t('blockedUsers.successTitle'), i18n.t('blockedUsers.unblockSuccess')); 
                             
-                            // Remove the user from the local state and refresh home feed implicitly
-                            setblockedUsers(prev => prev.filter(u => u.blockedUsers_id !== userToUnblockId));
+                            // Remove the user from the local state 
+                            setblockedUsers(prev => prev.filter(u => u.blocked_id !== userToUnblockId));
                             
-                            // 🔥 Signal to the home page to reload data (e.g., via event, or simply rely on navigation)
-                            // For a robust app, a global state update or event emitter would be ideal here.
-
                         } catch (error: any) {
                             console.error("Error unblocking user:", error.message);
-                            // UPDATED
                             Alert.alert(i18n.t('blockedUsers.errorTitle'), i18n.t('blockedUsers.unblockFailed')); 
                         }
                     }
@@ -152,19 +149,30 @@ export default function blockedUsersScreen() {
             }
         };
         loadUserAndData();
-        // Re-fetch on screen focus (if using a router that supports it)
-        // You would typically use a listener here, but for simplicity, we rely on initial load.
     }, [fetchblockedUsers]);
 
     // Render Item for FlatList
     const renderItem = ({ item }: { item: blockedUsersUser }) => (
         <View style={styles.userRow}>
-            <Text style={styles.usernameText}>{item.username}</Text>
+            <View style={styles.userInfo}>
+                {/* ✅ UI: Profile Picture or Placeholder */}
+                {item.profile_image_url ? (
+                    <Image 
+                        source={{ uri: item.profile_image_url }} 
+                        style={styles.profileImage} 
+                    />
+                ) : (
+                    <View style={styles.profileImagePlaceholder}>
+                        <Ionicons name="person" size={24} color="#fff" />
+                    </View>
+                )}
+                <Text style={styles.usernameText}>{item.username}</Text>
+            </View>
             <TouchableOpacity 
                 style={styles.unblockButton} 
-                onPress={() => handleUnblockUser(item.blockedUsers_id)}
+                onPress={() => handleUnblockUser(item.blocked_id)}
             >
-                <Text style={styles.unblockText}>{i18n.t('blockedUsers.unblockButton')}</Text> {/* UPDATED */}
+                <Text style={styles.unblockText}>{i18n.t('blockedUsers.unblockButton')}</Text>
             </TouchableOpacity>
         </View>
     );
@@ -175,7 +183,7 @@ export default function blockedUsersScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <Ionicons name="chevron-back" size={28} color={DARK_GRAY} />
                 </TouchableOpacity>
-                <Text style={styles.title}>{i18n.t('blockedUsers.title')}</Text> {/* UPDATED */}
+                <Text style={styles.title}>{i18n.t('blockedUsers.title')}</Text> 
                 <View style={{ width: 28 }} />
             </View>
 
@@ -184,7 +192,6 @@ export default function blockedUsersScreen() {
             ) : blockedUsers.length === 0 ? (
                 <View style={styles.emptyContainer}>
                     <Ionicons name="people-circle-outline" size={80} color="#ccc" />
-                    {/* UPDATED */}
                     <Text style={styles.emptyText}>{i18n.t('blockedUsers.emptyMessage')}</Text> 
                     <Text style={styles.emptySubText}>
                         {i18n.t('blockedUsers.emptySubtext')}
@@ -193,7 +200,7 @@ export default function blockedUsersScreen() {
             ) : (
                 <FlatList
                     data={blockedUsers}
-                    keyExtractor={(item) => String(item.blockedUsers_id)}
+                    keyExtractor={(item) => String(item.blocked_id)}
                     renderItem={renderItem}
                     contentContainerStyle={styles.listContent}
                 />
@@ -203,7 +210,6 @@ export default function blockedUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-    // ... (Your styles remain the same)
     container: { 
         flex: 1, 
         backgroundColor: "#fff",
@@ -256,11 +262,33 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#f0f0f0',
     },
+    // ✅ NEW: Styling for profile image and grouping
+    userInfo: { 
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    profileImage: { 
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        backgroundColor: '#ccc',
+    },
+    profileImagePlaceholder: { 
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        backgroundColor: PRIMARY_TEAL,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     usernameText: {
         fontSize: 16,
         color: DARK_GRAY,
         fontWeight: '500',
-        flex: 1,
+        // Removed flex to allow the image and username to wrap nicely
     },
     unblockButton: {
         backgroundColor: PRIMARY_TEAL,

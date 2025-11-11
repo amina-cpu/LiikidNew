@@ -68,32 +68,76 @@ const COLORS = {
 };
 
 /**
- * FIXED: Price formatting function to use K (thousands) and M (millions) 
- * correctly, ensuring clean display for round numbers (e.g., 90000 -> 90K, 9000000 -> 9M).
+ * Price formatting for compact display (e.g., 9.2K, 1.5M). 
+ * This is used for the Exchange banner display.
  */
 const formatPrice = (price: number): string => {
   if (price >= 1000000) {
     const divided = price / 1000000;
-    // Check if it's a clean million (e.g., 9000000)
     if (divided % 1 === 0) {
       return `${Math.floor(divided)}M`;
     } else {
-      // Use one decimal place for non-clean millions (e.g., 9200000 -> 9.2M)
       return `${divided.toFixed(1)}M`;
     }
   } else if (price >= 1000) {
     const divided = price / 1000;
     
-    // Check if it's a clean thousand (e.g., 1000, 50000). This handles 5-digit numbers correctly.
     if (divided % 1 === 0) {
       return `${Math.floor(divided)}K`;
     } else {
-      // Use one decimal place for non-clean thousands (e.g., 1234 -> 1.2K)
       return `${divided.toFixed(1)}K`;
     }
   }
   return price.toLocaleString();
 };
+
+/**
+ * FIX: Price formatting function for the main display, now supporting:
+ * 1. Price < 1000: Display numerically (e.g., 500)
+ * 2. 1000 <= Price < 10000: Display with 'K' suffix (e.g., 9000 -> 9K)
+ * 3. Price >= 10000: Display with 'million' text (e.g., 10000 -> 1 million)
+ */
+const formatPriceMainDisplay = (product: ProductDetail): string | null => {
+  // If it's pure exchange, return null (handled by exchange badge logic)
+  if (product.listing_type === "exchange" && !product.also_exchange) return null;
+  
+  const price = product.price;
+  const isRent = product.listing_type === "rent";
+  const suffix = isRent ? i18n.t('productDetail.priceSuffixDAMonth') : i18n.t('productDetail.priceSuffixDA');
+  
+  if (price >= 10000) {
+    // 3. Price >= 10000: Display with 'million' text
+    const millions = price / 10000; 
+    let formattedMillions;
+
+    if (millions % 1 === 0) {
+      formattedMillions = millions.toString();
+    } else if (millions >= 10) {
+      formattedMillions = Math.round(millions).toString();
+    } else {
+      formattedMillions = millions.toFixed(1);
+    }
+    
+    return `${formattedMillions} ${i18n.t('productDetail.million')} ${suffix}`;
+    
+  } else if (price >= 1000) {
+    // 2. 1000 <= Price < 10000: Display with 'K' suffix
+    const formattedK = formatPrice(price); // Use the K/M formatter for this range
+    
+    // Adjust suffix to correctly combine DA and /month if needed
+    if (isRent) {
+      // Example: 9K DA/month (using priceSuffixDA and perMonth)
+      return `${formattedK} ${i18n.t('productDetail.priceSuffixDA')}${i18n.t('productDetail.perMonth')}`;
+    }
+    // Example: 9K DA
+    return `${formattedK} ${i18n.t('productDetail.priceSuffixDA')}`;
+    
+  } else {
+    // 1. Price < 1000: Display numerically
+    return `${price.toLocaleString()} ${suffix}`;
+  }
+};
+
 
 const ProductDetailScreen = () => {
   const { id: productId } = useLocalSearchParams();
@@ -144,7 +188,11 @@ const ProductDetailScreen = () => {
 
   useEffect(() => {
     const checkIfLiked = async () => {
-      if (!currentUserId || !productId) return;
+      // FIX: Ensure both currentUserId and productId are available.
+      if (!currentUserId || !productId) {
+        setIsFavorite(false); // Default to false if we can't check
+        return;
+      }
 
       try {
         const { data, error } = await supabase
@@ -154,14 +202,14 @@ const ProductDetailScreen = () => {
           .eq('product_id', productId)
           .single();
 
-        // FIX: Explicitly check for data. If data is present, it's liked.
+        // FIX: Explicitly check for data presence. 
         if (data) {
           setIsFavorite(true);
         } else {
-          setIsFavorite(false); // Explicitly set to false if no like record is found.
+          setIsFavorite(false);
         }
 
-        // Handle actual errors (PGRST116 is the "Expected 1 row but found 0" error we expect for unliked products)
+        // Handle actual errors, ignoring the expected 'no rows' error (PGRST116)
         if (error && error.code !== 'PGRST116') {
             throw error;
         }
@@ -387,16 +435,8 @@ const ProductDetailScreen = () => {
       ? COLORS.rent
       : COLORS.exchange;
 
-  const formatPriceDisplay = () => {
-    if (product.listing_type === "exchange" && !product.also_exchange) return null;
-    
-    const formattedPrice = formatPrice(product.price);
-    
-    if (product.listing_type === "rent") {
-      return `${formattedPrice} DA${i18n.t('productDetail.perMonth')}`;
-    }
-    return `${formattedPrice} DA`;
-  };
+  // Use the main display formatter for the price badge
+  const priceDisplay = formatPriceMainDisplay(product);
   
   const isExchangeDisplayActive = product.also_exchange || product.listing_type === "exchange";
 
@@ -504,6 +544,7 @@ const ProductDetailScreen = () => {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.exchangeGradient}
               >
+                {/* Using the compact K/M formatter for the exchange price here */}
                 <Text style={styles.exchangePriceTextBlue}> 
                   {formatPrice(product.price)} DA
                 </Text>
@@ -514,11 +555,14 @@ const ProductDetailScreen = () => {
               </LinearGradient>
             </View>
           ) : (
-            <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
-              <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
-                {formatPriceDisplay()}
-              </Text>
-            </View>
+            // Using the new 'K/million' formatter for the main price display
+            priceDisplay && (
+                <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
+                    <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
+                        {priceDisplay}
+                    </Text>
+                </View>
+            )
           )}
 
           {product.hasShipping && (

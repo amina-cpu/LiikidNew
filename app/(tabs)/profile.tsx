@@ -18,7 +18,7 @@ import {
     View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
-import i18n from '../../lib/i18n'; // <-- Import i18n
+import i18n from '../../lib/i18n'; 
 import { useAuth } from '../context/AuthContext';
 
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
@@ -55,9 +55,7 @@ interface Category {
     delivery: boolean;
 }
 
-// NOTE: ProductCard doesn't need i18n for its main content (product data is dynamic), 
-// but if "Exchange" or the price format currency text was translatable, you'd apply it here.
-// For simplicity, I'll assume the price format is universal or handled elsewhere.
+// NOTE: The ProductCard component remains unchanged as the filtering happens in the fetch logic.
 const ProductCard: React.FC<{
     product: Product;
     categories: Category[];
@@ -139,19 +137,6 @@ const ProductCard: React.FC<{
                             />
                         </View>
                     )}
-
-                    {/* {showMenu ? (
-                        <TouchableOpacity style={styles.threeDotsMenu}>
-                            <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
-                        </TouchableOpacity>
-                    ) : (
-                        <TouchableOpacity 
-                            style={styles.heartIcon}
-                            onPress={handleUnlike}
-                        >
-                            <Ionicons name="heart" size={22} color="#FF5B5B" />
-                        </TouchableOpacity>
-                    )} */}
                 </View>
 
                 <View style={styles.cardDetails}>
@@ -173,8 +158,6 @@ const ProductCard: React.FC<{
 
 const ProfileScreen = () => {
     const router = useRouter();
-    // Keys 'Post' and 'Liked' are used internally for state, 
-    // but the displayed text will be translated.
     const [activeTab, setActiveTab] = useState('Post'); 
     const [userData, setUserData] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
@@ -190,6 +173,9 @@ const ProfileScreen = () => {
     const [categories, setCategories] = useState<Category[]>([]);
     const [loadingProducts, setLoadingProducts] = useState(false);
     const [loadingLiked, setLoadingLiked] = useState(false);
+    
+    // ✅ NEW STATE: To store the IDs of users the current user has blocked
+    const [blockedUserIds, setBlockedUserIds] = useState<number[]>([]); 
 
     useFocusEffect(
         useCallback(() => {
@@ -204,13 +190,28 @@ const ProfileScreen = () => {
     const requestPermissions = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            // NOTE: Alert strings are left hardcoded, but you should translate these too 
-            // by using i18n.t('permissionNeeded') and i18n.t('allowPhotoAccessMsg').
             Alert.alert('Permission needed', 'Please allow access to your photos to upload a profile picture');
         }
     };
 
-    // const fetchUnreadNotifications = async (userId: number) => { ... }; // Unchanged
+    // ✅ NEW FUNCTION: Fetch the IDs of users the current user has blocked
+    const fetchBlockedUsers = async (userId: number): Promise<number[]> => {
+        try {
+            const { data, error } = await supabase
+                .from('block')
+                .select('blocked_id')
+                .eq('blocker_id', userId);
+
+            if (error) throw error;
+
+            // Extract the blocked_id values into an array of numbers
+            return (data || []).map(item => item.blocked_id);
+        } catch (error) {
+            console.error('Error fetching blocked users for filtering:', error);
+            return []; // Return empty array on failure
+        }
+    };
+
 
     const loadUserData = async (isRefreshing = false) => {
         try {
@@ -237,20 +238,20 @@ const ProfileScreen = () => {
                     setUserData(user);
                 }
 
+                // --- Fetch Counts ---
                 const { count: followingCount } = await supabase
                     .from('user_follows')
                     .select('*', { count: 'exact', head: true })
                     .eq('follower_id', user.user_id);
-                
                 setFollowingCount(followingCount || 0);
 
                 const { count: followersCount } = await supabase
                     .from('user_follows')
                     .select('*', { count: 'exact', head: true })
                     .eq('following_id', user.user_id);
-                
                 setFollowersCount(followersCount || 0);
 
+                // --- Fetch Categories ---
                 const { data: categoriesData, error: categoriesError } = await supabase
                     .from('categories')
                     .select('id, name, description, delivery');
@@ -258,18 +259,20 @@ const ProfileScreen = () => {
                 if (categoriesError) throw categoriesError;
                 setCategories(categoriesData || []);
 
-                // Fetch unread notifications
-                // await fetchUnreadNotifications(user.user_id);
+                // --- Fetch Blocked Users (NEW STEP) ---
+                const blockedIds = await fetchBlockedUsers(user.user_id);
+                setBlockedUserIds(blockedIds); // Store for future use
 
+                // --- Fetch Products ---
                 await Promise.all([
                     fetchUserProducts(user.user_id),
-                    fetchLikedProducts(user.user_id)
+                    // ✅ UPDATED CALL: Pass the blocked IDs to the liked products function
+                    fetchLikedProducts(user.user_id, blockedIds) 
                 ]);
             }
         } catch (error) {
             console.error('Error loading user data:', error);
             if (!isRefreshing) {
-                // NOTE: Alert strings are left hardcoded
                 Alert.alert('Error', 'Failed to load profile data');
             }
         } finally {
@@ -279,9 +282,6 @@ const ProfileScreen = () => {
             }
         }
     };
-
-    // Real-time subscription for notifications (Unchanged)
-    // useEffect(() => { ... }, [userData]);
 
     const onRefresh = useCallback(() => {
         setRefreshing(true);
@@ -301,47 +301,94 @@ const ProfileScreen = () => {
             setProducts(data || []);
         } catch (error: any) {
             console.error('Error fetching user products:', error);
-            // NOTE: Alert strings are left hardcoded
             Alert.alert('Error', 'Failed to load products'); 
         } finally {
             setLoadingProducts(false);
         }
     };
 
-    const fetchLikedProducts = async (userId: number) => {
-        try {
-            setLoadingLiked(true);
-            
-            const { data: likesData, error: likesError } = await supabase
-                .from('likes')
-                .select('product_id')
-                .eq('user_id', userId)
-                .not('product_id', 'is', null)
-                .order('created_at', { ascending: false });
+// In ProfileScreen.tsx:
+const fetchLikedProducts = async (userId: number, blockedIds: number[]) => {
+    try {
+        setLoadingLiked(true);
+        
+        // 1. Get the IDs of products the user has liked
+        const { data: likesData, error: likesError } = await supabase
+            .from('likes')
+            .select('product_id')
+            .eq('user_id', userId)
+            .not('product_id', 'is', null)
+            .order('created_at', { ascending: false });
 
-            if (likesError) throw likesError;
+        if (likesError) throw likesError;
 
-            if (likesData && likesData.length > 0) {
-                const productIds = likesData.map(like => like.product_id);
-                
-                const { data: productsData, error: productsError } = await supabase
-                    .from('products')
-                    .select('id, name, price, listing_type, image_url, latitude, longitude, location_address, created_at, category_id')
-                    .in('id', productIds);
+        // CRITICAL HARDENING: Ensure all product IDs are non-null and valid numbers
+        const productIds = (likesData || [])
+            .map(like => like.product_id)
+            .filter((id): id is number => typeof id === 'number' && id !== null); 
 
-                if (productsError) throw productsError;
-                setLikedProducts(productsData || []);
-            } else {
-                setLikedProducts([]);
-            }
-        } catch (error: any) {
-            console.error('Error fetching liked products:', error);
-            // NOTE: Alert strings are left hardcoded
-            Alert.alert('Error', 'Failed to load liked products'); 
-        } finally {
+        // CRITICAL CHECK 1: If no products are liked, stop immediately.
+        if (productIds.length === 0) {
+            setLikedProducts([]);
             setLoadingLiked(false);
+            return;
         }
-    };
+
+        // 2. Filter the blockedIds list again for safety (in case the upstream fetch returns junk)
+        const safeBlockedIds = blockedIds.filter((id): id is number => typeof id === 'number' && id !== null);
+
+        // 3. Build the products query
+        let query = supabase
+            .from('products')
+            .select(`
+                id, 
+                name, 
+                price, 
+                listing_type, 
+                image_url, 
+                latitude, 
+                longitude, 
+                location_address, 
+                created_at, 
+                category_id,
+                user_id!inner(user_id) // Use implicit join via foreign key
+            `)
+            .in('id', productIds);
+            
+        // 4. FIX FOR PGRST100: Only apply the 'not.in' filter if the safe array is NOT empty.
+       if (safeBlockedIds.length > 0) {
+            console.log(`LOG Filtering ${safeBlockedIds.length} blocked users from liked products. (Safe)`);
+            
+            // ************ THE NEW FIX ************
+            if (safeBlockedIds.length === 1) {
+                // If there's ONLY one ID, use 'neq' (not equal) for robustness
+                // This forces PostgREST to use a simpler, safer filter syntax
+                query = query.neq('user_id.user_id', safeBlockedIds[0]);
+            } else {
+                // Otherwise, use 'not.in' for arrays of two or more
+                query = query.not('user_id.user_id', 'in', safeBlockedIds);
+            }
+            // ************ END OF NEW FIX ************
+            
+        } else {
+             console.log("LOG No blocked users to filter, fetching all liked products.");
+        }
+        // --- End of Critical Fix ---
+
+        // 5. Execute the query
+        const { data: productsData, error: productsError } = await query;
+
+        if (productsError) throw productsError;
+        
+        setLikedProducts(productsData as Product[] || []); 
+
+    } catch (error: any) {
+        console.error('Error fetching liked products:', error);
+        Alert.alert('Error', 'Failed to load liked products'); 
+    } finally {
+        setLoadingLiked(false);
+    }
+};
 
     const handleUnlikeProduct = async (productId: number) => {
         if (!userData) return;
@@ -358,7 +405,6 @@ const ProfileScreen = () => {
             setLikedProducts(prev => prev.filter(p => p.id !== productId));
         } catch (error: any) {
             console.error('Error unliking product:', error);
-            // NOTE: Alert strings are left hardcoded
             Alert.alert('Error', 'Failed to unlike product'); 
         }
     };
@@ -374,9 +420,7 @@ const ProfileScreen = () => {
     if (!userData) {
         return (
             <View style={[styles.container, styles.centerContent]}>
-                {/* ✅ TRANSLATED: No user data found */}
                 <Text style={styles.errorText}>{i18n.t('profileContent.noUserData')}</Text>
-                {/* ✅ TRANSLATED: Go to Login */}
                 <TouchableOpacity style={styles.loginButton} onPress={() => router.replace('/(auth)/login')}>
                     <Text style={styles.loginButtonText}>{i18n.t('goToLogin')}</Text>
                 </TouchableOpacity>
@@ -412,18 +456,14 @@ const ProfileScreen = () => {
             <StatusBar barStyle="dark-content" />
             
             <View style={styles.header}>
-                {/* ✅ TRANSLATED: Profile */}
                 <Text style={styles.headerTitle}>{i18n.t('tabs.profile')}</Text>
                 <View style={styles.headerRight}>
-                    {/* Help/Support Button - no text to translate */}
                     <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/help')}>
                         <Ionicons name="headset-outline" size={24} color="#000" />
                     </TouchableOpacity>
-                    {/* Share Button - no text to translate */}
                     <TouchableOpacity style={styles.headerButton}>
                         <Ionicons name="share-outline" size={24} color="#000" />
                     </TouchableOpacity>
-                    {/* Settings Button - no text to translate */}
                     <TouchableOpacity style={styles.headerButton} onPress={() => router.push('/settings')}>
                         <Ionicons name="settings-outline" size={24} color="#000" />
                         {unreadNotifications > 0 && (
@@ -471,7 +511,6 @@ const ProfileScreen = () => {
                         <View style={styles.statsRow}>
                             <View style={styles.statBox}>
                                 <Text style={styles.statValue}>{products.length}</Text>
-                                {/* ✅ TRANSLATED: Posts */}
                                 <Text style={styles.statName}>{i18n.t('profileContent.posts')}</Text>
                             </View>
                             <TouchableOpacity 
@@ -479,7 +518,6 @@ const ProfileScreen = () => {
                                 onPress={() => router.push(`/following_list?userId=${userData.user_id}`)}
                             >
                                 <Text style={styles.statValue}>{followingCount}</Text>
-                                {/* ✅ TRANSLATED: Following */}
                                 <Text style={styles.statName}>{i18n.t('profileContent.following')}</Text> 
                             </TouchableOpacity>
 
@@ -488,7 +526,6 @@ const ProfileScreen = () => {
                                 onPress={() => router.push(`/followers_list?userId=${userData.user_id}`)}
                             >
                                 <Text style={styles.statValue}>{followersCount}</Text>
-                                {/* ✅ TRANSLATED: Followers */}
                                 <Text style={styles.statName}>{i18n.t('profileContent.followers')}</Text> 
                             </TouchableOpacity>
                         </View>
@@ -510,21 +547,17 @@ const ProfileScreen = () => {
                 )}
 
                 <View style={styles.tabBar}>
-                    {/* Post Tab Button */}
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'Post' && styles.activeTab]}
                         onPress={() => setActiveTab('Post')}
                     >
-                        {/* ✅ TRANSLATED: Posts */}
                         <Text style={[styles.tabText, activeTab === 'Post' && styles.tabTextActive]}>{i18n.t('profileContent.posts')}</Text>
                     </TouchableOpacity>
                     
-                    {/* Liked Tab Button */}
                     <TouchableOpacity
                         style={[styles.tabButton, activeTab === 'Liked' && styles.activeTab]}
                         onPress={() => setActiveTab('Liked')}
                     >
-                        {/* ✅ TRANSLATED: Liked */}
                         <Text style={[styles.tabText, activeTab === 'Liked' && styles.tabTextActive]}>{i18n.t('profileContent.liked')}</Text>
                     </TouchableOpacity>
                 </View>
@@ -538,7 +571,6 @@ const ProfileScreen = () => {
                         <View style={styles.emptyContainer}>
                             <CustomEmptyIcon isPostTab={activeTab === 'Post'} />
                             <Text style={styles.emptyTextCustom}>
-                                {/* ✅ TRANSLATED: emptyPostMsg OR emptyLikedMsg */}
                                 {activeTab === 'Post' 
                                     ? i18n.t('profileContent.emptyPostMsg') 
                                     : i18n.t('profileContent.emptyLikedMsg')
@@ -549,7 +581,6 @@ const ProfileScreen = () => {
                                 onPress={() => router.push(activeTab === 'Post' ? '/add' : '/(tabs)')} 
                             >
                                 <Text style={styles.addButtonText}>
-                                    {/* ✅ TRANSLATED: addToCollection OR startBrowsing */}
                                     {activeTab === 'Post' 
                                         ? i18n.t('profileContent.addToCollection') 
                                         : i18n.t('profileContent.startBrowsing')
@@ -579,7 +610,7 @@ const ProfileScreen = () => {
     );
 };
 
-// ... (Rest of the StyleSheet remains the same)
+// ... (Your original StyleSheet remains here)
 const styles = StyleSheet.create({
     cardContainer: {
         width: CARD_WIDTH,
@@ -915,45 +946,42 @@ const styles = StyleSheet.create({
     },
     emptyContainer: {
         flex: 1,
-        alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 80,
-        paddingHorizontal: 20,
+        alignItems: 'center',
+        paddingVertical: 50,
+        paddingHorizontal: 30,
     },
     customIconContainer: {
         position: 'relative',
-        marginBottom: 20,
+        marginBottom: 10,
     },
     iconMain: {
-        opacity: 0.7,
+        // Simple positioning to simulate the icon pair
     },
     iconPlus: {
         position: 'absolute',
-        bottom: -2,
-        right: -8,
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        borderColor: '#fff',
-        borderWidth: 2,
+        bottom: 0,
+        right: -10,
     },
     emptyTextCustom: {
         fontSize: 16,
         color: '#888',
+        fontWeight: '500',
         textAlign: 'center',
-        marginBottom: 25,
-        lineHeight: 24,
+        marginTop: 15,
     },
     addButton: {
+        marginTop: 20,
         backgroundColor: '#16A085',
-        borderRadius: 10,
+        paddingVertical: 10,
         paddingHorizontal: 20,
-        paddingVertical: 12,
+        borderRadius: 10,
     },
     addButtonText: {
         color: '#fff',
         fontSize: 15,
         fontWeight: '600',
-    },
+    }
 });
 
 export default ProfileScreen;
