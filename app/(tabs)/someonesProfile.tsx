@@ -18,11 +18,12 @@ import {
     TouchableWithoutFeedback,
     View,
 } from 'react-native';
-import { supabase } from '../../lib/Supabase'; // Ensure this path is correct
+import { supabase } from '../../lib/Supabase';
 import { getOrCreateConversation } from '../../lib/messaging';
+import i18n from '../../lib/i18n';
+
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
 
-// --- Interface Declarations ---
 interface UserProfile {
     user_id: number;
     username: string;
@@ -74,7 +75,7 @@ const ProductCard: React.FC<{
     const tagColors = getTagColor();
 
     const formatPrice = () => {
-        if (product.listing_type === "exchange") return "Exchange";
+        if (product.listing_type === "exchange") return i18n.t('someonesProfile.exchange');
         
         if (product.price >= 10000) {
             const millions = product.price / 10000;
@@ -89,15 +90,15 @@ const ProductCard: React.FC<{
             }
             
             if (product.listing_type === "rent") {
-                return `${formattedMillions} million DA/mo`;
+                return `${formattedMillions} ${i18n.t('someonesProfile.million')} ${i18n.t('someonesProfile.daMonth')}`;
             }
-            return `${formattedMillions} million DA`;
+            return `${formattedMillions} ${i18n.t('someonesProfile.million')} ${i18n.t('someonesProfile.da')}`;
         }
         
         if (product.listing_type === "rent") {
-            return `${product.price.toLocaleString()} DA/mo`;
+            return `${product.price.toLocaleString()} ${i18n.t('someonesProfile.daMonth')}`;
         }
-        return `${product.price.toLocaleString()} DA`;
+        return `${product.price.toLocaleString()} ${i18n.t('someonesProfile.da')}`;
     };
 
     return (
@@ -144,7 +145,7 @@ const ProductCard: React.FC<{
         </View>
     );
 };
-// --- ActionSheetModal Component (Unchanged) ---
+
 const ActionSheetModal: React.FC<{
     isVisible: boolean;
     onClose: () => void;
@@ -167,16 +168,20 @@ const ActionSheetModal: React.FC<{
                             <View style={modalStyles.actionButtonsWrapper}>
                                 <TouchableOpacity style={modalStyles.actionButton} onPress={onBlock}>
                                     <MaterialCommunityIcons name="block-helper" size={20} color="#FF3B30" />
-                                    <Text style={[modalStyles.actionText, modalStyles.blockText]}>Block</Text>
+                                    <Text style={[modalStyles.actionText, modalStyles.blockText]}>
+                                        {i18n.t('someonesProfile.block')}
+                                    </Text>
                                 </TouchableOpacity>
                                 <View style={modalStyles.separator} />
                                 <TouchableOpacity style={modalStyles.actionButton} onPress={onReport}>
                                     <MaterialCommunityIcons name="flag" size={20} color="#FF3B30" />
-                                    <Text style={[modalStyles.actionText, modalStyles.reportText]}>Report</Text>
+                                    <Text style={[modalStyles.actionText, modalStyles.reportText]}>
+                                        {i18n.t('someonesProfile.report')}
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                             <TouchableOpacity style={modalStyles.cancelButton} onPress={onClose}>
-                                <Text style={modalStyles.cancelText}>Cancel</Text>
+                                <Text style={modalStyles.cancelText}>{i18n.t('someonesProfile.cancel')}</Text>
                             </TouchableOpacity>
                         </View>
                     </TouchableWithoutFeedback>
@@ -186,7 +191,6 @@ const ActionSheetModal: React.FC<{
     );
 };
 
-// --- Someone's Profile Screen ---
 const SomeonesProfileScreen = () => {
     const { userId } = useLocalSearchParams();
     const targetUserId = typeof userId === 'string' ? parseInt(userId) : null;
@@ -202,8 +206,7 @@ const SomeonesProfileScreen = () => {
     const [followingCount, setFollowingCount] = useState(0);
     const [followersCount, setFollowersCount] = useState(0);
 
-    // ⭐ NEW STATE: Block status
-    const [isBlocking, setIsBlocking] = useState(false); // True if current user is blocking targetUserId
+    const [isBlocking, setIsBlocking] = useState(false);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -211,21 +214,16 @@ const SomeonesProfileScreen = () => {
 
     const [showActionSheet, setShowActionSheet] = useState(false);
 
-    // --- Core Functions ---
-
-    // ⭐ NEW FUNCTION: Database cleanup on block
     const removeFollowsOnBlock = async (blockerId: number, blockedId: number) => {
         console.log(`Removing follow relationships between ${blockerId} and ${blockedId}`);
 
         try {
-            // 1. Remove the current user's 'Following' relationship (blocker unfollows blocked)
             await supabase
                 .from('user_follows')
                 .delete()
                 .eq('follower_id', blockerId)
                 .eq('following_id', blockedId);
 
-            // 2. Remove the blocked user's 'Follower' relationship (blocked unfollows blocker)
             await supabase
                 .from('user_follows')
                 .delete()
@@ -236,11 +234,9 @@ const SomeonesProfileScreen = () => {
 
         } catch (error) {
             console.error('Error during follow removal on block:', error);
-            // Non-critical, just log the error
         }
     };
 
-    // Fetches products (Only called if NOT blocked)
     const fetchUserProducts = useCallback(async (userId: number) => {
         try {
             setLoadingProducts(true);
@@ -259,7 +255,6 @@ const SomeonesProfileScreen = () => {
         }
     }, []);
 
-    // ⭐ MODIFIED: Check block status, then proceed with other data fetching
     const loadProfileData = useCallback(async (isRefreshing = false) => {
         if (!targetUserId) return;
 
@@ -268,16 +263,10 @@ const SomeonesProfileScreen = () => {
                 setLoading(true);
             }
 
-            // Get current user ID from storage
             const userJson = await AsyncStorage.getItem('user');
             const loggedInUserId = userJson ? JSON.parse(userJson).user_id : null;
             setCurrentUserId(loggedInUserId);
-            
-            if (!loggedInUserId) {
-                 // User isn't logged in, continue to load public data (but skip follow checks)
-            }
 
-            // 1. Fetch target user's profile
             const { data: profile, error: profileError } = await supabase
                 .from('users')
                 .select('user_id, username, bio, profile_image_url, location, created_at')
@@ -287,7 +276,6 @@ const SomeonesProfileScreen = () => {
             if (profileError) throw profileError;
             setProfileData(profile);
 
-            // 2. Check BLOCK STATUS
             if (loggedInUserId) {
                 const { data: blockStatus } = await supabase
                     .from('block')
@@ -299,23 +287,18 @@ const SomeonesProfileScreen = () => {
                 const isUserBlocking = !!blockStatus;
                 setIsBlocking(isUserBlocking);
 
-                // If blocked, stop further data loading (products, follows)
                 if (isUserBlocking) {
-                    setProducts([]); // Clear any old products immediately
+                    setProducts([]);
                     setIsFollowing(false);
                     setIsMutualFollow(false);
                     setFollowingCount(0);
                     setFollowersCount(0);
                     setLoading(false);
                     if (isRefreshing) setRefreshing(false);
-                    return; // EXIT EARLY IF BLOCKED
+                    return;
                 }
             }
 
-
-            // If NOT blocked (or not logged in), continue loading follow/product data:
-
-            // 3. Fetch categories
             const { data: categoriesData, error: categoriesError } = await supabase
                 .from('categories')
                 .select('id, name, description, delivery');
@@ -323,7 +306,6 @@ const SomeonesProfileScreen = () => {
             if (categoriesError) throw categoriesError;
             setCategories(categoriesData || []);
 
-            // 4. Fetch target user's follower/following counts
             const { count: targetFollowingCount } = await supabase
                 .from('user_follows')
                 .select('*', { count: 'exact', head: true })
@@ -337,9 +319,7 @@ const SomeonesProfileScreen = () => {
             setFollowingCount(targetFollowingCount || 0);
             setFollowersCount(targetFollowersCount || 0);
 
-            // 5. Check follow relationship with current user
             if (loggedInUserId) {
-                // Does current user follow target user?
                 const { data: followStatus } = await supabase
                     .from('user_follows')
                     .select('follow_id')
@@ -350,7 +330,6 @@ const SomeonesProfileScreen = () => {
                 const userFollowsTarget = !!followStatus;
                 setIsFollowing(userFollowsTarget);
 
-                // Does target user follow current user back?
                 const { data: followBackStatus } = await supabase
                     .from('user_follows')
                     .select('follow_id')
@@ -361,17 +340,15 @@ const SomeonesProfileScreen = () => {
                 const targetFollowsUser = !!followBackStatus;
                 setIsMutualFollow(userFollowsTarget && targetFollowsUser);
             } else {
-                 // Not logged in, so all follow states are false/zero
                  setIsFollowing(false);
                  setIsMutualFollow(false);
             }
 
-            // 6. Fetch user's products
             await fetchUserProducts(targetUserId);
 
         } catch (error: any) {
             console.error('Error loading profile data:', error);
-            Alert.alert('Error', error.message || 'Failed to load user profile.');
+            Alert.alert(i18n.t('someonesProfile.errorTitle'), error.message || i18n.t('someonesProfile.errorMessage'));
         } finally {
             setLoading(false);
             if (isRefreshing) {
@@ -380,11 +357,9 @@ const SomeonesProfileScreen = () => {
         }
     }, [targetUserId, fetchUserProducts]);
 
-    // Handle Follow/Unfollow
     const handleFollowToggle = useCallback(async () => {
-        // (Implementation remains the same as before, only callable if isBlocking is false)
         if (!currentUserId) {
-            Alert.alert('Login Required', 'You must be logged in to follow users.');
+            Alert.alert(i18n.t('someonesProfile.loginRequired'), i18n.t('someonesProfile.loginRequiredMessage'));
             return;
         }
         if (currentUserId === targetUserId) return;
@@ -392,12 +367,10 @@ const SomeonesProfileScreen = () => {
         let wasFollowing = isFollowing;
 
         try {
-            // Optimistic update
             setIsFollowing(prev => !prev);
             setFollowersCount(prev => wasFollowing ? Math.max(0, prev - 1) : prev + 1);
 
             if (wasFollowing) {
-                // Unfollow - delete the follow relationship
                 await supabase
                     .from('user_follows')
                     .delete()
@@ -406,7 +379,6 @@ const SomeonesProfileScreen = () => {
                 
                 setIsMutualFollow(false);
             } else {
-                // Follow - insert the follow relationship
                 await supabase
                     .from('user_follows')
                     .upsert(
@@ -414,7 +386,6 @@ const SomeonesProfileScreen = () => {
                         { onConflict: 'follower_id,following_id', ignoreDuplicates: false }
                     );
 
-                // Re-check for mutual follow
                 const { data: followBackStatus } = await supabase
                     .from('user_follows')
                     .select('follow_id')
@@ -426,99 +397,87 @@ const SomeonesProfileScreen = () => {
             }
         } catch (error: any) {
             console.error('Error toggling follow:', error);
-            Alert.alert('Error', 'Failed to update follow status.');
-            // Revert state if necessary (or simply call loadProfileData to sync)
+            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.followError'));
             loadProfileData(true);
         }
     }, [currentUserId, targetUserId, isFollowing, loadProfileData]);
-// In your SomeonesProfileScreen file (app/someones_profile/[userId].tsx or similar)
-// Find this section (around line 365 in your current code):
 
-
-// REPLACE IT WITH THIS NEW CODE:
-const handleChatPress = async () => {
-    if (!currentUserId || !targetUserId) {
-        Alert.alert('Error', 'Cannot start conversation. Please log in.');
-        return;
-    }
-
-    console.log('💬 === STARTING CHAT ===');
-    console.log('💬 Current User ID:', currentUserId);
-    console.log('💬 Target User ID:', targetUserId);
-
-    try {
-        console.log('📞 Calling getOrCreateConversation...');
-        const conversationId = await getOrCreateConversation(currentUserId, targetUserId);
-        
-        console.log('📋 Result from getOrCreateConversation:', conversationId);
-        console.log('📋 Type:', typeof conversationId);
-        
-        // Check if we got a valid conversation ID
-        if (!conversationId) {
-            console.error('❌ No conversation ID returned (null/undefined)');
-            Alert.alert('Error', 'Could not create or find conversation. Please check your database.');
+    const handleChatPress = async () => {
+        if (!currentUserId || !targetUserId) {
+            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.cannotStartChat'));
             return;
         }
 
-        // Validate it's a number
-        if (typeof conversationId !== 'number' || isNaN(conversationId) || conversationId <= 0) {
-            console.error('❌ Invalid conversation ID:', conversationId);
-            Alert.alert('Error', `Invalid conversation ID: ${conversationId}`);
-            return;
+        console.log('💬 === STARTING CHAT ===');
+        console.log('💬 Current User ID:', currentUserId);
+        console.log('💬 Target User ID:', targetUserId);
+
+        try {
+            console.log('📞 Calling getOrCreateConversation...');
+            const conversationId = await getOrCreateConversation(currentUserId, targetUserId);
+            
+            console.log('📋 Result from getOrCreateConversation:', conversationId);
+            console.log('📋 Type:', typeof conversationId);
+            
+            if (!conversationId) {
+                console.error('❌ No conversation ID returned (null/undefined)');
+                Alert.alert(i18n.t('someonesProfile.errorTitle'), 'Could not create or find conversation. Please check your database.');
+                return;
+            }
+
+            if (typeof conversationId !== 'number' || isNaN(conversationId) || conversationId <= 0) {
+                console.error('❌ Invalid conversation ID:', conversationId);
+                Alert.alert(i18n.t('someonesProfile.errorTitle'), `Invalid conversation ID: ${conversationId}`);
+                return;
+            }
+
+            console.log('✅ Valid conversation ID received:', conversationId);
+            console.log('🚀 Navigating to /chat/' + conversationId);
+            
+            router.push(`/chat/${conversationId}`);
+            
+        } catch (error: any) {
+            console.error('❌ === ERROR IN CHAT PRESS ===');
+            console.error('❌ Error type:', error?.constructor?.name);
+            console.error('❌ Error message:', error?.message);
+            console.error('❌ Full error:', error);
+            
+            Alert.alert(
+                i18n.t('someonesProfile.errorTitle'), 
+                i18n.t('someonesProfile.chatErrorMessage').replace('{{error}}', error?.message || 'Unknown error')
+            );
         }
+    };
 
-        console.log('✅ Valid conversation ID received:', conversationId);
-        console.log('🚀 Navigating to /chat/' + conversationId);
-        
-        // Navigate to chat
-        router.push(`/chat/${conversationId}`);
-        
-    } catch (error: any) {
-        console.error('❌ === ERROR IN CHAT PRESS ===');
-        console.error('❌ Error type:', error?.constructor?.name);
-        console.error('❌ Error message:', error?.message);
-        console.error('❌ Full error:', error);
-        
-        Alert.alert(
-            'Error', 
-            `Failed to start chat: ${error?.message || 'Unknown error'}. Check console for details.`
-        );
-    }
-};
-
-    // ⭐ MODIFIED: Handle Block User
     const handleBlockUser = async () => {
         setShowActionSheet(false);
 
         if (!currentUserId || !targetUserId) {
-            Alert.alert("Error", "You must be logged in to block a user.");
+            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.mustBeLoggedIn'));
             return;
         }
 
         Alert.alert(
-            'Block User',
-            `Are you sure you want to block ${profileData?.username}? This will also remove all follow relationships.`,
+            i18n.t('someonesProfile.blockUserTitle'),
+            i18n.t('someonesProfile.blockUserMessage').replace('{{username}}', profileData?.username || ''),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: i18n.t('someonesProfile.cancel'), style: 'cancel' },
                 {
-                    text: 'Block',
+                    text: i18n.t('someonesProfile.block'),
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            // 1. Remove all follow relationships first
                             await removeFollowsOnBlock(currentUserId, targetUserId);
 
-                            // 2. Insert the block relationship into the 'block' table
                             const { error } = await supabase.from('block').insert({
                                 blocker_id: currentUserId,
                                 blocked_id: targetUserId,
                             });
 
-                            if (error && error.code !== '23505') { // Ignore unique constraint error
+                            if (error && error.code !== '23505') {
                                 throw error;
                             }
 
-                            // 3. Update local UI to reflect blocked state
                             setIsBlocking(true);
                             setProducts([]); 
                             setFollowingCount(0); 
@@ -526,11 +485,14 @@ const handleChatPress = async () => {
                             setIsFollowing(false);
                             setIsMutualFollow(false);
                             
-                            Alert.alert('Blocked!', `${profileData?.username} has been blocked.`);
+                            Alert.alert(
+                                i18n.t('someonesProfile.blocked'), 
+                                i18n.t('someonesProfile.userBlocked').replace('{{username}}', profileData?.username || '')
+                            );
 
                         } catch (error: any) {
                             console.error('Error blocking user:', error.message);
-                            Alert.alert('Error', 'Failed to block user. Please try again.');
+                            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.failedToBlock'));
                         }
                     }
                 },
@@ -538,23 +500,21 @@ const handleChatPress = async () => {
         );
     };
 
-    // ⭐ NEW FUNCTION: Handle Unblock User
     const handleUnblockUser = async () => {
         if (!currentUserId || !targetUserId) {
-            Alert.alert("Error", "Cannot unblock user without IDs.");
+            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.cannotUnblock'));
             return;
         }
 
         Alert.alert(
-            'Unblock User',
-            `Are you sure you want to unblock ${profileData?.username}?`,
+            i18n.t('someonesProfile.unblockUserTitle'),
+            i18n.t('someonesProfile.unblockUserMessage').replace('{{username}}', profileData?.username || ''),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: i18n.t('someonesProfile.cancel'), style: 'cancel' },
                 {
-                    text: 'Unblock',
+                    text: i18n.t('someonesProfile.unblock'),
                     onPress: async () => {
                         try {
-                            // 1. Delete the block relationship
                             const { error } = await supabase
                                 .from('block')
                                 .delete()
@@ -563,15 +523,16 @@ const handleChatPress = async () => {
 
                             if (error) throw error;
 
-                            // 2. Update local UI and refresh data
                             setIsBlocking(false);
-                            Alert.alert('Unblocked!', `${profileData?.username} has been unblocked.`);
-                            // Re-fetch all data to show products, follower counts, etc.
+                            Alert.alert(
+                                i18n.t('someonesProfile.unblocked'), 
+                                i18n.t('someonesProfile.userUnblocked').replace('{{username}}', profileData?.username || '')
+                            );
                             loadProfileData(true);
 
                         } catch (error: any) {
                             console.error('Error unblocking user:', error.message);
-                            Alert.alert('Error', 'Failed to unblock user. Please try again.');
+                            Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.failedToUnblock'));
                         }
                     }
                 },
@@ -581,15 +542,17 @@ const handleChatPress = async () => {
 
     const handleReportUser = () => {
         setShowActionSheet(false);
-        Alert.alert('Report User', `You are reporting ${profileData?.username} for inappropriate content or behavior.`);
+        Alert.alert(
+            i18n.t('someonesProfile.reportUserTitle'), 
+            i18n.t('someonesProfile.reportUserMessage').replace('{{username}}', profileData?.username || '')
+        );
     };
 
-    // --- Effects & Helpers ---
     useEffect(() => {
         const fetchAndCheckUser = async () => {
             if (!targetUserId) {
                 setLoading(false);
-                Alert.alert("Error", "Invalid user ID provided.");
+                Alert.alert(i18n.t('someonesProfile.errorTitle'), i18n.t('someonesProfile.invalidUserId'));
                 return;
             }
 
@@ -630,7 +593,6 @@ const handleChatPress = async () => {
         </View>
     );
 
-    // --- Render Logic ---
     if (loading) {
         return (
             <View style={[styles.container, styles.centerContent]}>
@@ -642,15 +604,15 @@ const handleChatPress = async () => {
     if (!profileData) {
         return (
             <View style={[styles.container, styles.centerContent]}>
-                <Text style={styles.errorText}>Profile not found.</Text>
+                <Text style={styles.errorText}>{i18n.t('someonesProfile.profileNotFound')}</Text>
             </View>
         );
     }
 
     const getFollowButtonText = () => {
-        if (isMutualFollow) return 'Friends';
-        if (isFollowing) return 'Unfollow';
-        return 'Follow';
+        if (isMutualFollow) return i18n.t('someonesProfile.friends');
+        if (isFollowing) return i18n.t('someonesProfile.unfollow');
+        return i18n.t('someonesProfile.follow');
     };
 
     return (
@@ -661,13 +623,13 @@ const handleChatPress = async () => {
                 <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
                     <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>{profileData.username}'s Profile</Text>
+                <Text style={styles.headerTitle}>
+                    {profileData.username}'s {i18n.t('someonesProfile.profile')}
+                </Text>
                 <View style={styles.headerRight}>
-                    {/* Share Button is always available */}
                     <TouchableOpacity style={styles.headerButton}>
                         <Ionicons name="share-outline" size={24} color="#000" />
                     </TouchableOpacity>
-                    {/* Action Sheet (Report/Block) is always available if not blocked */}
                     {!isBlocking && (
                          <TouchableOpacity 
                             style={styles.headerButton}
@@ -706,12 +668,11 @@ const handleChatPress = async () => {
 
                         <Text style={styles.displayName}>{profileData.username}</Text>
 
-                        {/* ⭐ MODIFIED: Hide stats if blocked */}
                         {!isBlocking ? (
                             <View style={styles.statsRow}>
                                 <View style={styles.statBox}>
                                     <Text style={styles.statValue}>{products.length}</Text>
-                                    <Text style={styles.statName}>Posts</Text>
+                                    <Text style={styles.statName}>{i18n.t('someonesProfile.posts')}</Text>
                                 </View>
                                 
                                 <TouchableOpacity 
@@ -719,7 +680,7 @@ const handleChatPress = async () => {
                                     onPress={() => router.push(`/following_list?userId=${targetUserId}`)}
                                 >
                                     <Text style={styles.statValue}>{followingCount}</Text>
-                                    <Text style={styles.statName}>Following</Text>
+                                    <Text style={styles.statName}>{i18n.t('someonesProfile.following')}</Text>
                                 </TouchableOpacity>
                                 
                                 <TouchableOpacity 
@@ -727,24 +688,23 @@ const handleChatPress = async () => {
                                     onPress={() => router.push(`/followers_list?userId=${targetUserId}`)}
                                 >
                                     <Text style={styles.statValue}>{followersCount}</Text>
-                                    <Text style={styles.statName}>Followers</Text>
+                                    <Text style={styles.statName}>{i18n.t('someonesProfile.followers')}</Text>
                                 </TouchableOpacity>
                             </View>
                         ) : (
                             <View style={styles.blockedMessage}>
                                 <Ionicons name="eye-off-outline" size={24} color="#FF5B5B" />
-                                <Text style={styles.blockedText}>You have blocked this user.</Text>
+                                <Text style={styles.blockedText}>{i18n.t('someonesProfile.youBlockedUser')}</Text>
                             </View>
                         )}
                         
-                        {/* ⭐ MODIFIED: Show Unblock button OR Follow/Chat buttons */}
                         <View style={styles.actionButtonsRow}>
                             {isBlocking ? (
                                 <TouchableOpacity 
                                     style={styles.unblockButton} 
                                     onPress={handleUnblockUser}
                                 >
-                                    <Text style={styles.unblockButtonText}>Unblock</Text>
+                                    <Text style={styles.unblockButtonText}>{i18n.t('someonesProfile.unblock')}</Text>
                                 </TouchableOpacity>
                             ) : (
                                 <>
@@ -765,12 +725,12 @@ const handleChatPress = async () => {
                                         </Text>
                                     </TouchableOpacity>
 
-                                  <TouchableOpacity 
-    style={styles.chatButton} 
-    onPress={handleChatPress}  // Changed from Alert to handleChatPress
->
-    <Text style={styles.chatButtonText}>Chat</Text>
-</TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={styles.chatButton} 
+                                        onPress={handleChatPress}
+                                    >
+                                        <Text style={styles.chatButtonText}>{i18n.t('someonesProfile.chat')}</Text>
+                                    </TouchableOpacity>
                                 </>
                             )}
                         </View>
@@ -778,7 +738,6 @@ const handleChatPress = async () => {
                     </View>
                 </View>
                 
-                {/* ⭐ MODIFIED: Show bio only if NOT blocked */}
                 {profileData.bio && !isBlocking && (
                     <View style={styles.bioSection}>
                         <Text style={styles.bioText}>{profileData.bio}</Text>
@@ -788,7 +747,9 @@ const handleChatPress = async () => {
                 <View style={styles.tabBarSingle}>
                     <View style={styles.activeTabSingle}>
                         <Text style={styles.tabTextActive}>
-                            {isBlocking ? 'Posted Items (0)' : `Posted Items (${products.length})`}
+                            {isBlocking 
+                                ? `${i18n.t('someonesProfile.postedItems')} (0)` 
+                                : i18n.t('someonesProfile.postedItemsCount').replace('{{count}}', products.length.toString())}
                         </Text>
                     </View>
                 </View>
@@ -798,7 +759,7 @@ const handleChatPress = async () => {
                          <View style={styles.emptyContainer}>
                             <Ionicons name="lock-closed-outline" size={60} color="#FF5B5B" />
                             <Text style={styles.emptyTextCustom}>
-                                You cannot view this user's content while they are blocked.
+                                {i18n.t('someonesProfile.cannotViewContent')}
                             </Text>
                         </View>
                     ) : loadingProducts ? (
@@ -809,7 +770,7 @@ const handleChatPress = async () => {
                         <View style={styles.emptyContainer}>
                             <CustomEmptyIcon />
                             <Text style={styles.emptyTextCustom}>
-                                This user hasn't posted any items yet.
+                                {i18n.t('someonesProfile.noItemsYet')}
                             </Text>
                         </View>
                     ) : (
@@ -838,9 +799,7 @@ const handleChatPress = async () => {
     );
 };
 
-// --- Action Sheet Styles (Unchanged) ---
 const modalStyles = StyleSheet.create({
-    
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -892,9 +851,8 @@ const modalStyles = StyleSheet.create({
     },
 });
 
-// --- Styles (Added Blocked-specific styles) ---
 const styles = StyleSheet.create({
-     cardContainer: {
+    cardContainer: {
         width: CARD_WIDTH,
         marginBottom: 8,
         borderRadius: 20,
@@ -981,7 +939,7 @@ const styles = StyleSheet.create({
     },
     container: {
         flex: 1,
-        marginBottom:70,
+        marginBottom: 70,
         backgroundColor: '#F5F5F5',
     },
     centerContent: {
@@ -1085,7 +1043,6 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: '#666',
     },
-    // ⭐ NEW STYLE: Block message area
     blockedMessage: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1096,7 +1053,6 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         gap: 8,
     },
-    // ⭐ NEW STYLE: Blocked text
     blockedText: {
         fontSize: 14,
         fontWeight: '600',
@@ -1151,16 +1107,14 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         fontSize: 15,
     },
-    // ⭐ NEW STYLE: Unblock button
     unblockButton: {
         backgroundColor: '#FF5B5B',
         paddingHorizontal: 25,
         paddingVertical: 10,
         borderRadius: 25,
-        minWidth: 200, // Make it span the width
+        minWidth: 200,
         alignItems: 'center',
     },
-    // ⭐ NEW STYLE: Unblock button text
     unblockButtonText: {
         color: '#fff',
         fontWeight: '700',

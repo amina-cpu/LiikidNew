@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "white",
-    marginBottom:70,
+    marginBottom:110,
     paddingTop: SAFE_AREA_PADDING,
   },
   loadingContainer: {

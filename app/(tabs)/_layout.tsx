@@ -1,4 +1,4 @@
-// In your _layout.tsx - Updated to include chat folder
+// In your _layout.tsx - Updated with real unread messages count
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from 'expo-router';
@@ -7,11 +7,13 @@ import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 're
 import Svg, { Circle, Path } from 'react-native-svg';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import i18n from '../../lib/i18n';
+import { supabase } from '../../lib/Supabase';
+import { useAuth } from '../context/AuthContext';
 
 const ACTIVE_COLOR = '#00C853';
 const INACTIVE_COLOR = '#545151ff';
 const TEXT_COLOR = '#000000';
-const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 90 : 80;
+const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 100 : 90;
 
 const TwoChatsIcon = ({ color, size }: { color: string; size: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -44,11 +46,63 @@ export default function TabLayout() {
   const segments = useSegments();
   const currentRoute = segments.join('/');
   const isHome = currentRoute === '' || currentRoute === 'index';
+  const { user } = useAuth();
 
   const tabBarTranslateY = useRef(new Animated.Value(0)).current;
   const [isTabBarVisible, setIsTabBarVisible] = useState(true);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
 
   const handleHomePress = () => router.push('/');
+
+  // Fetch unread messages count
+  const fetchUnreadMessagesCount = async () => {
+    if (!user?.user_id) {
+      setUnreadMessagesCount(0);
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('conversation_list_view')
+        .select('unread_count')
+        .eq('user_id', user.user_id);
+
+      if (error) {
+        console.error('Error fetching unread messages:', error);
+        return;
+      }
+
+      // Sum up all unread counts from all conversations
+      const totalUnread = data?.reduce((sum, conv) => sum + (conv.unread_count || 0), 0) || 0;
+      console.log('📬 Total unread messages:', totalUnread);
+      setUnreadMessagesCount(totalUnread);
+    } catch (error) {
+      console.error('Exception fetching unread messages:', error);
+    }
+  };
+
+  // Fetch unread count on mount and when user changes
+  useEffect(() => {
+    fetchUnreadMessagesCount();
+  }, [user?.user_id]);
+
+  // Refresh unread count when returning to messages tab
+  useEffect(() => {
+    if (currentRoute === 'messages') {
+      fetchUnreadMessagesCount();
+    }
+  }, [currentRoute]);
+
+  // Poll for updates every 30 seconds
+  useEffect(() => {
+    if (!user?.user_id) return;
+    
+    const interval = setInterval(() => {
+      fetchUnreadMessagesCount();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [user?.user_id]);
 
   // ✅ FIX: Reset tab bar visibility when route changes
   useEffect(() => {
@@ -99,7 +153,7 @@ export default function TabLayout() {
           borderTopWidth: 1,
           borderTopColor: '#E5E5E5',
           height: TAB_BAR_HEIGHT,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 15,
           paddingTop: 10,
           elevation: 8,
           shadowColor: '#000',
@@ -187,9 +241,13 @@ export default function TabLayout() {
           tabBarIcon: ({ focused }) => (
             <View>
               <TwoChatsIcon color={focused ? ACTIVE_COLOR : INACTIVE_COLOR} size={26} />
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>3</Text>
-              </View>
+              {unreadMessagesCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                  </Text>
+                </View>
+              )}
             </View>
           ),
           tabBarLabel: ({ focused }) => (
@@ -224,16 +282,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      
-   {/* <Tabs.Screen 
-  name="chat"
-  options={{
-    href: null,
-    headerShown: false,
-    tabBarStyle: { display: 'none' },
-  }}
-/> */}
-
 
       {/* Hidden Screens */}
       <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
@@ -249,7 +297,6 @@ export default function TabLayout() {
       <Tabs.Screen name="following_list" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="notification_settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
-
       <Tabs.Screen 
         name="conversations" 
         options={{ 
@@ -265,7 +312,6 @@ const styles = StyleSheet.create({
   tabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-   
   },
   homeButton: {
     flex: 1,

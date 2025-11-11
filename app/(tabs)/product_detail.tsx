@@ -103,7 +103,7 @@ const formatPriceMainDisplay = (product: ProductDetail): string | null => {
   
   const price = product.price;
   const isRent = product.listing_type === "rent";
-  const suffix = isRent ? i18n.t('productDetail.priceSuffixDAMonth') : i18n.t('productDetail.priceSuffixDA');
+  const suffix = isRent ? i18n.t('product.priceSuffixDAMonth') : i18n.t('product.priceSuffixDA');
   
   if (price >= 10000) {
     // 3. Price >= 10000: Display with 'million' text
@@ -698,7 +698,7 @@ const ProductDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  flexContainer: { flex: 1, marginBottom:70,backgroundColor: COLORS.background },
+  flexContainer: { flex: 1, marginBottom:110,backgroundColor: COLORS.background },
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
   loadingText: { marginTop: 10, color: COLORS.secondary },

@@ -22,36 +22,68 @@ const TEXT_LIGHT = '#8A8A8E';
 const LIGHT_GRAY = '#F5F5F5';
 const WHITE = '#FFFFFF';
 
-// --- Options ---
+// --- Filter Keys (language-independent) ---
+const SORT_KEYS = {
+    BEST_MATCH: 'bestMatch',
+    MOST_RECENT: 'mostRecent',
+    LOWEST_PRICE: 'lowestPrice',
+    HIGHEST_PRICE: 'highestPrice',
+    NEAREST: 'nearest'
+};
+
+const DELIVERY_KEYS = {
+    ALL: 'allMethods',
+    PICKUP: 'pickup',
+    DELIVERY: 'delivery',
+    SHIPPING: 'shipping'
+};
+
+const CONDITION_KEYS = {
+    ALL: 'all',
+    NEW: 'new',
+    USED: 'used'
+};
+
+const LOCATION_KEYS = {
+    ALL: 'allLocations',
+    SETIF: 'Setif',
+    BLIDA: 'Blida',
+    ALGIERS: 'Algiers',
+    ORAN: 'Oran',
+    CONSTANTINE: 'Constantine',
+    ANNABA: 'Annaba'
+};
+
+// --- Options with Keys ---
 const getSortOptions = () => [
-    i18n.t('filterss.bestMatch'),
-    i18n.t('filterss.mostRecent'),
-    i18n.t('filterss.lowestPrice'),
-    i18n.t('filterss.highestPrice'),
-    i18n.t('filterss.nearest')
+    { key: SORT_KEYS.BEST_MATCH, label: i18n.t('filterss.bestMatch') },
+    { key: SORT_KEYS.MOST_RECENT, label: i18n.t('filterss.mostRecent') },
+    { key: SORT_KEYS.LOWEST_PRICE, label: i18n.t('filterss.lowestPrice') },
+    { key: SORT_KEYS.HIGHEST_PRICE, label: i18n.t('filterss.highestPrice') },
+    { key: SORT_KEYS.NEAREST, label: i18n.t('filterss.nearest') }
 ];
 
 const getDeliveryMethods = () => [
-    { label: i18n.t('filterss.allMethods'), icon: 'apps-outline' },
-    { label: i18n.t('filterss.pickup'), icon: 'walk-outline' },
-    { label: i18n.t('filterss.delivery'), icon: 'bicycle-outline' },
-    { label: i18n.t('filterss.shipping'), icon: 'airplane-outline' }
+    { key: DELIVERY_KEYS.ALL, label: i18n.t('filterss.allMethods'), icon: 'apps-outline' },
+    { key: DELIVERY_KEYS.PICKUP, label: i18n.t('filterss.pickup'), icon: 'walk-outline' },
+    { key: DELIVERY_KEYS.DELIVERY, label: i18n.t('filterss.delivery'), icon: 'bicycle-outline' },
+    { key: DELIVERY_KEYS.SHIPPING, label: i18n.t('filterss.shipping'), icon: 'airplane-outline' }
 ];
 
 const getConditionOptions = () => [
-    i18n.t('filterss.all'),
-    i18n.t('filterss.new'),
-    i18n.t('filterss.used')
+    { key: CONDITION_KEYS.ALL, label: i18n.t('filterss.all') },
+    { key: CONDITION_KEYS.NEW, label: i18n.t('filterss.new') },
+    { key: CONDITION_KEYS.USED, label: i18n.t('filterss.used') }
 ];
 
 const getLocations = () => [
-    i18n.t('filterss.allLocations'),
-    'Setif',
-    'Blida',
-    'Algiers',
-    'Oran',
-    'Constantine',
-    'Annaba'
+    { key: LOCATION_KEYS.ALL, label: i18n.t('filterss.allLocations') },
+    { key: LOCATION_KEYS.SETIF, label: 'Setif' },
+    { key: LOCATION_KEYS.BLIDA, label: 'Blida' },
+    { key: LOCATION_KEYS.ALGIERS, label: 'Algiers' },
+    { key: LOCATION_KEYS.ORAN, label: 'Oran' },
+    { key: LOCATION_KEYS.CONSTANTINE, label: 'Constantine' },
+    { key: LOCATION_KEYS.ANNABA, label: 'Annaba' }
 ];
 
 const getPriceUnits = () => [
@@ -74,14 +106,15 @@ export default function FiltersScreen() {
     const searchMode = params.searchMode === 'true';
     const searchQuery = params.searchQuery as string || '';
     
+    // Store keys instead of translated labels
     const [selectedCategory, setSelectedCategory] = useState(params.category as string || i18n.t('filterss.all'));
-    const [selectedSortBy, setSelectedSortBy] = useState(params.sortBy as string || i18n.t('filterss.bestMatch'));
-    const [selectedLocation, setSelectedLocation] = useState(params.location as string || i18n.t('filterss.allLocations'));
-    const [selectedDelivery, setSelectedDelivery] = useState(params.delivery as string || i18n.t('filterss.allMethods'));
+    const [selectedSortByKey, setSelectedSortByKey] = useState((params.sortBy as string) || SORT_KEYS.BEST_MATCH);
+    const [selectedLocationKey, setSelectedLocationKey] = useState((params.location as string) || LOCATION_KEYS.ALL);
+    const [selectedDeliveryKey, setSelectedDeliveryKey] = useState((params.delivery as string) || DELIVERY_KEYS.ALL);
     const [minPrice, setMinPrice] = useState(params.minPrice as string || '');
     const [maxPrice, setMaxPrice] = useState(params.maxPrice as string || '');
     const [priceUnit, setPriceUnit] = useState(getPriceUnits()[0]);
-    const [selectedCondition, setSelectedCondition] = useState(params.condition as string || i18n.t('filterss.all'));
+    const [selectedConditionKey, setSelectedConditionKey] = useState((params.condition as string) || CONDITION_KEYS.ALL);
     
     const [modalVisible, setModalVisible] = useState(false);
     const [modalType, setModalType] = useState<'category' | 'sortBy' | 'location' | 'delivery' | 'priceUnit' | null>(null);
@@ -118,19 +151,19 @@ export default function FiltersScreen() {
         setModalType(null);
     };
 
-    const handleSelect = (value: string) => {
+    const handleSelect = (key: string) => {
         switch (modalType) {
             case 'category':
-                setSelectedCategory(value);
+                setSelectedCategory(key);
                 break;
             case 'sortBy':
-                setSelectedSortBy(value);
+                setSelectedSortByKey(key);
                 break;
             case 'location':
-                setSelectedLocation(value);
+                setSelectedLocationKey(key);
                 break;
             case 'delivery':
-                setSelectedDelivery(value);
+                setSelectedDeliveryKey(key);
                 break;
         }
         closeModal();
@@ -141,12 +174,29 @@ export default function FiltersScreen() {
         closeModal();
     };
 
+    // Helper functions to get current labels
+    const getCurrentSortLabel = () => {
+        const option = getSortOptions().find(opt => opt.key === selectedSortByKey);
+        return option ? option.label : i18n.t('filterss.bestMatch');
+    };
+
+    const getCurrentLocationLabel = () => {
+        const option = getLocations().find(opt => opt.key === selectedLocationKey);
+        return option ? option.label : i18n.t('filterss.allLocations');
+    };
+
+    const getCurrentDeliveryLabel = () => {
+        const option = getDeliveryMethods().find(opt => opt.key === selectedDeliveryKey);
+        return option ? option.label : i18n.t('filterss.allMethods');
+    };
+
+    const getCurrentConditionLabel = () => {
+        const option = getConditionOptions().find(opt => opt.key === selectedConditionKey);
+        return option ? option.label : i18n.t('filterss.all');
+    };
+
     const renderModalContent = () => {
         if (!modalType) return null;
-
-        let title = '';
-        let options: string[] = [];
-        let currentValue = '';
 
         if (modalType === 'priceUnit') {
             const PRICE_UNITS = getPriceUnits();
@@ -186,21 +236,21 @@ export default function FiltersScreen() {
                     <ScrollView showsVerticalScrollIndicator={false}>
                         {DELIVERY_METHODS.map((method) => (
                             <TouchableOpacity
-                                key={method.label}
+                                key={method.key}
                                 style={modalStyles.row}
-                                onPress={() => handleSelect(method.label)}
+                                onPress={() => handleSelect(method.key)}
                             >
                                 <View style={modalStyles.deliveryOption}>
                                     <View style={modalStyles.deliveryIconContainer}>
                                         <Ionicons 
                                             name={method.icon as any} 
                                             size={24} 
-                                            color={selectedDelivery === method.label ? PRIMARY_TEAL : DARK_GRAY} 
+                                            color={selectedDeliveryKey === method.key ? PRIMARY_TEAL : DARK_GRAY} 
                                         />
                                     </View>
                                     <Text style={modalStyles.rowText}>{method.label}</Text>
                                 </View>
-                                {selectedDelivery === method.label && (
+                                {selectedDeliveryKey === method.key && (
                                     <Ionicons name="checkmark" size={22} color={PRIMARY_TEAL} />
                                 )}
                             </TouchableOpacity>
@@ -210,21 +260,25 @@ export default function FiltersScreen() {
             );
         }
 
+        let title = '';
+        let options: { key: string; label: string }[] = [];
+        let currentKey = '';
+
         switch (modalType) {
             case 'category':
                 title = i18n.t('filterss.category');
-                options = categories.map(cat => cat.name);
-                currentValue = selectedCategory;
+                options = categories.map(cat => ({ key: cat.name, label: cat.name }));
+                currentKey = selectedCategory;
                 break;
             case 'sortBy':
                 title = i18n.t('filterss.sortBy');
                 options = getSortOptions();
-                currentValue = selectedSortBy;
+                currentKey = selectedSortByKey;
                 break;
             case 'location':
                 title = i18n.t('filterss.location');
                 options = getLocations();
-                currentValue = selectedLocation;
+                currentKey = selectedLocationKey;
                 break;
         }
 
@@ -245,12 +299,12 @@ export default function FiltersScreen() {
                 <ScrollView showsVerticalScrollIndicator={false}>
                     {options.map((option) => (
                         <TouchableOpacity
-                            key={option}
+                            key={option.key}
                             style={modalStyles.row}
-                            onPress={() => handleSelect(option)}
+                            onPress={() => handleSelect(option.key)}
                         >
-                            <Text style={modalStyles.rowText}>{option}</Text>
-                            {currentValue === option && (
+                            <Text style={modalStyles.rowText}>{option.label}</Text>
+                            {currentKey === option.key && (
                                 <Ionicons name="checkmark" size={22} color={PRIMARY_TEAL} />
                             )}
                         </TouchableOpacity>
@@ -262,13 +316,13 @@ export default function FiltersScreen() {
 
     const handleReset = () => {
         setSelectedCategory(i18n.t('filterss.all'));
-        setSelectedSortBy(i18n.t('filterss.bestMatch'));
-        setSelectedLocation(i18n.t('filterss.allLocations'));
-        setSelectedDelivery(i18n.t('filterss.allMethods'));
+        setSelectedSortByKey(SORT_KEYS.BEST_MATCH);
+        setSelectedLocationKey(LOCATION_KEYS.ALL);
+        setSelectedDeliveryKey(DELIVERY_KEYS.ALL);
         setMinPrice('');
         setMaxPrice('');
         setPriceUnit(getPriceUnits()[0]);
-        setSelectedCondition(i18n.t('filterss.all'));
+        setSelectedConditionKey(CONDITION_KEYS.ALL);
     };
 
     const handleBack = () => {
@@ -295,20 +349,20 @@ export default function FiltersScreen() {
             filterParams.listingType = listingType;
         }
 
-        if (selectedSortBy !== i18n.t('filterss.bestMatch')) {
-            filterParams.sortBy = selectedSortBy;
+        if (selectedSortByKey !== SORT_KEYS.BEST_MATCH) {
+            filterParams.sortBy = selectedSortByKey;
         }
         
-        if (selectedLocation !== i18n.t('filterss.allLocations')) {
-            filterParams.location = selectedLocation;
+        if (selectedLocationKey !== LOCATION_KEYS.ALL) {
+            filterParams.location = selectedLocationKey;
         }
         
-        if (selectedDelivery !== i18n.t('filterss.allMethods')) {
-            filterParams.delivery = selectedDelivery;
+        if (selectedDeliveryKey !== DELIVERY_KEYS.ALL) {
+            filterParams.delivery = selectedDeliveryKey;
         }
         
-        if (selectedCondition !== i18n.t('filterss.all')) {
-            filterParams.condition = selectedCondition;
+        if (selectedConditionKey !== CONDITION_KEYS.ALL) {
+            filterParams.condition = selectedConditionKey;
         }
         
         if (minPrice) {
@@ -334,7 +388,7 @@ export default function FiltersScreen() {
 
     const getDeliveryIcon = () => {
         const DELIVERY_METHODS = getDeliveryMethods();
-        const method = DELIVERY_METHODS.find(m => m.label === selectedDelivery);
+        const method = DELIVERY_METHODS.find(m => m.key === selectedDeliveryKey);
         return method ? method.icon : 'apps-outline';
     };
 
@@ -366,17 +420,17 @@ export default function FiltersScreen() {
                 <View style={styles.section}>
                     <FilterRow
                         label={i18n.t('filterss.sortBy')}
-                        value={selectedSortBy}
+                        value={getCurrentSortLabel()}
                         onPress={() => openModal('sortBy')}
                     />
                     <FilterRow
                         label={i18n.t('filterss.location')}
-                        value={selectedLocation}
+                        value={getCurrentLocationLabel()}
                         onPress={() => openModal('location')}
                     />
                     <FilterRowWithIcon
                         label={i18n.t('filterss.deliveryMethods')}
-                        value={selectedDelivery}
+                        value={getCurrentDeliveryLabel()}
                         icon={getDeliveryIcon()}
                         onPress={() => openModal('delivery')}
                     />
@@ -387,7 +441,10 @@ export default function FiltersScreen() {
                     <Text style={styles.sectionTitle}>{i18n.t('filterss.priceRange')}</Text>
                     <View style={styles.priceContainer}>
                         <TextInput
-                            style={styles.priceInput}
+                            style={[
+                                styles.priceInput,
+                                minPrice && styles.priceInputFilled
+                            ]}
                             placeholder={i18n.t('filterss.min')}
                             placeholderTextColor={TEXT_LIGHT}
                             value={minPrice}
@@ -395,7 +452,10 @@ export default function FiltersScreen() {
                             keyboardType="numeric"
                         />
                         <TextInput
-                            style={styles.priceInput}
+                            style={[
+                                styles.priceInput,
+                                maxPrice && styles.priceInputFilled
+                            ]}
                             placeholder={i18n.t('filterss.max')}
                             placeholderTextColor={TEXT_LIGHT}
                             value={maxPrice}
@@ -412,7 +472,7 @@ export default function FiltersScreen() {
                     </View>
                     {priceUnit.value > 1 && (
                         <Text style={styles.priceHint}>
-                            💡 {priceUnit.value === 1000 ? '1 = 1,000 DA' : '1 = 1,000,000 DA'}
+                            💡 {priceUnit.value === 1000 ? '1 = 1,000 DA' : '1 = 10,000 DA'}
                         </Text>
                     )}
                 </View>
@@ -423,18 +483,18 @@ export default function FiltersScreen() {
                     <View style={styles.conditionContainer}>
                         {getConditionOptions().map((condition) => (
                             <TouchableOpacity
-                                key={condition}
+                                key={condition.key}
                                 style={[
                                     styles.conditionButton,
-                                    selectedCondition === condition && styles.conditionButtonActive
+                                    selectedConditionKey === condition.key && styles.conditionButtonActive
                                 ]}
-                                onPress={() => setSelectedCondition(condition)}
+                                onPress={() => setSelectedConditionKey(condition.key)}
                             >
                                 <Text style={[
                                     styles.conditionText,
-                                    selectedCondition === condition && styles.conditionTextActive
+                                    selectedConditionKey === condition.key && styles.conditionTextActive
                                 ]}>
-                                    {condition}
+                                    {condition.label}
                                 </Text>
                             </TouchableOpacity>
                         ))}
@@ -511,7 +571,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: LIGHT_GRAY,
-        marginBottom:90
+        marginBottom:100
     },
     header: {
         flexDirection: 'row',
@@ -608,6 +668,17 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         fontSize: 16,
         color: DARK_GRAY,
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    priceInputFilled: {
+        borderColor: PRIMARY_TEAL,
+        backgroundColor: WHITE,
+        elevation: 2,
+        shadowColor: PRIMARY_TEAL,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     currencyButton: {
         flexDirection: 'row',

@@ -12,16 +12,16 @@ import {
     Text,
     TouchableOpacity,
     View,
+    Alert,
 } from 'react-native';
 import {
     GestureHandlerRootView,
     Swipeable,
 } from 'react-native-gesture-handler';
-import i18n from '../../lib/i18n'; // Import i18n
+import i18n from '../../lib/i18n';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
 
-// Interface for the notification item (Sender/Product details are nested)
 interface NotificationItem {
     notification_id: number;
     type: string;
@@ -42,7 +42,6 @@ interface NotificationItem {
     };
 }
 
-// Interface for the Notification Settings (matching the DB structure)
 interface NotificationSettings {
     newFollowers: boolean;
     likes: boolean;
@@ -65,10 +64,13 @@ const NotificationsScreen = () => {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    
+    // 🔥 NEW: Edit mode states
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [selectedNotifications, setSelectedNotifications] = useState<Set<number>>(new Set());
 
     const deleteNotification = async (notificationId: number) => {
         try {
-            // 1. Delete from Supabase
             const { error } = await supabase
                 .from("notifications")
                 .delete()
@@ -79,7 +81,6 @@ const NotificationsScreen = () => {
                 return false;
             }
 
-            // 2. Update local state to remove the item instantly
             setNotifications(prev => 
                 prev.filter(n => n.notification_id !== notificationId)
             );
@@ -93,13 +94,104 @@ const NotificationsScreen = () => {
         }
     };
 
+    // 🔥 NEW: Delete multiple notifications
+    const deleteSelectedNotifications = async () => {
+        if (selectedNotifications.size === 0) return;
+
+        Alert.alert(
+            'Delete Notifications',
+            `Delete ${selectedNotifications.size} notification${selectedNotifications.size > 1 ? 's' : ''}?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const idsToDelete = Array.from(selectedNotifications);
+                            
+                            const { error } = await supabase
+                                .from("notifications")
+                                .delete()
+                                .in("notification_id", idsToDelete);
+
+                            if (error) {
+                                console.error("Error deleting notifications:", error);
+                                return;
+                            }
+
+                            setNotifications(prev => 
+                                prev.filter(n => !selectedNotifications.has(n.notification_id))
+                            );
+                            
+                            setSelectedNotifications(new Set());
+                            setIsEditMode(false);
+                        } catch (error) {
+                            console.error("Exception during bulk deletion:", error);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // 🔥 NEW: Mark selected as read
+    const markSelectedAsRead = async () => {
+        if (selectedNotifications.size === 0) return;
+
+        try {
+            const idsToUpdate = Array.from(selectedNotifications);
+            
+            await supabase
+                .from('notifications')
+                .update({ is_read: true })
+                .in('notification_id', idsToUpdate);
+
+            setNotifications(prev =>
+                prev.map(n => 
+                    selectedNotifications.has(n.notification_id) 
+                        ? { ...n, is_read: true } 
+                        : n
+                )
+            );
+            
+            setSelectedNotifications(new Set());
+            setIsEditMode(false);
+        } catch (error) {
+            console.error("Error marking as read:", error);
+        }
+    };
+
+    // 🔥 NEW: Toggle selection
+    const toggleSelection = (notificationId: number) => {
+        setSelectedNotifications(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(notificationId)) {
+                newSet.delete(notificationId);
+            } else {
+                newSet.add(notificationId);
+            }
+            return newSet;
+        });
+    };
+
+    // 🔥 NEW: Select all
+    const selectAll = () => {
+        const allIds = new Set(notifications.map(n => n.notification_id));
+        setSelectedNotifications(allIds);
+    };
+
+    // 🔥 NEW: Deselect all
+    const deselectAll = () => {
+        setSelectedNotifications(new Set());
+    };
+
     const fetchNotifications = async (isRefreshing = false) => {
         if (!user?.user_id) return;
 
         if (!isRefreshing) setLoading(true);
 
         try {
-            // 1. Fetch the receiver's notification settings
             const { data: userProfile, error: profileError } = await supabase
                 .from('users')
                 .select('notification_settings')
@@ -116,7 +208,6 @@ const NotificationsScreen = () => {
                 currentSettings = { ...currentSettings, ...userProfile.notification_settings };
             }
 
-            // 2. Fetch ALL notifications for the user
             const { data: notifData, error: notifError } = await supabase
                 .from("notifications")
                 .select(
@@ -146,7 +237,6 @@ const NotificationsScreen = () => {
                 return;
             }
 
-            // 3. Filter the notifications based on the user's settings
             const filteredNotifications = notifData.filter(notif => {
                 switch (notif.type) {
                     case 'follow':
@@ -162,14 +252,12 @@ const NotificationsScreen = () => {
                 }
             });
 
-            // 4. Get all product IDs
             const productIds = filteredNotifications
                 .filter(n => n.product_id !== null)
                 .map(n => n.product_id) as number[];
 
             let productsMap: { [key: number]: any } = {};
 
-            // 5. Fetch product details if needed
             if (productIds.length > 0) {
                 const { data: productsData, error: productsError } = await supabase
                     .from("products")
@@ -184,7 +272,6 @@ const NotificationsScreen = () => {
                 }
             }
 
-            // 6. Combine filtered notifications with product data
             const enrichedNotifications = filteredNotifications.map(notif => ({
                 ...notif,
                 product: notif.product_id ? productsMap[notif.product_id] : undefined,
@@ -203,7 +290,6 @@ const NotificationsScreen = () => {
     useEffect(() => {
         fetchNotifications();
 
-        // Subscribe to real-time changes
         const channel = supabase
             .channel('notifications-realtime')
             .on(
@@ -231,7 +317,6 @@ const NotificationsScreen = () => {
         fetchNotifications(true);
     };
     
-    // Helper function to get translated notification text
     const getNotificationText = (item: NotificationItem) => {
         switch (item.type) {
             case 'like':
@@ -283,23 +368,25 @@ const NotificationsScreen = () => {
     };
 
     const handleNotificationPress = async (item: NotificationItem) => {
-        // Mark as read
+        // 🔥 In edit mode, toggle selection instead of navigating
+        if (isEditMode) {
+            toggleSelection(item.notification_id);
+            return;
+        }
+
         if (!item.is_read) {
             await markAsRead(item.notification_id);
         }
 
-        // Navigate based on notification type
         if (item.type === 'like' && item.product_id) {
             router.push(`/product_detail?id=${item.product_id}`);
         } else if (item.type === 'follow') {
             router.push(`/someonesProfile?userId=${item.sender.user_id}`);
         } else {
-            // Default: go to sender's profile
             router.push(`/someonesProfile?userId=${item.sender.user_id}`);
         }
     };
 
-    // Function to render the swipe-to-delete background
     const renderRightActions = (
         progress: Animated.AnimatedInterpolation<number>,
         dragX: Animated.AnimatedInterpolation<number>,
@@ -325,13 +412,28 @@ const NotificationsScreen = () => {
     };
 
     const renderItem = ({ item, index }: { item: NotificationItem, index: number }) => {
+        const isSelected = selectedNotifications.has(item.notification_id);
+
         const renderNotificationContent = () => (
             <TouchableOpacity
-                style={[styles.item, !item.is_read && styles.unread]}
+                style={[
+                    styles.item, 
+                    !item.is_read && styles.unread,
+                    isEditMode && isSelected && styles.selected
+                ]}
                 onPress={() => handleNotificationPress(item)}
-                activeOpacity={1}
+                activeOpacity={0.7}
             >
                 <View style={styles.itemContent}>
+                    {/* 🔥 NEW: Checkbox in edit mode */}
+                    {isEditMode && (
+                        <View style={styles.checkboxContainer}>
+                            <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                                {isSelected && <Ionicons name="checkmark" size={18} color="white" />}
+                            </View>
+                        </View>
+                    )}
+
                     <View style={styles.avatarContainer}>
                         {item.sender?.profile_image_url ? (
                             <Image
@@ -345,7 +447,7 @@ const NotificationsScreen = () => {
                                 </Text>
                             </View>
                         )}
-                        {!item.is_read && <View style={styles.unreadDot} />}
+                        {!item.is_read && !isEditMode && <View style={styles.unreadDot} />}
                     </View>
 
                     <View style={styles.textContainer}>
@@ -368,6 +470,11 @@ const NotificationsScreen = () => {
             </TouchableOpacity>
         );
 
+        // 🔥 Disable swipe in edit mode
+        if (isEditMode) {
+            return renderNotificationContent();
+        }
+
         return (
             <Swipeable
                 ref={(ref) => row.current[index] = ref}
@@ -383,7 +490,6 @@ const NotificationsScreen = () => {
                         });
                     }
                 }}
-                onSwipeableWillOpen={() => {}}
                 overshootRight={false}
             >
                 {renderNotificationContent()}
@@ -402,36 +508,80 @@ const NotificationsScreen = () => {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
+                {/* 🔥 UPDATED HEADER */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.backButton}>
                         <Ionicons name="chevron-back" size={28} color="#000" />
                     </TouchableOpacity>
                     <Text style={styles.title}>{i18n.t('notificationsScreen.title')}</Text>
                     <View style={styles.headerRight}>
-                        {notifications.some(n => !n.is_read) && (
+                        {!isEditMode && (
                             <TouchableOpacity
-                                onPress={async () => {
-                                    const unreadIds = notifications
-                                        .filter(n => !n.is_read)
-                                        .map(n => n.notification_id);
-
-                                    if (unreadIds.length > 0) {
-                                        await supabase
-                                            .from('notifications')
-                                            .update({ is_read: true })
-                                            .in('notification_id', unreadIds);
-
-                                        setNotifications(prev =>
-                                            prev.map(n => ({ ...n, is_read: true }))
-                                        );
-                                    }
-                                }}
+                                onPress={() => setIsEditMode(true)}
+                                style={styles.editButton}
                             >
-                                <Text style={styles.markAllRead}>{i18n.t('notificationsScreen.markAllRead')}</Text>
+                                <Ionicons name="create-outline" size={20} color="#00A78F" />
+                                <Text style={styles.editText}>Edit</Text>
                             </TouchableOpacity>
                         )}
                     </View>
                 </View>
+
+                {/* 🔥 NEW: Edit mode action bar */}
+                {isEditMode && (
+                    <View style={styles.editModeBar}>
+                        <View style={styles.editModeLeft}>
+                            <TouchableOpacity
+                                style={styles.selectAllButton}
+                                onPress={() => {
+                                    if (selectedNotifications.size === notifications.length) {
+                                        deselectAll();
+                                    } else {
+                                        selectAll();
+                                    }
+                                }}
+                            >
+                                <View style={[
+                                    styles.checkbox, 
+                                    selectedNotifications.size === notifications.length && styles.checkboxSelected
+                                ]}>
+                                    {selectedNotifications.size === notifications.length && (
+                                        <Ionicons name="checkmark" size={18} color="white" />
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={deleteSelectedNotifications}
+                                disabled={selectedNotifications.size === 0}
+                                style={[styles.actionButton, selectedNotifications.size === 0 && styles.actionButtonDisabled]}
+                            >
+                                <Text style={[styles.actionButtonText, selectedNotifications.size === 0 && styles.actionButtonTextDisabled]}>
+                                    Delete
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                onPress={markSelectedAsRead}
+                                disabled={selectedNotifications.size === 0}
+                                style={[styles.actionButton, selectedNotifications.size === 0 && styles.actionButtonDisabled]}
+                            >
+                                <Text style={[styles.actionButtonText, selectedNotifications.size === 0 && styles.actionButtonTextDisabled]}>
+                                    Mark unread
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={() => {
+                                setIsEditMode(false);
+                                setSelectedNotifications(new Set());
+                            }}
+                        >
+                            <Text style={styles.doneButton}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 <FlatList
                     data={notifications}
@@ -496,10 +646,80 @@ const styles = StyleSheet.create({
         width: 100,
         alignItems: 'flex-end',
     },
+    editButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    editText: {
+        fontSize: 16,
+        color: '#00A78F',
+        fontWeight: '600',
+    },
     markAllRead: {
         fontSize: 14,
         color: "#00A78F",
         fontWeight: '600',
+    },
+    // 🔥 NEW: Edit mode bar styles
+    editModeBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#F8F8F8',
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+    },
+    editModeLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    selectAllButton: {
+        padding: 4,
+    },
+    actionButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+    },
+    actionButtonDisabled: {
+        opacity: 0.4,
+    },
+    actionButtonText: {
+        fontSize: 15,
+        color: '#000',
+        fontWeight: '500',
+    },
+    actionButtonTextDisabled: {
+        color: '#999',
+    },
+    doneButton: {
+        fontSize: 16,
+        color: '#00A78F',
+        fontWeight: '600',
+    },
+    // 🔥 NEW: Checkbox styles
+    checkboxContainer: {
+        marginRight: 12,
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        borderColor: '#ccc',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'white',
+    },
+    checkboxSelected: {
+        backgroundColor: '#00A78F',
+        borderColor: '#00A78F',
+    },
+    selected: {
+        backgroundColor: '#E8F5F3',
     },
     listContent: {
         padding: 16,

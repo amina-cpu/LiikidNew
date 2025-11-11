@@ -42,74 +42,77 @@ search: {
     "emptySubtext": "Users you block will not be able to see your products, and you will not see theirs."
   },
 someonesProfile: {
-  // Header & Navigation
-  profileTitleSuffix: "'s Profile",
-  
-  // Stats
-  posts: "Posts",
-  following: "Following",
-  followers: "Followers",
-  
-  // Buttons
-  followButton: "Follow",
-  unfollowButton: "Unfollow",
-  friendsButton: "Friends",
-  chatButton: "Chat",
-  blockButton: "Block",
-  unblockButton: "Unblock",
-  reportButton: "Report",
-  cancel: "Cancel",
-  
-  // Blocked State
-  blockedUserMessage: "You have blocked this user.",
-  blockedContentMessage: "You cannot view this user's content while they are blocked.",
-  postedItems: "Posted Items",
-  postedItemsBlocked: "Posted Items (0)",
-  
-  // Empty States
-  noPostsYet: "This user hasn't posted any items yet.",
-  profileNotFound: "Profile not found.",
-  
-  // Alerts - Login Required
-  loginRequiredTitle: "Login Required",
-  loginRequiredMessage: "You must be logged in to follow users.",
-  loginRequiredToBlock: "You must be logged in to block a user.",
-  
-  // Alerts - Block User
-  blockAlertTitle: "Block User",
-  blockAlertMessage: "Are you sure you want to block {{username}}? This will also remove all follow relationships.",
-  blockedTitle: "Blocked!",
-  blockedMessage: "{{username}} has been blocked.",
-  
-  // Alerts - Unblock User
-  unblockAlertTitle: "Unblock User",
-  unblockAlertMessage: "Are you sure you want to unblock {{username}}?",
-  unblockedTitle: "Unblocked!",
-  unblockedMessage: "{{username}} has been unblocked.",
-  
-  // Alerts - Report User
-  reportAlertTitle: "Report User",
-  reportAlertMessage: "You are reporting {{username}} for inappropriate content or behavior.",
-  
-  // Error Messages
-  errorTitle: "Error",
-  errorLoadingProfile: "Failed to load user profile.",
-  errorUpdatingFollow: "Failed to update follow status.",
-  errorStartingChat: "Cannot start conversation. Please log in.",
-  errorCreatingConversation: "Could not create or find conversation. Please check your database.",
-  errorBlockingUser: "Failed to block user. Please try again.",
-  errorUnblockingUser: "Cannot unblock user without IDs.",
-  invalidUserId: "Invalid user ID provided.",
-  invalidConversationId: "Invalid conversation ID",
-  unknownError: "Unknown error",
+    profile: "Profile",
+    posts: "Posts",
+    following: "Following",
+    followers: "Followers",
+    follow: "Follow",
+    unfollow: "Unfollow",
+    friends: "Friends",
+    chat: "Chat",
+    block: "Block",
+    report: "Report",
+    cancel: "Cancel",
+    unblock: "Unblock",
+    
+    // Alerts
+    loginRequired: "Login Required",
+    loginRequiredMessage: "You must be logged in to follow users.",
+    errorTitle: "Error",
+    errorMessage: "Failed to load user profile.",
+    profileNotFound: "Profile not found.",
+    invalidUserId: "Invalid user ID provided.",
+    
+    // Block/Unblock
+    blockUserTitle: "Block User",
+    blockUserMessage: "Are you sure you want to block {{username}}? This will also remove all follow relationships.",
+    blocked: "Blocked!",
+    userBlocked: "{{username}} has been blocked.",
+    failedToBlock: "Failed to block user. Please try again.",
+    
+    unblockUserTitle: "Unblock User",
+    unblockUserMessage: "Are you sure you want to unblock {{username}}?",
+    unblocked: "Unblocked!",
+    userUnblocked: "{{username}} has been unblocked.",
+    failedToUnblock: "Failed to unblock user. Please try again.",
+    cannotUnblock: "Cannot unblock user without IDs.",
+    mustBeLoggedIn: "You must be logged in to block a user.",
+    
+    // Report
+    reportUserTitle: "Report User",
+    reportUserMessage: "You are reporting {{username}} for inappropriate content or behavior.",
+    
+    // Blocked state
+    youBlockedUser: "You have blocked this user.",
+    cannotViewContent: "You cannot view this user's content while they are blocked.",
+    
+    // Empty states
+    noItemsYet: "This user hasn't posted any items yet.",
+    postedItems: "Posted Items",
+    postedItemsCount: "Posted Items ({{count}})",
+    
+    // Chat errors
+    cannotStartChat: "Cannot start conversation. Please log in.",
+    chatErrorMessage: "Failed to start chat: {{error}}. Check console for details.",
+    
+    // Follow errors
+    followError: "Failed to update follow status.",
+    
+    // Price formatting
+    exchange: "Exchange",
+    million: "million",
+    da: "DA",
+    daMonth: "DA/mo",
 },
+
   productDetail: {
   // Loading & Errors
   loadingText: "Loading product details...",
   productNotFound: "Product not found.",
   errorLoading: "Failed to load product.",
-  "million": "million",       // <-- NEW KEY for million
-    "priceSuffixDA": "DA",
+  million: "million",       // <-- NEW KEY for million
+    priceSuffixDA: "DA",
+    
   // Header Actions
   loginRequired: "Login Required",
   loginRequiredMessage: "Please login to like products",
@@ -194,68 +197,7 @@ notificationsSettings: {
     ordersTitle: "Orders",
     ordersDescription: "Updates about your orders and purchases",
 },
-someonesProfile: {
-  // Header & Navigation
-  profileTitleSuffix: "",
-  
-  // Stats
-  posts: "Annonces",
-  following: "Abonnements",
-  followers: "Abonnés",
-  
-  // Buttons
-  followButton: "Suivre",
-  unfollowButton: "Ne plus suivre",
-  friendsButton: "Amis",
-  chatButton: "Discuter",
-  blockButton: "Bloquer",
-  unblockButton: "Débloquer",
-  reportButton: "Signaler",
-  cancel: "Annuler",
-  
-  // Blocked State
-  blockedUserMessage: "Vous avez bloqué cet utilisateur.",
-  blockedContentMessage: "Vous ne pouvez pas voir le contenu de cet utilisateur tant qu'il est bloqué.",
-  postedItems: "Articles publiés",
-  postedItemsBlocked: "Articles publiés (0)",
-  
-  // Empty States
-  noPostsYet: "Cet utilisateur n'a pas encore publié d'articles.",
-  profileNotFound: "Profil introuvable.",
-  
-  // Alerts - Login Required
-  loginRequiredTitle: "Connexion requise",
-  loginRequiredMessage: "Vous devez être connecté pour suivre des utilisateurs.",
-  loginRequiredToBlock: "Vous devez être connecté pour bloquer un utilisateur.",
-  
-  // Alerts - Block User
-  blockAlertTitle: "Bloquer l'utilisateur",
-  blockAlertMessage: "Êtes-vous sûr de vouloir bloquer {{username}} ? Cela supprimera également toutes les relations de suivi.",
-  blockedTitle: "Bloqué !",
-  blockedMessage: "{{username}} a été bloqué.",
-  
-  // Alerts - Unblock User
-  unblockAlertTitle: "Débloquer l'utilisateur",
-  unblockAlertMessage: "Êtes-vous sûr de vouloir débloquer {{username}} ?",
-  unblockedTitle: "Débloqué !",
-  unblockedMessage: "{{username}} a été débloqué.",
-  
-  // Alerts - Report User
-  reportAlertTitle: "Signaler l'utilisateur",
-  reportAlertMessage: "Vous signalez {{username}} pour contenu ou comportement inapproprié.",
-  
-  // Error Messages
-  errorTitle: "Erreur",
-  errorLoadingProfile: "Échec du chargement du profil utilisateur.",
-  errorUpdatingFollow: "Échec de la mise à jour du statut de suivi.",
-  errorStartingChat: "Impossible de démarrer la conversation. Veuillez vous connecter.",
-  errorCreatingConversation: "Impossible de créer ou de trouver la conversation. Veuillez vérifier votre base de données.",
-  errorBlockingUser: "Échec du blocage de l'utilisateur. Veuillez réessayer.",
-  errorUnblockingUser: "Impossible de débloquer l'utilisateur sans ID.",
-  invalidUserId: "ID utilisateur non valide fourni.",
-  invalidConversationId: "ID de conversation non valide",
-  unknownError: "Erreur inconnue",
-},
+
 
 // ... (rest of the en: block)
   addListing: {
@@ -550,6 +492,69 @@ HomeandFurniture:"Home & Furniture",
   },
   
   fr: {
+someonesProfile: {
+    profile: "Profil",
+    posts: "Publications",
+    following: "Abonnements",
+    followers: "Abonnés",
+    follow: "Suivre",
+    unfollow: "Ne plus suivre",
+    friends: "Amis",
+    chat: "Discuter",
+    block: "Bloquer",
+    report: "Signaler",
+    cancel: "Annuler",
+    unblock: "Débloquer",
+    
+    // Alerts
+    loginRequired: "Connexion requise",
+    loginRequiredMessage: "Vous devez être connecté pour suivre des utilisateurs.",
+    errorTitle: "Erreur",
+    errorMessage: "Échec du chargement du profil utilisateur.",
+    profileNotFound: "Profil introuvable.",
+    invalidUserId: "ID utilisateur non valide fourni.",
+    
+    // Block/Unblock
+    blockUserTitle: "Bloquer l'utilisateur",
+    blockUserMessage: "Êtes-vous sûr de vouloir bloquer {{username}} ? Cela supprimera également toutes les relations de suivi.",
+    blocked: "Bloqué !",
+    userBlocked: "{{username}} a été bloqué.",
+    failedToBlock: "Échec du blocage de l'utilisateur. Veuillez réessayer.",
+    
+    unblockUserTitle: "Débloquer l'utilisateur",
+    unblockUserMessage: "Êtes-vous sûr de vouloir débloquer {{username}} ?",
+    unblocked: "Débloqué !",
+    userUnblocked: "{{username}} a été débloqué.",
+    failedToUnblock: "Échec du déblocage de l'utilisateur. Veuillez réessayer.",
+    cannotUnblock: "Impossible de débloquer l'utilisateur sans ID.",
+    mustBeLoggedIn: "Vous devez être connecté pour bloquer un utilisateur.",
+    
+    // Report
+    reportUserTitle: "Signaler l'utilisateur",
+    reportUserMessage: "Vous signalez {{username}} pour un contenu ou un comportement inapproprié.",
+    
+    // Blocked state
+    youBlockedUser: "Vous avez bloqué cet utilisateur.",
+    cannotViewContent: "Vous ne pouvez pas voir le contenu de cet utilisateur tant qu'il est bloqué.",
+    
+    // Empty states
+    noItemsYet: "Cet utilisateur n'a encore publié aucun article.",
+    postedItems: "Articles publiés",
+    postedItemsCount: "Articles publiés ({{count}})",
+    
+    // Chat errors
+    cannotStartChat: "Impossible de démarrer la conversation. Veuillez vous connecter.",
+    chatErrorMessage: "Échec du démarrage du chat : {{error}}. Consultez la console pour plus de détails.",
+    
+    // Follow errors
+    followError: "Échec de la mise à jour du statut de suivi.",
+    
+    // Price formatting
+    exchange: "Échange",
+    million: "million",
+    da: "DA",
+    daMonth: "DA/mois",
+},
 
   // ... (inside the fr: { ... } block)
 notificationsSettings: {
@@ -1081,66 +1086,67 @@ notificationsScreen: {
     },
 
 someonesProfile: {
-  // Header & Navigation
-  profileTitleSuffix: "",
-  
-  // Stats
-  posts: "المنشورات",
-  following: "متابَعون",
-  followers: "متابِعون",
-  
-  // Buttons
-  followButton: "متابعة",
-  unfollowButton: "إلغاء المتابعة",
-  friendsButton: "أصدقاء",
-  chatButton: "محادثة",
-  blockButton: "حظر",
-  unblockButton: "إلغاء الحظر",
-  reportButton: "إبلاغ",
-  cancel: "إلغاء",
-  
-  // Blocked State
-  blockedUserMessage: "لقد قمت بحظر هذا المستخدم.",
-  blockedContentMessage: "لا يمكنك عرض محتوى هذا المستخدم أثناء حظره.",
-  postedItems: "العناصر المنشورة",
-  postedItemsBlocked: "العناصر المنشورة (0)",
-  
-  // Empty States
-  noPostsYet: "لم ينشر هذا المستخدم أي عناصر بعد.",
-  profileNotFound: "لم يتم العثور على الملف الشخصي.",
-  
-  // Alerts - Login Required
-  loginRequiredTitle: "تسجيل الدخول مطلوب",
-  loginRequiredMessage: "يجب تسجيل الدخول لمتابعة المستخدمين.",
-  loginRequiredToBlock: "يجب تسجيل الدخول لحظر مستخدم.",
-  
-  // Alerts - Block User
-  blockAlertTitle: "حظر المستخدم",
-  blockAlertMessage: "هل أنت متأكد من رغبتك في حظر {{username}}؟ سيؤدي هذا أيضًا إلى إزالة جميع علاقات المتابعة.",
-  blockedTitle: "تم الحظر!",
-  blockedMessage: "تم حظر {{username}}.",
-  
-  // Alerts - Unblock User
-  unblockAlertTitle: "إلغاء حظر المستخدم",
-  unblockAlertMessage: "هل أنت متأكد من رغبتك في إلغاء حظر {{username}}؟",
-  unblockedTitle: "تم إلغاء الحظر!",
-  unblockedMessage: "تم إلغاء حظر {{username}}.",
-  
-  // Alerts - Report User
-  reportAlertTitle: "الإبلاغ عن المستخدم",
-  reportAlertMessage: "أنت تبلغ عن {{username}} لمحتوى أو سلوك غير لائق.",
-  
-  // Error Messages
-  errorTitle: "خطأ",
-  errorLoadingProfile: "فشل تحميل ملف المستخدم الشخصي.",
-  errorUpdatingFollow: "فشل تحديث حالة المتابعة.",
-  errorStartingChat: "لا يمكن بدء المحادثة. يرجى تسجيل الدخول.",
-  errorCreatingConversation: "تعذر إنشاء المحادثة أو العثور عليها. يرجى التحقق من قاعدة البيانات.",
-  errorBlockingUser: "فشل حظر المستخدم. يرجى المحاولة مرة أخرى.",
-  errorUnblockingUser: "لا يمكن إلغاء حظر المستخدم بدون معرفات.",
-  invalidUserId: "معرّف مستخدم غير صالح تم توفيره.",
-  invalidConversationId: "معرّف محادثة غير صالح",
-  unknownError: "خطأ غير معروف",
+    profile: "الملف الشخصي",
+    posts: "المنشورات",
+    following: "المتابَعون",
+    followers: "المتابِعون",
+    follow: "متابعة",
+    unfollow: "إلغاء المتابعة",
+    friends: "أصدقاء",
+    chat: "محادثة",
+    block: "حظر",
+    report: "إبلاغ",
+    cancel: "إلغاء",
+    unblock: "إلغاء الحظر",
+    
+    // Alerts
+    loginRequired: "تسجيل الدخول مطلوب",
+    loginRequiredMessage: "يجب تسجيل الدخول لمتابعة المستخدمين.",
+    errorTitle: "خطأ",
+    errorMessage: "فشل تحميل ملف المستخدم.",
+    profileNotFound: "لم يتم العثور على الملف الشخصي.",
+    invalidUserId: "معرف مستخدم غير صالح.",
+    
+    // Block/Unblock
+    blockUserTitle: "حظر المستخدم",
+    blockUserMessage: "هل أنت متأكد من رغبتك في حظر {{username}}؟ سيؤدي هذا أيضًا إلى إزالة جميع علاقات المتابعة.",
+    blocked: "تم الحظر!",
+    userBlocked: "تم حظر {{username}}.",
+    failedToBlock: "فشل حظر المستخدم. يرجى المحاولة مرة أخرى.",
+    
+    unblockUserTitle: "إلغاء حظر المستخدم",
+    unblockUserMessage: "هل أنت متأكد من رغبتك في إلغاء حظر {{username}}؟",
+    unblocked: "تم إلغاء الحظر!",
+    userUnblocked: "تم إلغاء حظر {{username}}.",
+    failedToUnblock: "فشل إلغاء حظر المستخدم. يرجى المحاولة مرة أخرى.",
+    cannotUnblock: "لا يمكن إلغاء حظر المستخدم بدون معرفات.",
+    mustBeLoggedIn: "يجب تسجيل الدخول لحظر مستخدم.",
+    
+    // Report
+    reportUserTitle: "الإبلاغ عن المستخدم",
+    reportUserMessage: "أنت تبلغ عن {{username}} بسبب محتوى أو سلوك غير لائق.",
+    
+    // Blocked state
+    youBlockedUser: "لقد قمت بحظر هذا المستخدم.",
+    cannotViewContent: "لا يمكنك عرض محتوى هذا المستخدم أثناء حظره.",
+    
+    // Empty states
+    noItemsYet: "لم ينشر هذا المستخدم أي عناصر بعد.",
+    postedItems: "العناصر المنشورة",
+    postedItemsCount: "العناصر المنشورة ({{count}})",
+    
+    // Chat errors
+    cannotStartChat: "لا يمكن بدء المحادثة. يرجى تسجيل الدخول.",
+    chatErrorMessage: "فشل بدء الدردشة: {{error}}. تحقق من وحدة التحكم للحصول على التفاصيل.",
+    
+    // Follow errors
+    followError: "فشل تحديث حالة المتابعة.",
+    
+    // Price formatting
+    exchange: "مقايضة",
+    million: "مليون",
+    da: "دج",
+    daMonth: "دج/شهر",
 },
 filterss: {
   title: "الفلاتر",

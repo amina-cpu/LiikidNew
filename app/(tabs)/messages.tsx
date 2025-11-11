@@ -18,7 +18,6 @@ import {
   GestureHandlerRootView,
   Swipeable,
 } from "react-native-gesture-handler";
-// Check your path and import: assuming this path is correct
 import {
   getUserConversations,
   updateConversationPinStatus
@@ -26,9 +25,7 @@ import {
 import { supabase } from "../../lib/Supabase";
 import { useAuth } from "../context/AuthContext";
 
-// Re-defining the Conversation interface
 interface Conversation {
-  // Fields coming from your 'conversation_list_view' or custom query
   conversation_id: number;
   other_user_id: number;
   other_user_name: string;
@@ -39,15 +36,13 @@ interface Conversation {
   last_message_time: string | null;
   last_message_sender_id: number | null;
   unread_count: number;
-  is_pinned: boolean; // Must be present in your view/query
+  is_pinned: boolean;
   is_premium: boolean; 
   listing_image_url: string | null;
 }
 
-// Interface for Notification Settings 
 interface NotificationSettings {
     likes: boolean;
-    // ... other settings can be added here
 }
 
 const MessagesScreen = () => {
@@ -64,7 +59,6 @@ const MessagesScreen = () => {
   const [isGrouped, setIsGrouped] = useState(false); 
   const toggleAnim = useRef(new Animated.Value(isGrouped ? 1 : 0)).current;
 
-  // Animate the toggle circle's position
   useEffect(() => {
     Animated.timing(toggleAnim, {
       toValue: isGrouped ? 1 : 0,
@@ -82,7 +76,6 @@ const MessagesScreen = () => {
     outputRange: [2, 22], 
   });
 
-  // --- DELETE/PIN LOGIC ---
   const deleteConversation = async (conversationId: number) => {
     try {
         Alert.alert(
@@ -94,7 +87,6 @@ const MessagesScreen = () => {
                     text: "Delete", 
                     style: "destructive", 
                     onPress: () => {
-                        // Implement DB deletion here
                         setConversations(prev => 
                             prev.filter(c => c.conversation_id !== conversationId)
                         );
@@ -110,20 +102,17 @@ const MessagesScreen = () => {
     }
   };
   
-  // MODIFIED: Uses the new updateConversationPinStatus signature
   const pinConversation = async (conversationId: number, currentPinStatus: boolean) => {
       if (!user?.user_id) return;
       
       const newPinStatus = !currentPinStatus;
 
-      // Optimistic update
       setConversations(prev => 
           prev.map(c => 
               c.conversation_id === conversationId ? { ...c, is_pinned: newPinStatus } : c
           )
       );
 
-      // Database update: Pass the current user's ID to update the participants table
       const success = await updateConversationPinStatus(
           conversationId, 
           user.user_id, 
@@ -132,7 +121,6 @@ const MessagesScreen = () => {
 
       if (!success) {
         Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
-        // Revert on failure (pessimistic update)
         setConversations(prev => 
             prev.map(c => 
                 c.conversation_id === conversationId ? { ...c, is_pinned: currentPinStatus } : c
@@ -140,14 +128,10 @@ const MessagesScreen = () => {
         );
       }
   };
-  // --- END DELETE/PIN LOGIC ---
 
-
-  // --- Data Fetching and Real-time Logic ---
   const fetchUnreadNotificationsCount = useCallback(async () => {
     if (!user?.user_id) return;
     try {
-        // 1. Fetch user's notification settings
         const { data: userProfile, error: profileError } = await supabase
             .from('users')
             .select('notification_settings')
@@ -157,20 +141,17 @@ const MessagesScreen = () => {
         let showLikes = true; 
         if (!profileError && userProfile?.notification_settings) {
             const settings = userProfile.notification_settings as NotificationSettings;
-            // Check if 'likes' is explicitly set to false
             if (settings.likes === false) {
                 showLikes = false; 
             }
         }
 
-        // 2. Build the query to count unread notifications
         let query = supabase
             .from('notifications')
             .select('*', { count: 'exact', head: true })
             .eq('receiver_id', user.user_id)
             .eq('is_read', false);
 
-        // CONDITIONAL FILTERING: If showLikes is false, exclude 'like' notifications from the count
         if (!showLikes) {
             query = query.not('type', 'eq', 'like');
         }
@@ -201,7 +182,6 @@ const MessagesScreen = () => {
         setIsLoading(true);
       }
       
-      // Uses the getUserConversations which fetches from your conversation_list_view
       const data = await getUserConversations(user.user_id);
       
       if (data) {
@@ -220,6 +200,7 @@ const MessagesScreen = () => {
     }
   }, [user?.user_id]);
 
+  // ✅ ADDED: Reload conversations when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadConversations();
@@ -233,7 +214,6 @@ const MessagesScreen = () => {
     fetchUnreadNotificationsCount();
   }, [loadConversations, fetchUnreadNotificationsCount]);
 
-  // --- Utility Functions (Retained) ---
   const formatTime = (timestamp: string | null) => { 
     if (!timestamp) return '';
     const diff = new Date().getTime() - new Date(timestamp).getTime();
@@ -242,13 +222,27 @@ const MessagesScreen = () => {
     if (hours < 24) return `${hours} hours ago`;
     return `${days} days ago`;
   }; 
-  const getAvatarUrl = (conversation: Conversation) => { return conversation.other_user_avatar || "https://via.placeholder.com/56"; };
-  const getDisplayName = (conversation: Conversation) => { return conversation.other_user_full_name || conversation.other_user_name || "Unknown User"; };
-  const getLastMessagePreview = (conversation: Conversation) => { return conversation.last_message || "No messages yet"; };
-  const handleConversationPress = (conversationId: number) => { router.push(`/chat/${conversationId}`); };
-  const handleNotificationPress = () => { router.push('/(tabs)/notifications'); };
+  
+  const getAvatarUrl = (conversation: Conversation) => { 
+    return conversation.other_user_avatar || "https://via.placeholder.com/56"; 
+  };
+  
+  const getDisplayName = (conversation: Conversation) => { 
+    return conversation.other_user_full_name || conversation.other_user_name || "Unknown User"; 
+  };
+  
+  const getLastMessagePreview = (conversation: Conversation) => { 
+    return conversation.last_message || "No messages yet"; 
+  };
+  
+  const handleConversationPress = (conversationId: number) => { 
+    router.push(`/chat/${conversationId}`); 
+  };
+  
+  const handleNotificationPress = () => { 
+    router.push('/(tabs)/notifications'); 
+  };
 
-  // Sort pinned conversations before unpinned ones
   const sortedConversations = conversations.sort((a, b) => {
       if (a.is_pinned && !b.is_pinned) return -1;
       if (!a.is_pinned && b.is_pinned) return 1;
@@ -258,8 +252,6 @@ const MessagesScreen = () => {
   const pinnedConversations = sortedConversations.filter(c => c.is_pinned);
   const unpinnedConversations = sortedConversations.filter(c => !c.is_pinned);
 
-
-  // --- Swipeable Actions (Pin/Delete) ---
   const renderRightActions = (
     progress: Animated.AnimatedInterpolation<number>,
     dragX: Animated.AnimatedInterpolation<number>,
@@ -276,7 +268,6 @@ const MessagesScreen = () => {
     
     return (
         <View style={styles.swipeActionsContainer}>
-            {/* PIN/UNPIN Action (Dark Gray) */}
             <TouchableOpacity 
                 style={[styles.actionButtonContainer, styles.pinAction]}
                 onPress={() => {
@@ -290,7 +281,6 @@ const MessagesScreen = () => {
                 </Animated.View>
             </TouchableOpacity>
 
-            {/* DELETE Action (Red) */}
             <TouchableOpacity 
                 style={[styles.actionButtonContainer, styles.deleteAction]}
                 onPress={() => {
@@ -306,10 +296,7 @@ const MessagesScreen = () => {
         </View>
     );
   };
-  // --- END Swipeable Actions ---
 
-  // --- Rendering Components ---
-  
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>Inbox</Text>
@@ -318,7 +305,6 @@ const MessagesScreen = () => {
         onPress={handleNotificationPress}
       >
         <Ionicons name="notifications-outline" size={26} color="#000" /> 
-        {/* The badge is hidden if unreadNotificationsCount is 0, correctly respecting the settings logic */}
         {unreadNotificationsCount > 0 && (
           <View style={styles.notificationBadge}>
             <Text style={styles.badgeText}>
@@ -330,7 +316,7 @@ const MessagesScreen = () => {
     </View>
   );
 
-  const renderGroupBy = () => ( /* ... (retained) */
+  const renderGroupBy = () => (
     <View style={styles.groupByContainer}>
       <View style={styles.groupByToggleRow}>
         <TouchableOpacity 
@@ -402,7 +388,6 @@ const MessagesScreen = () => {
               <Text style={styles.premiumLabelText}>PREMIUM</Text>
             </View>
           )}
-          {/* Green dot for UNREAD messages (inside the avatar container) */}
           {hasUnread && <View style={styles.unreadDot} />}
         </View>
 
@@ -427,7 +412,6 @@ const MessagesScreen = () => {
           </Text>
         </View>
         
-        {/* Rightmost image thumbnail */}
         {item.listing_image_url && (
           <Image 
             source={{ uri: item.listing_image_url }} 
@@ -463,7 +447,6 @@ const MessagesScreen = () => {
     <View style={{ backgroundColor: '#fff' }}>
         {renderGroupBy()}
         
-        {/* Pinned Section */}
         {pinnedConversations.length > 0 && (
             <>
                 {renderSectionHeader("Pinned", "View all")}
@@ -477,11 +460,9 @@ const MessagesScreen = () => {
             </>
         )}
         
-        {/* All Section Header and Edit/Sort Buttons */}
         {renderSectionHeader("All")}
         {renderEditSortButtons()} 
         
-        {/* Separator before the unpinned/main list items start */}
         {unpinnedConversations.length > 0 && <View style={styles.separator} />}
     </View>
   );
@@ -569,8 +550,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  
-  // --- GROUP BY SECTION STYLES (RETAINED) ---
   groupByContainer: {
     backgroundColor: '#fff',
     paddingHorizontal: 16,
@@ -640,8 +619,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#fff',
   },
-  // --- END GROUP BY STYLES ---
-
   pinIcon: {
     marginRight: 6,
   },
@@ -667,8 +644,6 @@ const styles = StyleSheet.create({
     color: '#00A86B', 
     fontWeight: '500',
   },
-  
-  // --- EDIT/SORT BUTTONS STYLES (RETAINED) ---
   editSortRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -704,9 +679,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000', 
   },
-  // --- END EDIT/SORT STYLES ---
-
-  // --- CONVERSATION/UNREAD STYLES (RETAINED) ---
   conversationItem: {
     flexDirection: "row",
     paddingHorizontal: 16,
@@ -802,8 +774,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     backgroundColor: '#E5E5EA',
   },
-  
-  // --- SWIPE ACTIONS STYLES (MATCHING IMAGE) ---
   swipeActionsContainer: {
       flexDirection: 'row',
       width: 160, 
@@ -827,15 +797,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  // Dark Gray for Pin
   pinAction: {
     backgroundColor: '#4A4A4A', 
   },
-  // Red for Delete
   deleteAction: {
     backgroundColor: '#E53E3E', 
   },
-  
   loadingContainer: {
     flex: 1,
     justifyContent: "center",

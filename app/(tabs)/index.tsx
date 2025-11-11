@@ -1033,9 +1033,9 @@ useEffect(() => {
         {!searchMode && selectedFilter === "All" && hasMoreProducts && (
           <LoadMoreButton onPress={handleLoadMore} loading={loadingMore} />
         )}
-        {!searchMode && selectedFilter === "All" && !hasMoreProducts && products.length > 0 && (
+        {/* {!searchMode && selectedFilter === "All" && !hasMoreProducts && products.length > 0 && (
           <Text style={styles.noMoreText}>{i18n.t('home.noMoreText')}</Text>
-        )}
+        )} */}
       </ScrollView>
     </View>
   );
@@ -1046,6 +1046,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
+    marginBottom:40
   },
   
   // 🔍 SEARCH BAR - Enhanced shadow

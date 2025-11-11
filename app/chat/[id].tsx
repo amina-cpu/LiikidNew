@@ -1,4 +1,4 @@
-// app/chat/[id].tsx - COMPLETE FIX
+// app/chat/[id].tsx - COMPLETE FIX with proper read marking
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import {
   getConversationMessages,
-  markConversationAsRead,
   sendMessage,
 } from "../../lib/messaging";
 import { supabase } from "../../lib/Supabase";
@@ -46,6 +45,32 @@ interface ConversationInfo {
   other_user_avatar: string | null;
   other_user_profile_image: string | null;
 }
+
+// ✅ FIXED: Function to mark messages as read using last_read_at
+const markMessagesAsRead = async (conversationId: number, userId: number) => {
+  try {
+    console.log('📖 MARKING MESSAGES AS READ');
+    console.log('   Conversation ID:', conversationId);
+    console.log('   Current User ID:', userId);
+    
+    // Call the database function to update last_read_at
+    const { error } = await supabase.rpc('update_last_read_at', {
+      p_conversation_id: conversationId,
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error('❌ Error updating last_read_at:', error);
+      return false;
+    }
+
+    console.log('✅ Messages marked as read (last_read_at updated)');
+    return true;
+  } catch (error) {
+    console.error('❌ Exception:', error);
+    return false;
+  }
+};
 
 const ChatScreen = () => {
   const router = useRouter();
@@ -90,41 +115,46 @@ const ChatScreen = () => {
     }
   }, [conversationId, user?.user_id]);
 
-  // Load messages - FIX: Include sender_id
+  // Load messages
   const loadMessages = useCallback(async () => {
     try {
       console.log('📥 Loading messages for conversation:', conversationId);
       const data = await getConversationMessages(conversationId);
       if (data) {
         console.log('✅ Loaded', data.length, 'messages');
-        console.log('First message sender_id:', data[0]?.sender_id);
         setMessages(data as Message[]);
+        
+        // ✅ Mark messages as read after loading
+        if (user?.user_id) {
+          setTimeout(() => {
+            markMessagesAsRead(conversationId, user.user_id);
+          }, 500);
+        }
       }
     } catch (error) {
       console.error("Error loading messages:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [conversationId]);
+  }, [conversationId, user?.user_id]);
 
   useEffect(() => {
     loadConversationInfo();
     loadMessages();
   }, [loadConversationInfo, loadMessages]);
 
-  // Mark messages as read when screen is focused - DISABLED FOR NOW
+  // ✅ Mark messages as read when screen is focused
   useFocusEffect(
     useCallback(() => {
-      // Commenting out read receipts for now
-      // if (user?.user_id) {
-      //   setTimeout(() => {
-      //     markConversationAsRead(conversationId, user.user_id);
-      //   }, 500);
-      // }
+      if (user?.user_id) {
+        setTimeout(() => {
+          markMessagesAsRead(conversationId, user.user_id);
+        }, 500);
+      }
     }, [conversationId, user?.user_id])
   );
 
-  // Subscribe to new messages - IMPROVED: Better duplicate handling
+  // Subscribe to new messages
   useEffect(() => {
     if (!user?.user_id) return;
 
@@ -182,10 +212,10 @@ const ChatScreen = () => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }, 100);
 
-            // Mark as read if from other user
+            // ✅ Mark as read if from other user
             if (data.sender_id !== user.user_id) {
               setTimeout(() => {
-                markConversationAsRead(conversationId, user.user_id);
+                markMessagesAsRead(conversationId, user.user_id);
               }, 500);
             }
           }
@@ -220,9 +250,8 @@ const ChatScreen = () => {
 
     setIsSending(true);
     const messageText = inputText.trim();
-    const tempId = Date.now(); // Temporary ID for optimistic update
+    const tempId = Date.now();
     
-    // Create optimistic message
     const optimisticMessage: Message = {
       message_id: tempId,
       message_text: messageText,
@@ -238,12 +267,10 @@ const ChatScreen = () => {
       },
     };
 
-    // Add message immediately to UI
     setMessages(prev => [...prev, optimisticMessage]);
     setInputText("");
     setInputHeight(40);
 
-    // Scroll to bottom
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
@@ -252,12 +279,10 @@ const ChatScreen = () => {
       const result = await sendMessage(conversationId, user.user_id, messageText);
       
       if (!result) {
-        // Remove optimistic message on failure
         setMessages(prev => prev.filter(m => m.message_id !== tempId));
         setInputText(messageText);
         Alert.alert('Error', 'Failed to send message');
       } else {
-        // Replace optimistic message with real one
         setMessages(prev => 
           prev.map(m => m.message_id === tempId ? { ...result, sender: optimisticMessage.sender } as Message : m)
         );
@@ -290,7 +315,6 @@ const ChatScreen = () => {
   };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-    // FIX: Use sender_id to determine if it's your message
     const isMyMessage = item.sender_id === user?.user_id;
     const previousMessage = index > 0 ? messages[index - 1] : null;
     const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
@@ -431,7 +455,7 @@ const ChatScreen = () => {
           />
         )}
 
-        {/* Input - FIXED FOR VISIBILITY */}
+        {/* Input */}
         <View style={styles.inputContainer}>
           <View style={styles.inputRow}>
             <TouchableOpacity style={styles.plusButton}>
@@ -575,7 +599,6 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  // ✅ FIXED INPUT STYLES - PERFECTLY VISIBLE
   inputContainer: {
     backgroundColor: "#F9F9F9",
     borderTopWidth: 0.5,

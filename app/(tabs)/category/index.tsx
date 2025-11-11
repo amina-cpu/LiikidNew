@@ -1005,89 +1005,85 @@ export default function CategoryScreen() {
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
-         <View style={styles.categoryTitleContainer}>
-  {getCategoryIcon(category?.name || "Category", 24, PRIMARY_TEAL)}
-  <Text style={styles.categoryTitle}>
-    {getCategoryTranslation(category?.name || "Category")}
-  </Text>
-</View>
+          <View style={styles.categoryTitleContainer}>
+            {getCategoryIcon(category?.name || "Category", 24, PRIMARY_TEAL)}
+            <Text style={styles.categoryTitle}>
+              {getCategoryTranslation(category?.name || "Category")}
+            </Text>
+          </View>
 
-
-{visibleSubcategories.length > 0 && (
-  <ScrollView
-    horizontal
-    showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.subcategoryScroll}
-  >
-    {visibleSubcategories.map((sub) => (
-      <TouchableOpacity
-        key={sub.id}
-        style={[
-          styles.subcategoryPill,
-          selectedSubcategory === sub.id && styles.subcategoryPillActive,
-        ]}
-        onPress={() => {
-          if (currentSearchQuery.trim()) {
-            router.push(
-              `/category/subcategory/${sub.id}?searchMode=true&searchQuery=${encodeURIComponent(currentSearchQuery)}`
-            );
-          } else {
-            router.push(`/category/subcategory/${sub.id}`);
-          }
-        }}
-      >
-        {sub.hasResults && (
-          <View style={styles.redDot} />
-        )}
-      {sub.hasResults && (
-  <View style={styles.redDot} />
-)}
-
-{getCategoryIcon(sub.name, 20, DARK_GRAY)}
-
-<Text style={styles.subcategoryText}>
-  {sub.name}
-</Text>
-
-      </TouchableOpacity>
-    ))}
-  </ScrollView>
-)}
-          <View 
-            style={styles.filterTabsWrapper}
-            onLayout={(event) => {
-              const { y, height } = event.nativeEvent.layout;
-              setFilterTabsLayout({ y, height });
-            }}
-          >
-            <View style={styles.filterTabs}>
-              {FILTER_TABS.map((tab) => (
+          {visibleSubcategories.length > 0 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.subcategoryScroll}
+            >
+              {visibleSubcategories.map((sub) => (
                 <TouchableOpacity
-                  key={tab}
+                  key={sub.id}
                   style={[
-                    styles.filterButton,
-                    selectedFilter === tab && styles.filterButtonActive,
-                    selectedFilter === tab &&
-                      tab === "Sell" && { backgroundColor: BLUE },
-                    selectedFilter === tab &&
-                      tab === "Rent" && { backgroundColor: ORANGE },
-                    selectedFilter === tab &&
-                      tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                    styles.subcategoryPill,
+                    selectedSubcategory === sub.id && styles.subcategoryPillActive,
                   ]}
-                  onPress={() => setSelectedFilter(tab)}
+                  onPress={() => {
+                    if (currentSearchQuery.trim()) {
+                      router.push(
+                        `/category/subcategory/${sub.id}?searchMode=true&searchQuery=${encodeURIComponent(currentSearchQuery)}`
+                      );
+                    } else {
+                      router.push(`/category/subcategory/${sub.id}`);
+                    }
+                  }}
                 >
-                  <Text
-                    style={[
-                      styles.filterText,
-                      selectedFilter === tab && styles.filterTextActive,
-                    ]}
-                  >
-                    {translateFilter(tab)}
+                  {sub.hasResults && (
+                    <View style={styles.redDot} />
+                  )}
+                  {getCategoryIcon(sub.name, 20, DARK_GRAY)}
+                  <Text style={styles.subcategoryText}>
+                    {sub.name}
                   </Text>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+          )}
+
+          {!isSticky && (
+            <View 
+              style={styles.filterTabsWrapper}
+              onLayout={(event) => {
+                const { y, height } = event.nativeEvent.layout;
+                setFilterTabsLayout({ y, height });
+              }}
+            >
+              <View style={styles.filterTabs}>
+                {FILTER_TABS.map((tab) => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[
+                      styles.filterButton,
+                      selectedFilter === tab && styles.filterButtonActive,
+                      selectedFilter === tab &&
+                        tab === "Sell" && { backgroundColor: BLUE },
+                      selectedFilter === tab &&
+                        tab === "Rent" && { backgroundColor: ORANGE },
+                      selectedFilter === tab &&
+                        tab === "Exchange" && { backgroundColor: "#8E44AD" },
+                    ]}
+                    onPress={() => setSelectedFilter(tab)}
+                  >
+                    <Text
+                      style={[
+                        styles.filterText,
+                        selectedFilter === tab && styles.filterTextActive,
+                      ]}
+                    >
+                      {translateFilter(tab)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {filteredProducts.length === 0 ? (
             <Text style={styles.emptyText}>
@@ -1128,7 +1124,7 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    marginBottom:70,
+    marginBottom:110,
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
   },
@@ -1369,36 +1365,34 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '700',
   },
-  // 📦 UPDATED PRODUCT GRID - Match homepage spacing
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: 8, // Changed from 16 to 8
+    paddingHorizontal: 8,
   },
-  // 📦 UPDATED PRODUCT CARD - Match homepage design
   cardContainer: {
     width: CARD_WIDTH,
-    marginBottom: 8, // Changed from 16 to 8
-    borderRadius: 20, // Changed from 16 to 20
+    marginBottom: 8,
+    borderRadius: 20,
     backgroundColor: "white",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 }, // Increased shadow
-    shadowOpacity: 0.15, // Increased shadow
-    shadowRadius: 12, // Increased shadow
-    elevation: 8, // Increased elevation
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   cardTouchable: {
-    borderRadius: 20, // Changed from 16 to 20
+    borderRadius: 20,
     overflow: "hidden",
     flex: 1,
   },
   imageWrapper: {
     width: "100%",
-    aspectRatio: 0.8, // Changed from 1 to 0.8 (taller cards)
+    aspectRatio: 0.8,
     backgroundColor: "#F7F7F7",
-    borderTopLeftRadius: 20, // Changed from 16 to 20
-    borderTopRightRadius: 20, // Changed from 16 to 20
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: "hidden",
   },
   cardImage: {
@@ -1414,17 +1408,17 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
     shadowColor: "#000",
-    shadowOpacity: 0.2, // Increased shadow
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4, // Increased elevation
+    elevation: 4,
   },
   heartIcon: {
     position: "absolute",
-    top: 12, // Changed from 10 to 12
-    right: 12, // Changed from 10 to 12
-    backgroundColor: 'rgba(0,0,0,0.5)', // Added background
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
-    padding: 6, // Changed from 5 to 6
+    padding: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
@@ -1439,23 +1433,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    marginBottom: 6, // Changed from 8 to 6
+    marginBottom: 6,
   },
   priceText: {
-    fontSize: 13, // Changed from 14 to 13
+    fontSize: 13,
     fontWeight: "700",
   },
   cardTitle: {
-    fontSize: 13, // Changed from 14 to 13
+    fontSize: 13,
     fontWeight: "500",
-    color: "#333", // Changed to match homepage
-    minHeight: 34, // Changed from 36 to 34
-    marginBottom: 4, // Added
+    color: "#333",
+    minHeight: 34,
+    marginBottom: 4,
   },
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2, // Changed from 4 to 2
+    marginTop: 2,
   },
   cardDistance: {
     marginLeft: 4,
@@ -1466,19 +1460,19 @@ const styles = StyleSheet.create({
   loadMoreContainer: {
     paddingHorizontal: 16,
     marginTop: 20,
-    marginBottom: 40, // Increased bottom margin
+    marginBottom: 40,
   },
   loadMoreButton: {
     backgroundColor: PRIMARY_TEAL,
-    borderRadius: 14, // Slightly more rounded
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: PRIMARY_TEAL,
-    shadowOffset: { width: 0, height: 6 }, // Increased shadow
-    shadowOpacity: 0.4, // Increased shadow
-    shadowRadius: 10, // Increased shadow
-    elevation: 8, // Increased elevation
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   loadMoreText: {
     color: "white",
