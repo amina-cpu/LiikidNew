@@ -42,7 +42,7 @@ const SettingsScreen = () => {
             i18n.t('profile.logout'),
             i18n.t('settingsScreen.areYouSureLogout'),
             [
-                { text: i18n.t('settingsScreen.cancel'), style: 'cancel' },
+                { text: i18n.t('someonesProfile.cancel'), style: 'cancel' },
                 {
                     text: i18n.t('profile.logout'),
                     style: 'destructive',

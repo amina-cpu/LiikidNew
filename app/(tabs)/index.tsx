@@ -1075,6 +1075,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 10,
+    marginTop:20,
     position: 'relative',
     
     // Soft outer shadow for depth
@@ -1372,24 +1373,24 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 
-  redDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+redDot: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: ACCENT_RED,
-    zIndex: 2,
-    borderWidth: 2,
-    borderColor: 'white',
+    borderWidth: 3,
+    borderColor: "white",
+    zIndex: 20,
     shadowColor: ACCENT_RED,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }],
   },
-
   loadMoreContainer: {
     paddingHorizontal: 16,
     marginTop: 20,

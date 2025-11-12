@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,17 +27,24 @@ const SearchScreen = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedCategoryName, setSelectedCategoryName] = useState(i18n.t('search.allCategories'));
   const [categories, setCategories] = useState<Category[]>([]);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Get the translated category name dynamically
+  const getSelectedCategoryName = () => {
+    if (selectedCategoryId === null) {
+      return i18n.t('search.allCategories');
+    }
+    const category = categories.find(cat => cat.id === selectedCategoryId);
+    return category?.name || i18n.t('search.allCategories');
+  };
+
   useFocusEffect(
     useCallback(() => {
       setSearch('');
       setSelectedCategoryId(null);
-      setSelectedCategoryName(i18n.t('search.allCategories'));
       setShowCategoryPicker(false);
       
       if (user) {
@@ -147,7 +153,7 @@ const SearchScreen = () => {
             id: selectedCategoryId.toString(),
             searchQuery: search.trim(),
             searchMode: 'true',
-            categoryName: selectedCategoryName,
+            categoryName: getSelectedCategoryName(),
           },
         });
       } else {
@@ -215,10 +221,8 @@ const SearchScreen = () => {
   const selectCategory = (cat: Category | null) => {
     if (cat) {
       setSelectedCategoryId(cat.id);
-      setSelectedCategoryName(cat.name);
     } else {
       setSelectedCategoryId(null);
-      setSelectedCategoryName(i18n.t('search.allCategories'));
     }
     setShowCategoryPicker(false);
   };
@@ -232,110 +236,116 @@ const SearchScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionLabel}>{i18n.t('search.subtitle')}</Text>
-
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#999" />
-        <TextInput
-          placeholder={i18n.t('search.placeholder')}
-          placeholderTextColor="#999"
-          style={styles.input}
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={handleSearch}
-          returnKeyType="search"
-        />
-      </View>
-
-      <TouchableOpacity 
-        style={styles.categoryBox}
-        onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.categoryText}>{selectedCategoryName}</Text>
-        <MaterialIcons 
-          name={showCategoryPicker ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
-          size={22} 
-          color="#444" 
-        />
-      </TouchableOpacity>
+        <Text style={styles.sectionLabel}>{i18n.t('search.subtitle')}</Text>
 
-      {showCategoryPicker && (
-        <ScrollView style={styles.categoryPicker} nestedScrollEnabled>
-          <TouchableOpacity 
-            style={styles.categoryOption}
-            onPress={() => selectCategory(null)}
-          >
-            <Text style={[
-              styles.categoryOptionText,
-              !selectedCategoryId && styles.categoryOptionTextActive
-            ]}>
-              {i18n.t('search.allCategories')}
-            </Text>
-            {!selectedCategoryId && (
-              <Ionicons name="checkmark" size={20} color={PRIMARY_TEAL} />
-            )}
-          </TouchableOpacity>
-          {categories.map((cat) => (
-            <TouchableOpacity 
-              key={cat.id}
-              style={styles.categoryOption}
-              onPress={() => selectCategory(cat)}
-            >
-              <Text style={[
-                styles.categoryOptionText,
-                selectedCategoryId === cat.id && styles.categoryOptionTextActive
-              ]}>
-                {cat.name}
-              </Text>
-              {selectedCategoryId === cat.id && (
-                <Ionicons name="checkmark" size={20} color={PRIMARY_TEAL} />
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
-
-      <TouchableOpacity 
-        style={styles.searchBtn} 
-        onPress={handleSearch}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator size="small" color="#fff" />
-        ) : (
-          <>
-            <Ionicons name="search" size={18} color="#fff" />
-            <Text style={styles.searchBtnText}>{i18n.t('search.searchButton')}</Text>
-          </>
-        )}
-      </TouchableOpacity>
-
-      <Text style={styles.recentLabel}>{i18n.t('search.recentSearches')}</Text>
-
-      {recentSearches.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="time-outline" size={48} color="#ccc" />
-          <Text style={styles.emptyStateText}>{i18n.t('search.noRecentSearches')}</Text>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#999" />
+          <TextInput
+            placeholder={i18n.t('search.placeholder')}
+            placeholderTextColor="#999"
+            style={styles.input}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
         </View>
-      ) : (
-        <FlatList
-          data={recentSearches}
-          keyExtractor={(item, index) => `${item}-${index}`}
-          contentContainerStyle={styles.recentList}
-          numColumns={2}
-          renderItem={({ item }) => (
-            <TouchableOpacity 
-              style={styles.recentItem}
-              onPress={() => handleRecentSearchTap(item)}
-            >
-              <Text style={styles.recentText} numberOfLines={1}>{item}</Text>
-              <TouchableOpacity onPress={() => removeRecent(item)}>
-                <Ionicons name="close" size={14} color="#777" />
+
+        <TouchableOpacity 
+          style={styles.categoryBox}
+          onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+        >
+          <Text style={styles.categoryText}>{getSelectedCategoryName()}</Text>
+          <MaterialIcons 
+            name={showCategoryPicker ? "keyboard-arrow-up" : "keyboard-arrow-down"} 
+            size={22} 
+            color="#444" 
+          />
+        </TouchableOpacity>
+
+        {showCategoryPicker && (
+          <View style={styles.categoryPickerWrapper}>
+            <ScrollView style={styles.categoryPicker} nestedScrollEnabled>
+              <TouchableOpacity 
+                style={styles.categoryOption}
+                onPress={() => selectCategory(null)}
+              >
+                <Text style={[
+                  styles.categoryOptionText,
+                  !selectedCategoryId && styles.categoryOptionTextActive
+                ]}>
+                  {i18n.t('search.allCategories')}
+                </Text>
+                {!selectedCategoryId && (
+                  <Ionicons name="checkmark" size={20} color={PRIMARY_TEAL} />
+                )}
               </TouchableOpacity>
-            </TouchableOpacity>
+              {categories.map((cat) => (
+                <TouchableOpacity 
+                  key={cat.id}
+                  style={styles.categoryOption}
+                  onPress={() => selectCategory(cat)}
+                >
+                  <Text style={[
+                    styles.categoryOptionText,
+                    selectedCategoryId === cat.id && styles.categoryOptionTextActive
+                  ]}>
+                    {cat.name}
+                  </Text>
+                  {selectedCategoryId === cat.id && (
+                    <Ionicons name="checkmark" size={20} color={PRIMARY_TEAL} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        <TouchableOpacity 
+          style={styles.searchBtn} 
+          onPress={handleSearch}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="search" size={18} color="#fff" />
+              <Text style={styles.searchBtnText}>{i18n.t('search.searchButton')}</Text>
+            </>
           )}
-        />
-      )}
+        </TouchableOpacity>
+
+        {/* Recent Searches Section */}
+        <Text style={styles.recentLabel}>{i18n.t('search.recentSearches')}</Text>
+
+        {recentSearches.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="time-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyStateText}>{i18n.t('search.noRecentSearches')}</Text>
+          </View>
+        ) : (
+          <View style={styles.recentSearchesGrid}>
+            {recentSearches.map((item, index) => (
+              <TouchableOpacity 
+                key={`${item}-${index}`}
+                style={styles.recentItem}
+                onPress={() => handleRecentSearchTap(item)}
+              >
+                <Text style={styles.recentText} numberOfLines={1}>{item}</Text>
+                <TouchableOpacity onPress={() => removeRecent(item)}>
+                  <Ionicons name="close" size={14} color="#777" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 };
@@ -346,13 +356,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-    padding: 16,
     marginTop: 40,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   headerTitle: {
     fontSize: 20,
@@ -362,10 +375,16 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 4,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
   sectionLabel: {
     fontSize: 13,
     color: '#333',
-    marginTop: 20,
     marginBottom: 8,
     fontWeight: '500',
   },
@@ -399,22 +418,16 @@ const styles = StyleSheet.create({
     color: '#444',
     fontSize: 15,
   },
+  categoryPickerWrapper: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
   categoryPicker: {
-    position: 'absolute',
-    top: 165,
-    left: 16,
-    right: 16,
     backgroundColor: '#fff',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
     maxHeight: 250,
-    zIndex: 1000,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
   },
   categoryOption: {
     flexDirection: 'row',
@@ -456,36 +469,36 @@ const styles = StyleSheet.create({
   recentLabel: {
     fontSize: 13,
     fontWeight: '500',
-    marginTop: 18,
+    marginTop: 24,
+    marginBottom: 12,
     color: '#222',
   },
-  recentList: {
-    marginTop: 10,
+  recentSearchesGrid: {
+    flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f2f2f2',
     borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     marginRight: 8,
     marginBottom: 8,
+    minWidth: 80,
     maxWidth: '48%',
   },
   recentText: {
     fontSize: 13,
     color: '#333',
-    marginRight: 4,
-    flex: 1,
+    marginRight: 8,
+    flexShrink: 1,
   },
   emptyState: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 60,
+    paddingVertical: 60,
   },
   emptyStateText: {
     fontSize: 14,

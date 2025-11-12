@@ -19,8 +19,8 @@ import {
     View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
-import { getOrCreateConversation } from '../../lib/messaging';
 import i18n from '../../lib/i18n';
+import { getOrCreateConversation } from '../../lib/messaging';
 
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
 
@@ -125,9 +125,9 @@ const ProductCard: React.FC<{
                         </View>
                     )}
                     
-                    <TouchableOpacity style={styles.threeDotsMenu}>
+                    {/* <TouchableOpacity style={styles.threeDotsMenu}>
                         <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
                 
                 <View style={styles.cardDetails}>
@@ -1133,7 +1133,7 @@ const styles = StyleSheet.create({
     tabBarSingle: {
         marginHorizontal: 14,
         marginBottom: 10,
-        backgroundColor: '#F7F7F7',
+        backgroundColor:  '#16A085',
         borderRadius: 12,
         padding: 4,
     },
@@ -1141,7 +1141,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 10,
         borderRadius: 10,
-        backgroundColor: '#FFFFFF',
+        backgroundColor:  '#16A085',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.08,
@@ -1151,7 +1151,7 @@ const styles = StyleSheet.create({
     tabTextActive: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#000',
+        color: '#fff',
     },
     productsBackground: {
         flex: 1,
