@@ -19,8 +19,6 @@ import {
 } from "react-native";
 
 import { supabase } from "../../../lib/Supabase";
-// 💡 Import i18n and helper
-
 import i18n, { translateFilter } from '../../../lib/i18n';
 
 const PRIMARY_TEAL = "#16A085";
@@ -63,8 +61,9 @@ interface Product {
   sub_subcategory_id: number | null;
   created_at: string;
   delivery: boolean;
-  user_id: number; // 🔥 NEW
+  user_id: number;
 }
+
 const getCategoryTranslation = (catName: string): string => {
   const normalized = catName.trim().toLowerCase();
 
@@ -85,6 +84,8 @@ const getCategoryTranslation = (catName: string): string => {
     'clothing & fashion': 'ClothingFashion',
     'health & beauty': 'HealthBeauty',
     'homemade & handcrafted': 'HomemadeHandcrafted',
+    'animals shop': 'AnimalShop',
+    'home & furniture': 'HomeandFurniture',
   };
 
   const mappedKey = categoryMap[normalized];
@@ -95,118 +96,147 @@ const getCategoryTranslation = (catName: string): string => {
   const translated = i18n.t(translationKey);
   return translated !== translationKey ? translated : catName;
 };
+
+const getSubcategoryTranslation = (subName: string): string => {
+  const normalized = subName.trim().toLowerCase();
+
+  const subcategoryMap: { [key: string]: string } = {
+    'phones': 'Phones',
+    'phone cases': 'PhoneCases',
+    'chargers & cables': 'ChargersAndCables',
+    'headphones & earphones': 'HeadphonesAndEarphones',
+    'screen protectors': 'ScreenProtectors',
+    'power banks': 'PowerBanks',
+    'laptops': 'Laptops',
+    'desktop computers': 'DesktopComputers',
+    'tablets': 'Tablets',
+    'monitors': 'Monitors',
+    'keyboards & mice': 'KeyboardsAndMice',
+    'printers & scanners': 'PrintersAndScanners',
+    'cars': 'Cars',
+    'motorcycles': 'Motorcycles',
+    'trucks & vans': 'TrucksAndVans',
+    'bicycles': 'Bicycles',
+    'apartments': 'Apartments',
+    'houses & villas': 'HousesAndVillas',
+    'commercial properties': 'CommercialProperties',
+    'land': 'Land',
+    'living room': 'LivingRoom',
+    'bedroom': 'Bedroom',
+    'office furniture': 'OfficeFurniture',
+    'dining room': 'DiningRoom',
+    'outdoor furniture': 'OutdoorFurniture',
+    'refrigerators': 'Refrigerators',
+    'washing machine': 'WashingMachine',
+    'full pack': 'FullPack',
+  };
+
+  const mappedKey = subcategoryMap[normalized];
+
+  if (!mappedKey) return subName;
+
+  const translationKey = `subcategories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : subName;
+};
+
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
-// 💡 Helper function to translate category names
 const getCategoryIcon = (name: string, size = 24, color = "#16A085") => {
   if (!name) return <MaterialCommunityIcons name="shape-outline" size={size} color={color} />;
 
   const lower = name.toLowerCase();
 
-  // Real estate
   if (lower.includes("real estate") || lower.includes("apartment") || lower.includes("villa") || lower.includes("house")|| lower.includes("commercial properties")|| lower.includes("land")) {
     return <MaterialCommunityIcons name="home-city-outline" size={size} color={color} />;
   }
 
-  // Cars and vehicles
   if (lower.includes("car") || lower.includes("vehicle")  || lower.includes("truck")) {
     return <Ionicons name="car-outline" size={size} color={color} />;
   }
 
-  // Cars and vehicles
   if (lower.includes("bicycles")  || lower.includes("motorcycles") ) {
     return <MaterialCommunityIcons  name="motorbike" size={size} color={color} />;
   }
-  // Electronics
+
   if (lower.includes("phone") || lower.includes("electronics") || lower.includes("appliance") || lower.includes("tv")) {
     return <Ionicons name="phone-portrait-outline" size={size} color={color} />;
   }
- if (lower.includes("washing machine") || lower.includes("machine")) {
+
+  if (lower.includes("washing machine") || lower.includes("machine")) {
     return <MaterialCommunityIcons name="washing-machine" size={size} color={color} />;
   }
- if (lower.includes("refrigirator") || lower.includes("fridge")) {
+
+  if (lower.includes("refrigirator") || lower.includes("fridge")) {
     return <MaterialCommunityIcons name="fridge-outline" size={size} color={color} />;
   }
-if (lower.includes("charger") || lower.includes("cable")) {
-  return <MaterialCommunityIcons name="power-plug-outline" size={size} color={color} />;
-}
-if (lower.includes("headphones") || lower.includes("earphone")|| lower.includes("headphones & earphones") || lower.includes("earbud")) {
-  return <MaterialCommunityIcons name="headphones" size={size} color={color} />;
-}
 
-  // Computers
+  if (lower.includes("charger") || lower.includes("cable")) {
+    return <MaterialCommunityIcons name="power-plug-outline" size={size} color={color} />;
+  }
+
+  if (lower.includes("headphones") || lower.includes("earphone")|| lower.includes("headphones & earphones") || lower.includes("earbud")) {
+    return <MaterialCommunityIcons name="headphones" size={size} color={color} />;
+  }
+
   if (lower.includes("computer") || lower.includes("laptop") || lower.includes("accessory")) {
     return <MaterialCommunityIcons name="laptop" size={size} color={color} />;
   }
 
-  // Furniture
   if (lower.includes("furniture") || lower.includes("chair") || lower.includes("sofa") || lower.includes("table")) {
     return <MaterialCommunityIcons name="sofa-outline" size={size} color={color} />;
   }
 
-  // Fashion
   if (lower.includes("fashion") || lower.includes("clothing") || lower.includes("dress") || lower.includes("shoes")) {
     return <MaterialCommunityIcons name="tshirt-crew-outline" size={size} color={color} />;
   }
 
-  // Jobs
   if (lower.includes("job") || lower.includes("career")) {
     return <MaterialCommunityIcons name="briefcase-outline" size={size} color={color} />;
   }
 
-  // Services
   if (lower.includes("service") || lower.includes("repair")) {
     return <MaterialCommunityIcons name="account-cog-outline" size={size} color={color} />;
   }
 
-  // Books or education
   if (lower.includes("book") || lower.includes("study") || lower.includes("education")) {
     return <Ionicons name="book-outline" size={size} color={color} />;
   }
 
-  // Food
   if (lower.includes("food") || lower.includes("restaurant") || lower.includes("drink")) {
     return <MaterialCommunityIcons name="food-outline" size={size} color={color} />;
   }
 
-  // Sports
   if (lower.includes("sport") || lower.includes("fitness") || lower.includes("gym")) {
     return <MaterialCommunityIcons name="basketball-hoop-outline" size={size} color={color} />;
   }
 
-  // Kids / Baby
   if (lower.includes("baby") || lower.includes("kid") || lower.includes("child") || lower.includes("toy")) {
     return <MaterialCommunityIcons name="baby-face-outline" size={size} color={color} />;
   }
 
-  // Health & Beauty
   if (lower.includes("health") || lower.includes("beauty") || lower.includes("makeup")) {
     return <MaterialCommunityIcons name="heart-outline" size={size} color={color} />;
   }
 
-  // Handmade / Crafts
   if (lower.includes("handmade") || lower.includes("craft") || lower.includes("art")) {
     return <MaterialCommunityIcons name="hammer-wrench" size={size} color={color} />;
   }
 
-  // Travel
   if (lower.includes("travel") || lower.includes("trip") || lower.includes("flight")) {
     return <MaterialCommunityIcons name="airplane" size={size} color={color} />;
   }
 
-  // Entertainment
   if (lower.includes("hobby") || lower.includes("entertainment") || lower.includes("music")) {
     return <MaterialCommunityIcons name="guitar-electric" size={size} color={color} />;
   }
 
-  // Tools & Materials
   if (lower.includes("tool") || lower.includes("material") || lower.includes("equipment")) {
     return <MaterialCommunityIcons name="tools" size={size} color={color} />;
   }
 
- 
+  return <MaterialCommunityIcons name="shape-outline" size={size} color={color} />;
 };
-
 
 const calculateDistance = (
   lat1: number,
@@ -231,13 +261,13 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
-  currentUserId: number | null; // 🔥 NEW
-  isLiked: boolean; // 🔥 NEW
-  onToggleLike: (productId: number) => void; // 🔥 NEW
+  currentUserId: number | null;
+  isLiked: boolean;
+  onToggleLike: (productId: number) => void;
 }> = ({ product, userLat, userLon, currentUserId, isLiked, onToggleLike }) => {
   const router = useRouter();
   const [isAnimating, setIsAnimating] = useState(false);
-  const isOwnProduct = currentUserId === product.user_id; // 🔥 NEW
+  const isOwnProduct = currentUserId === product.user_id;
 
   const toggleLike = async () => {
     if (isAnimating) return;
@@ -319,7 +349,6 @@ const ProductCard: React.FC<{
               />
             </View>
           )}
-          {/* 🔥 HIDE HEART IF IT'S THE USER'S OWN PRODUCT */}
           {!isOwnProduct && (
             <TouchableOpacity 
               onPress={toggleLike} 
@@ -420,11 +449,9 @@ export default function CategoryScreen() {
   const searchMode = params.searchMode === 'true';
   const searchQuery = params.searchQuery as string || '';
 
-  // 🔥 NEW: User state
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [likedProducts, setLikedProducts] = useState<Set<number>>(new Set());
 
-  // Filter params from filters page
   const filtersApplied = params.filtersApplied === "true";
   const listingTypeParam = (params.listingType as string) || null;
   const sortByParam = (params.sortBy as string) || "Best Match";
@@ -452,7 +479,6 @@ export default function CategoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
 
-  // Sticky header state
   const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
   const scrollY = useRef(new Animated.Value(0)).current;
   const [isSticky, setIsSticky] = useState(false);
@@ -460,7 +486,15 @@ export default function CategoryScreen() {
   const lastScrollY = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // 🔥 Get current user
+  // 🆕 Tab bar scroll logic
+  const tabBarVisible = useRef(true);
+  const upGestureCount = useRef(0);
+  const scrollDirection = useRef<'up' | 'down' | null>(null);
+  const upDistance = useRef(0);
+
+  const MIN_SCROLL_DELTA = 5;
+  const UP_GESTURE_DISTANCE = 100;
+
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
@@ -496,7 +530,6 @@ export default function CategoryScreen() {
     getCurrentUser();
   }, []);
 
-  // 🔥 Fetch user likes
   useEffect(() => {
     if (currentUserId) {
       fetchUserLikes();
@@ -522,7 +555,6 @@ export default function CategoryScreen() {
     }
   };
 
-  // 🔥 Toggle like functionality
   const handleToggleLike = async (productId: number) => {
     if (!currentUserId) {
       Alert.alert(i18n.t('home.loginRequiredTitle'), i18n.t('home.loginRequiredMessage'));
@@ -584,6 +616,8 @@ export default function CategoryScreen() {
           setCurrentSearchQuery("");
           setIsSearchActive(false);
         }
+        // Show tab bar when leaving screen
+        AsyncStorage.setItem('tabBarVisible', 'true');
       };
     }, [searchMode])
   );
@@ -770,7 +804,6 @@ export default function CategoryScreen() {
       if (subcategoriesError) throw subcategoriesError;
       setSubcategories(subcategoriesData || []);
 
-      // 🔥 UPDATED: Include user_id
       const { data: productsData, error: productsError } = await supabase
         .from("products")
         .select(
@@ -797,21 +830,65 @@ export default function CategoryScreen() {
       useNativeDriver: false,
       listener: (event: any) => {
         const currentScrollY = event.nativeEvent.contentOffset.y;
+        const delta = currentScrollY - lastScrollY.current;
         
         setIsSticky(currentScrollY >= filterTabsLayout.y);
-        
-        if (scrollTimeout.current) {
-          clearTimeout(scrollTimeout.current);
+
+        // ALWAYS show tab bar when at the top
+        if (currentScrollY <= 50) {
+          if (!tabBarVisible.current) {
+            tabBarVisible.current = true;
+            AsyncStorage.setItem('tabBarVisible', 'true');
+          }
+          upGestureCount.current = 0;
+          upDistance.current = 0;
+          scrollDirection.current = null;
+          lastScrollY.current = currentScrollY;
+          return;
         }
 
-        if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
+        let direction: 'up' | 'down' = scrollDirection.current ?? 'down';
+        if (delta > MIN_SCROLL_DELTA) direction = 'down';
+        else if (delta < -MIN_SCROLL_DELTA) direction = 'up';
+
+        // DOWN: hide immediately (only when scrolled past 50)
+        if (direction === 'down' && currentScrollY > 50) {
+          if (tabBarVisible.current) {
+            tabBarVisible.current = false;
+            AsyncStorage.setItem('tabBarVisible', 'false');
+          }
+          upGestureCount.current = 0;
+          upDistance.current = 0;
+
+          if (scrollTimeout.current) {
+            clearTimeout(scrollTimeout.current);
+          }
           Animated.timing(headerHeight, {
             toValue: 0,
             duration: 200,
             useNativeDriver: false,
           }).start();
-        } 
-        else if (currentScrollY < lastScrollY.current) {
+        }
+
+        // UP: accumulate distance
+        if (!tabBarVisible.current && direction === 'up') {
+          upDistance.current += Math.abs(delta);
+
+          if (upDistance.current >= UP_GESTURE_DISTANCE) {
+            upGestureCount.current += 1;
+            upDistance.current = 0;
+          }
+
+          if (upGestureCount.current >= 2) {
+            tabBarVisible.current = true;
+            AsyncStorage.setItem('tabBarVisible', 'true');
+            upGestureCount.current = 0;
+            upDistance.current = 0;
+          }
+
+          if (scrollTimeout.current) {
+            clearTimeout(scrollTimeout.current);
+          }
           scrollTimeout.current = setTimeout(() => {
             Animated.timing(headerHeight, {
               toValue: 1,
@@ -821,10 +898,20 @@ export default function CategoryScreen() {
           }, 150);
         }
 
+        scrollDirection.current = direction;
         lastScrollY.current = currentScrollY;
       },
     }
   );
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+      AsyncStorage.setItem('tabBarVisible', 'true');
+    };
+  }, []);
 
   const openFilters = () => {
     const currentParams: any = {
@@ -899,7 +986,6 @@ export default function CategoryScreen() {
               <TextInput
                 ref={searchInputRef}
                 style={styles.searchInputExpanded}
-               
                 placeholder={`${i18n.t('home.searchPlaceholder')} ${getCategoryTranslation(category?.name || '')}`}
                 placeholderTextColor="#999"
                 value={currentSearchQuery}
@@ -1040,7 +1126,7 @@ export default function CategoryScreen() {
                   )}
                   {getCategoryIcon(sub.name, 20, DARK_GRAY)}
                   <Text style={styles.subcategoryText}>
-                    {sub.name}
+                    {getSubcategoryTranslation(sub.name)}
                   </Text>
                 </TouchableOpacity>
               ))}

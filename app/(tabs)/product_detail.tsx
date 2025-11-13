@@ -19,6 +19,7 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../lib/Supabase";
 import i18n from '../../lib/i18n';
+import { getOrCreateConversation } from '../../lib/messaging';
 
 interface ProductImage {
   image_url: string;
@@ -67,10 +68,6 @@ const COLORS = {
   exchangeGradientEnd: "#F3E8FF",
 };
 
-/**
- * Price formatting for compact display (e.g., 9.2K, 1.5M). 
- * This is used for the Exchange banner display.
- */
 const formatPrice = (price: number): string => {
   if (price >= 1000000) {
     const divided = price / 1000000;
@@ -91,14 +88,7 @@ const formatPrice = (price: number): string => {
   return price.toLocaleString();
 };
 
-/**
- * FIX: Price formatting function for the main display, now supporting:
- * 1. Price < 1000: Display numerically (e.g., 500)
- * 2. 1000 <= Price < 10000: Display with 'K' suffix (e.g., 9000 -> 9K)
- * 3. Price >= 10000: Display with 'million' text (e.g., 10000 -> 1 million)
- */
 const formatPriceMainDisplay = (product: ProductDetail): string | null => {
-  // If it's pure exchange, return null (handled by exchange badge logic)
   if (product.listing_type === "exchange" && !product.also_exchange) return null;
   
   const price = product.price;
@@ -106,7 +96,6 @@ const formatPriceMainDisplay = (product: ProductDetail): string | null => {
   const suffix = isRent ? i18n.t('product.priceSuffixDAMonth') : i18n.t('product.priceSuffixDA');
   
   if (price >= 10000) {
-    // 3. Price >= 10000: Display with 'million' text
     const millions = price / 10000; 
     let formattedMillions;
 
@@ -121,19 +110,14 @@ const formatPriceMainDisplay = (product: ProductDetail): string | null => {
     return `${formattedMillions} ${i18n.t('productDetail.million')} ${suffix}`;
     
   } else if (price >= 1000) {
-    // 2. 1000 <= Price < 10000: Display with 'K' suffix
-    const formattedK = formatPrice(price); // Use the K/M formatter for this range
+    const formattedK = formatPrice(price);
     
-    // Adjust suffix to correctly combine DA and /month if needed
     if (isRent) {
-      // Example: 9K DA/month (using priceSuffixDA and perMonth)
       return `${formattedK} ${i18n.t('productDetail.priceSuffixDA')}${i18n.t('productDetail.perMonth')}`;
     }
-    // Example: 9K DA
     return `${formattedK} ${i18n.t('productDetail.priceSuffixDA')}`;
     
   } else {
-    // 1. Price < 1000: Display numerically
     return `${price.toLocaleString()} ${suffix}`;
   }
 };
@@ -188,9 +172,8 @@ const ProductDetailScreen = () => {
 
   useEffect(() => {
     const checkIfLiked = async () => {
-      // FIX: Ensure both currentUserId and productId are available.
       if (!currentUserId || !productId) {
-        setIsFavorite(false); // Default to false if we can't check
+        setIsFavorite(false);
         return;
       }
 
@@ -202,22 +185,18 @@ const ProductDetailScreen = () => {
           .eq('product_id', productId)
           .single();
 
-        // FIX: Explicitly check for data presence. 
         if (data) {
           setIsFavorite(true);
         } else {
           setIsFavorite(false);
         }
 
-        // Handle actual errors, ignoring the expected 'no rows' error (PGRST116)
         if (error && error.code !== 'PGRST116') {
             throw error;
         }
 
       } catch (error) {
-        // Fallback catch: ensures isFavorite is false if any check fails
         setIsFavorite(false);
-        // console.log('Product not liked or error occurred during check:', error); 
       }
     };
     checkIfLiked();
@@ -405,6 +384,34 @@ const ProductDetailScreen = () => {
     );
   };
 
+  // NEW: Handle chat button press
+  const handleChatPress = async () => {
+    if (!currentUserId || !product?.user_id) {
+      Alert.alert(i18n.t('productDetail.loginRequired'), i18n.t('productDetail.loginRequiredMessage'));
+      return;
+    }
+
+    console.log('💬 Starting chat from product detail');
+    console.log('💬 Current User:', currentUserId);
+    console.log('💬 Product Owner:', product.user_id);
+
+    try {
+      const conversationId = await getOrCreateConversation(currentUserId, product.user_id);
+      
+      if (!conversationId || typeof conversationId !== 'number') {
+        Alert.alert(i18n.t('productDetail.error'), 'Could not create conversation');
+        return;
+      }
+
+      console.log('✅ Conversation ID:', conversationId);
+      router.push(`/chat/${conversationId}`);
+      
+    } catch (error: any) {
+      console.error('❌ Error starting chat:', error);
+      Alert.alert(i18n.t('productDetail.error'), error?.message || 'Failed to start chat');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.flexCenter}>
@@ -435,7 +442,6 @@ const ProductDetailScreen = () => {
       ? COLORS.rent
       : COLORS.exchange;
 
-  // Use the main display formatter for the price badge
   const priceDisplay = formatPriceMainDisplay(product);
   
   const isExchangeDisplayActive = product.also_exchange || product.listing_type === "exchange";
@@ -473,7 +479,6 @@ const ProductDetailScreen = () => {
         <View style={styles.rightIcons}>
           {!isOwner && (
             <TouchableOpacity style={styles.headerBtn} onPress={toggleFavorite}>
-              {/* Correctly renders filled red heart if isFavorite is true, and outlined dark heart otherwise */}
               <Ionicons
                 name={isFavorite ? "heart" : "heart-outline"}
                 size={22}
@@ -544,7 +549,6 @@ const ProductDetailScreen = () => {
                 end={{ x: 1, y: 0.5 }}
                 style={styles.exchangeGradient}
               >
-                {/* Using the compact K/M formatter for the exchange price here */}
                 <Text style={styles.exchangePriceTextBlue}> 
                   {formatPrice(product.price)} DA
                 </Text>
@@ -555,7 +559,6 @@ const ProductDetailScreen = () => {
               </LinearGradient>
             </View>
           ) : (
-            // Using the new 'K/million' formatter for the main price display
             priceDisplay && (
                 <View style={[styles.priceRow, { backgroundColor: `${typeColor}15` }]}>
                     <Text style={{ fontSize: 20, fontWeight: "700", color: typeColor }}>
@@ -639,7 +642,7 @@ const ProductDetailScreen = () => {
           <Text style={styles.mapCaption}>{i18n.t('productDetail.mapCaption')}</Text>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
 
       {!isOwner && (
@@ -647,7 +650,7 @@ const ProductDetailScreen = () => {
           <TouchableOpacity style={styles.callButton}>
             <Text style={styles.callButtonText}>{i18n.t('productDetail.call')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.chatButton}>
+          <TouchableOpacity style={styles.chatButton} onPress={handleChatPress}>
             <Text style={styles.chatButtonText}>{i18n.t('productDetail.chat')}</Text>
           </TouchableOpacity>
         </View>
@@ -698,7 +701,7 @@ const ProductDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  flexContainer: { flex: 1, marginBottom:110,backgroundColor: COLORS.background },
+  flexContainer: { flex: 1, backgroundColor: COLORS.background },
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
   loadingText: { marginTop: 10, color: COLORS.secondary },
@@ -953,8 +956,9 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     backgroundColor: COLORS.white,
-    padding: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
     borderTopWidth: 1,
     borderTopColor: "#E5E5E5",
     gap: 12,

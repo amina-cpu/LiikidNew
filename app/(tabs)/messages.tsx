@@ -39,6 +39,7 @@ interface Conversation {
   is_pinned: boolean;
   is_premium: boolean; 
   listing_image_url: string | null;
+  listing_id: number | null;
 }
 
 interface NotificationSettings {
@@ -182,13 +183,38 @@ const MessagesScreen = () => {
         setIsLoading(true);
       }
       
-      const data = await getUserConversations(user.user_id);
-      
-      if (data) {
-        setConversations(data as Conversation[]); 
-      } else {
-        setConversations([]);
-      }
+      // Get conversations with listing info
+      const { data: conversationsData, error: conversationsError } = await supabase
+        .from('conversation_list_view')
+        .select('*')
+        .eq('user_id', user.user_id)
+        .order('last_message_time', { ascending: false, nullsFirst: false });
+
+      if (conversationsError) throw conversationsError;
+
+      // For each conversation, fetch the listing image if listing_id exists
+      const conversationsWithImages = await Promise.all(
+        (conversationsData || []).map(async (convo) => {
+          if (convo.listing_id) {
+            const { data: productData } = await supabase
+              .from('products')
+              .select('image_url')
+              .eq('id', convo.listing_id)
+              .single();
+
+            return {
+              ...convo,
+              listing_image_url: productData?.image_url || null,
+            };
+          }
+          return {
+            ...convo,
+            listing_image_url: null,
+          };
+        })
+      );
+
+      setConversations(conversationsWithImages as Conversation[]);
     } catch (error) {
       Alert.alert('Error', 'Failed to load messages.');
       setConversations([]);
@@ -200,7 +226,6 @@ const MessagesScreen = () => {
     }
   }, [user?.user_id]);
 
-  // ✅ ADDED: Reload conversations when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadConversations();
@@ -219,12 +244,12 @@ const MessagesScreen = () => {
     const diff = new Date().getTime() - new Date(timestamp).getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    if (hours < 24) return `${hours} hours ago`;
-    return `${days} days ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
   }; 
   
   const getAvatarUrl = (conversation: Conversation) => { 
-    return conversation.other_user_avatar || "https://via.placeholder.com/56"; 
+    return conversation.other_user_avatar || conversation.other_user_profile_image || "https://via.placeholder.com/56"; 
   };
   
   const getDisplayName = (conversation: Conversation) => { 
@@ -381,7 +406,7 @@ const MessagesScreen = () => {
         <View style={styles.avatarContainer}>
           <Image 
             source={{ uri: getAvatarUrl(item) }} 
-            style={[styles.avatar, item.other_user_avatar ? null : {backgroundColor: '#D1D1D6'}]}
+            style={styles.avatar}
           />
           {item.is_premium && (
             <View style={styles.premiumLabelContainer}>

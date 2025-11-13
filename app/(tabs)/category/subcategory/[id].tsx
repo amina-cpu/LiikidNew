@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from "expo-location";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ import {
 import Ionicons from "react-native-vector-icons/Ionicons";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../../../../lib/Supabase";
+import i18n, { translateFilter } from '../../../../lib/i18n';
 
 const PRIMARY_TEAL = "#16A085";
 const SEARCH_GREEN = "#059669";
@@ -54,6 +56,7 @@ interface Product {
   sub_subcategory_id: number | null;
   created_at: string;
   delivery: boolean;
+  user_id: number;
 }
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
@@ -68,6 +71,183 @@ interface Subcategory {
   category_id: number;
   name: string;
 }
+
+const getSubcategoryTranslation = (subName: string): string => {
+  const normalized = subName.trim().toLowerCase();
+
+  const subcategoryMap: { [key: string]: string } = {
+    'phones': 'Phones',
+    'phone cases': 'PhoneCases',
+    'chargers & cables': 'ChargersAndCables',
+    'headphones & earphones': 'HeadphonesAndEarphones',
+    'screen protectors': 'ScreenProtectors',
+    'power banks': 'PowerBanks',
+    'laptops': 'Laptops',
+    'desktop computers': 'DesktopComputers',
+    'tablets': 'Tablets',
+    'monitors': 'Monitors',
+    'keyboards & mice': 'KeyboardsAndMice',
+    'printers & scanners': 'PrintersAndScanners',
+    'cars': 'Cars',
+    'motorcycles': 'Motorcycles',
+    'trucks & vans': 'TrucksAndVans',
+    'bicycles': 'Bicycles',
+    'apartments': 'Apartments',
+    'houses & villas': 'HousesAndVillas',
+    'commercial properties': 'CommercialProperties',
+    'land': 'Land',
+    'living room': 'LivingRoom',
+    'bedroom': 'Bedroom',
+    'office furniture': 'OfficeFurniture',
+    'dining room': 'DiningRoom',
+    'outdoor furniture': 'OutdoorFurniture',
+    'refrigerators': 'Refrigerators',
+    'washing machine': 'WashingMachine',
+    'full pack': 'FullPack',
+  };
+
+  const mappedKey = subcategoryMap[normalized];
+
+  if (!mappedKey) return subName;
+
+  const translationKey = `subcategories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : subName;
+};
+
+const getSubSubcategoryTranslation = (subSubName: string): string => {
+  const normalized = subSubName.trim().toLowerCase();
+
+  const subSubcategoryMap: { [key: string]: string } = {
+    'desktop computer': 'DesktopComputer',
+    'central unit': 'CentralUnit',
+    'all in one': 'AllInOne',
+    'switchs': 'Switchs',
+    'modems & routers': 'ModemsRouters',
+    'wifi access points': 'WifiAccessPoints',
+    'ethernet cards': 'EthernetCards',
+    'wifi repeater': 'WifiRepeater',
+    'other': 'Other',
+    'villa': 'Villa',
+    'offices': 'Offices',
+    'retail shops': 'RetailShops',
+    'warehouses': 'Warehouses',
+    'restaurants': 'Restaurants',
+    'hotels': 'Hotels',
+    'sofas': 'Sofas',
+    'coffee tables': 'CoffeeTables',
+    'tv stands': 'TVStands',
+    'bookshelves': 'Bookshelves',
+    'armchairs': 'Armchairs',
+    'beds': 'Beds',
+    'mattresses': 'Mattresses',
+    'wardrobes': 'Wardrobes',
+    'nightstands': 'Nightstands',
+    'dressers': 'Dressers',
+    'hard disk': 'HardDisk',
+    'charger': 'Charger',
+    'jet-ski': 'JetSki',
+    'rigid boats': 'RigidBoats',
+    'inflatable boats': 'InflatableBoats',
+    'boats': 'Boats',
+    'mechanical and electrical parts': 'MechanicalElectricalParts',
+    'car body parts': 'CarBodyParts',
+    'auto accessories': 'AutoAccessories',
+    'car seats': 'CarSeats',
+    'optics and lighting': 'OpticsLighting',
+    'sound': 'Sound',
+    'tires & rims': 'TiresRims',
+    'windows & windshield': 'WindowsWindshield',
+    'pieces': 'Pieces',
+    'accessories': 'Accessories',
+    'helmets and protection': 'HelmetsProtection',
+    'tires and rims': 'TiresRims',
+    'engines': 'Engines',
+    'ram': 'RAM',
+    'motherboard': 'Motherboard',
+    'screen protection': 'ScreenProtection',
+    'shockproof & cases': 'ShockproofCases',
+    'supports': 'Supports',
+    'selfie sticks': 'SelfieSticks',
+    'stabilizers': 'Stabilizers',
+    'vr': 'VR',
+    'memory cards': 'MemoryCards',
+    'others accessories': 'OthersAccessories',
+    'laptop': 'Laptop',
+    'macbooks': 'Macbooks',
+    'laser printers': 'LaserPrinters',
+    'cartridges & toners': 'CartridgesToners',
+    'multifunction': 'Multifunction',
+    'inkjet printers': 'InkjetPrinters',
+    'photocopier': 'Photocopier',
+    'barcodes & labelers': 'BarcodesLabelers',
+    'photo printers & badges': 'PhotoPrintersBadges',
+    'graphic card': 'GraphicCard',
+    'power supply - case': 'PowerSupplyCase',
+    'processor': 'Processor',
+    'cooling': 'Cooling',
+    'reader - writer': 'ReaderWriter',
+    'internal storage': 'InternalStorage',
+    'screens': 'Screens',
+    'keyboard - touchpad': 'KeyboardTouchpad',
+    'batteries': 'Batteries',
+    'baffle - webcam': 'BaffleWebcam',
+    'data shows': 'DataShows',
+    'hard drivers': 'HardDrivers',
+    'flash disk': 'FlashDisk',
+    'memory card': 'MemoryCard',
+    'rack': 'Rack',
+    'tops and t-shirts': 'TopsTShirts',
+    'shirts': 'Shirts',
+    'gilets': 'Gilets',
+    'jeans and pants': 'JeansPants',
+    'coats and jackets': 'CoatsJackets',
+    'tracksuits': 'Tracksuits',
+    'suits and blazers': 'SuitsBlazers',
+    'shorts and pants': 'ShortsPants',
+  };
+
+  const mappedKey = subSubcategoryMap[normalized];
+
+  if (!mappedKey) return subSubName;
+
+  const translationKey = `subSubcategories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : subSubName;
+};
+
+const getCategoryTranslation = (catName: string): string => {
+  const normalized = catName.trim().toLowerCase();
+
+  const categoryMap: { [key: string]: string } = {
+    'food': 'Food',
+    'computers & accessories': 'ComputersAccessories',
+    'real estate': 'RealEstate',
+    'electronics & home appliance': 'ElectronicsHomeAppliance',
+    'materials & equipment': 'MaterialsEquipment',
+    'repair parts': 'RepairParts',
+    'cars and vehicles': 'CarsVehicles',
+    'sports': 'Sports',
+    'phones & accessories': 'PhonesAccessories',
+    'travel': 'Travel',
+    'computers & laptops': 'ComputersLaptops',
+    'hobbies and entertainment': 'HobbiesEntertainment',
+    'baby essentials': 'BabyEssentials',
+    'clothing & fashion': 'ClothingFashion',
+    'health & beauty': 'HealthBeauty',
+    'homemade & handcrafted': 'HomemadeHandcrafted',
+    'animals shop': 'AnimalShop',
+    'home & furniture': 'HomeandFurniture',
+  };
+
+  const mappedKey = categoryMap[normalized];
+
+  if (!mappedKey) return catName;
+
+  const translationKey = `categories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  return translated !== translationKey ? translated : catName;
+};
 
 const calculateDistance = (
   lat1: number,
@@ -91,10 +271,20 @@ const ProductCard: React.FC<{
   product: Product;
   userLat: number | null;
   userLon: number | null;
-}> = ({ product, userLat, userLon }) => {
+  currentUserId: number | null;
+  isLiked: boolean;
+  onToggleLike: (productId: number) => void;
+}> = ({ product, userLat, userLon, currentUserId, isLiked, onToggleLike }) => {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const toggleLike = () => setLiked(!liked);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const isOwnProduct = currentUserId === product.user_id;
+
+  const toggleLike = async () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    await onToggleLike(product.id);
+    setTimeout(() => setIsAnimating(false), 300);
+  };
 
   let distance = "N/A";
   if (userLat && userLon && product.latitude && product.longitude) {
@@ -121,10 +311,28 @@ const ProductCard: React.FC<{
   const tagColors = getTagColor();
 
   const formatPrice = () => {
-    if (product.listing_type === "exchange") return "Exchange";
+    if (product.listing_type === "exchange") return i18n.t('product.exchangeTag');
+    
+    if (product.price >= 10000) {
+      const millions = product.price / 10000;
+      let formattedMillions;
+      if (millions % 1 === 0) {
+        formattedMillions = millions.toString();
+      } else if (millions >= 10) {
+        formattedMillions = Math.round(millions).toString();
+      } else {
+        formattedMillions = millions.toFixed(1);
+      }
+      
+      if (product.listing_type === "rent") {
+        return `${formattedMillions} million ${i18n.t('product.priceSuffixDAMonth')}`;
+      }
+      return `${formattedMillions} million ${i18n.t('product.priceSuffixDA')}`;
+    }
+    
     if (product.listing_type === "rent")
-      return `${product.price.toLocaleString()} DA/month`;
-    return `${product.price.toLocaleString()} DA`;
+      return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDAMonth')}`;
+    return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDA')}`;
   };
 
   return (
@@ -138,7 +346,7 @@ const ProductCard: React.FC<{
             source={{
               uri:
                 product.image_url ||
-                "https://placehold.co/180x180/E0E0E0/333333?text=No+Image",
+                `https://placehold.co/180x180/E0E0E0/333333?text=${i18n.t('product.noImage').replace(' ', '+')}`,
             }}
             style={styles.cardImage}
           />
@@ -151,13 +359,19 @@ const ProductCard: React.FC<{
               />
             </View>
           )}
-          <TouchableOpacity onPress={toggleLike} style={styles.heartIcon}>
-            <Ionicons
-              name={liked ? "heart" : "heart-outline"}
-              size={22}
-              color={liked ? "#FF5B5B" : "white"}
-            />
-          </TouchableOpacity>
+          {!isOwnProduct && (
+            <TouchableOpacity 
+              onPress={toggleLike} 
+              style={styles.heartIcon}
+              disabled={isAnimating}
+            >
+              <Ionicons
+                name={isLiked ? "heart" : "heart-outline"}
+                size={22}
+                color={isLiked ? "#FF5B5B" : "white"}
+              />
+            </TouchableOpacity>
+          )}
         </View>
         <View style={styles.cardDetails}>
           <View style={[styles.priceTag, { backgroundColor: tagColors.bg }]}>
@@ -231,7 +445,7 @@ const LoadMoreButton: React.FC<{ onPress: () => void; loading: boolean }> = ({
         {loading ? (
           <ActivityIndicator size="small" color="white" />
         ) : (
-          <Text style={styles.loadMoreText}>Load More Items</Text>
+          <Text style={styles.loadMoreText}>{i18n.t('home.loadMore')}</Text>
         )}
       </TouchableOpacity>
     </Animated.View>
@@ -245,6 +459,9 @@ export default function SubcategoryScreen() {
   const searchMode = params.searchMode === 'true';
   const searchQueryParam = params.searchQuery as string || '';
   
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [likedProducts, setLikedProducts] = useState<Set<number>>(new Set());
+  
   const [selectedFilter, setSelectedFilter] = useState<string>("All");
   const [subSubcategories, setSubSubcategories] = useState<SubSubcategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -252,7 +469,7 @@ export default function SubcategoryScreen() {
   const [selectedBrand, setSelectedBrand] = useState<number | null>(null);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLon, setUserLon] = useState<number | null>(null);
-  const [location, setLocation] = useState<string>("Loading...");
+  const [location, setLocation] = useState<string>(i18n.t('home.loading'));
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreProducts, setHasMoreProducts] = useState(true);
@@ -264,33 +481,152 @@ export default function SubcategoryScreen() {
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategory, setSubcategory] = useState<Subcategory | null>(null);
 
-  // Sticky header state
   const [filterTabsLayout, setFilterTabsLayout] = useState({ y: 0, height: 0 });
   const scrollY = useRef(new Animated.Value(0)).current;
   const [isSticky, setIsSticky] = useState(false);
 
-  // Clear search state when screen loses focus
+  // 🆕 Tab bar scroll logic
+  const lastScrollY = useRef(0);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
+  const tabBarVisible = useRef(true);
+  const upGestureCount = useRef(0);
+  const scrollDirection = useRef<'up' | 'down' | null>(null);
+  const upDistance = useRef(0);
+
+  const MIN_SCROLL_DELTA = 5;
+  const UP_GESTURE_DISTANCE = 100;
+
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        const userIdString = await AsyncStorage.getItem('userId');
+
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          const userId = user.user_id || user.id || parseInt(userIdString || '0');
+          if (userId && userId > 0) {
+            setCurrentUserId(userId);
+            return;
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+          const { data: dbUser, error } = await supabase
+            .from('users')
+            .select('user_id, email, username')
+            .eq('email', session.user.email.toLowerCase())
+            .single();
+
+          if (dbUser && !error) {
+            setCurrentUserId(dbUser.user_id);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error getting current user:', error);
+      }
+    };
+
+    getCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserLikes();
+    }
+  }, [currentUserId]);
+
+  const fetchUserLikes = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('likes')
+        .select('product_id')
+        .eq('user_id', currentUserId)
+        .not('product_id', 'is', null);
+
+      if (error) throw error;
+
+      const likedProductIds = new Set(data?.map(like => like.product_id) || []);
+      setLikedProducts(likedProductIds);
+    } catch (error: any) {
+      console.error('Error fetching likes:', error);
+    }
+  };
+
+  const handleToggleLike = async (productId: number) => {
+    if (!currentUserId) {
+      Alert.alert(i18n.t('home.loginRequiredTitle'), i18n.t('home.loginRequiredMessage'));
+      return;
+    }
+
+    const isCurrentlyLiked = likedProducts.has(productId);
+
+    try {
+      if (isCurrentlyLiked) {
+        await supabase
+          .from('likes')
+          .delete()
+          .eq('user_id', currentUserId)
+          .eq('product_id', productId);
+
+        setLikedProducts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(productId);
+          return newSet;
+        });
+      } else {
+        await supabase.from('likes').insert({
+          user_id: currentUserId,
+          product_id: productId,
+          post_id: null
+        });
+
+        setLikedProducts(prev => new Set([...prev, productId]));
+
+        const { data: productData } = await supabase
+          .from("products")
+          .select("user_id")
+          .eq("id", productId)
+          .single();
+
+        if (productData && productData.user_id !== currentUserId) {
+          await supabase.from("notifications").insert({
+            receiver_id: productData.user_id,
+            sender_id: currentUserId,
+            type: "like",
+            product_id: productId,
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error("Error toggling like:", error);
+      Alert.alert(i18n.t('home.error'), i18n.t('home.failedToUpdateLike'));
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       hasNavigatedRef.current = false;
       
-      // Only set search query if coming from search mode
       if (searchMode && searchQueryParam) {
         setSearchQuery(searchQueryParam);
-        setIsSearchActive(false); // Make sure search overlay isn't shown
+        setIsSearchActive(false);
       } else {
-        // Clear search when not in search mode
         setSearchQuery("");
       }
       
       return () => {
-        // Only clear if not in search mode
         if (!searchMode) {
           setSelectedFilter("All");
           setSelectedBrand(null);
           setSearchQuery("");
           setIsSearchActive(false);
         }
+        // Show tab bar when leaving screen
+        AsyncStorage.setItem('tabBarVisible', 'true');
       };
     }, [searchMode, searchQueryParam])
   );
@@ -305,11 +641,11 @@ export default function SubcategoryScreen() {
 
         let reverse = await Location.reverseGeocodeAsync(coords.coords);
         if (reverse.length > 0) {
-          let city = reverse[0].city || reverse[0].region || "Unknown";
+          let city = reverse[0].city || reverse[0].region || i18n.t('home.unknownLocation');
           setLocation(city);
         }
       } else {
-        setLocation("Location unavailable");
+        setLocation(i18n.t('home.permissionDenied'));
       }
     })();
   }, []);
@@ -320,7 +656,6 @@ export default function SubcategoryScreen() {
     }
   }, [subcategoryId]);
 
-  // Filter products whenever products or filter state changes
   useEffect(() => {
     let filtered = products;
 
@@ -342,10 +677,7 @@ export default function SubcategoryScreen() {
 
     setFilteredProducts(filtered);
 
-    // CRITICAL FIX: Update sub-subcategories with results based on SEARCH ONLY
-    // This ensures red dots show correctly when coming from category page
     if (searchQuery.trim()) {
-      // Get products that match ONLY the search query (before other filters)
       let searchMatches = products.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -368,7 +700,6 @@ export default function SubcategoryScreen() {
     }
   }, [selectedBrand, selectedFilter, searchQuery, products]);
 
-  // Auto-select first brand if only one has results when coming from search
   useEffect(() => {
     const subsWithResults = subSubcategories.filter(sub => sub.hasResults);
     
@@ -397,7 +728,7 @@ export default function SubcategoryScreen() {
     try {
       const { data: productData, error: productError, count } = await supabase
         .from("products")
-        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery", { count: "exact" })
+        .select("id, name, price, listing_type, image_url, latitude, longitude, location_address, subcategory_id, sub_subcategory_id, created_at, delivery, user_id", { count: "exact" })
         .eq("subcategory_id", subcategoryId)
         .order("created_at", { ascending: false })
         .range(from, to);
@@ -413,7 +744,7 @@ export default function SubcategoryScreen() {
       setHasMoreProducts((count || 0) > (isInitialLoad ? newProducts.length : products.length + newProducts.length));
 
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      Alert.alert(i18n.t('home.error'), e.message);
     } finally {
       if (!isInitialLoad) {
         setLoadingMore(false);
@@ -452,14 +783,11 @@ export default function SubcategoryScreen() {
 
       if (brandError) throw brandError;
       setSubSubcategories(brands || []);
-
-      // Don't auto-redirect when there's only one sub-subcategory
-      // Just show it in the list and let user click if they want
       
       await fetchProducts(isInitialLoad);
 
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      Alert.alert(i18n.t('home.error'), e.message);
     } finally {
       setLoading(false);
     }
@@ -470,8 +798,8 @@ export default function SubcategoryScreen() {
       fetchProducts(false);
     } else {
       Alert.alert(
-        "Filter Active",
-        "Please clear all filters to load more items from the server."
+        i18n.t('home.filterActive'),
+        i18n.t('home.clearFiltersToLoadMore')
       );
     }
   };
@@ -514,10 +842,68 @@ export default function SubcategoryScreen() {
       useNativeDriver: false,
       listener: (event: any) => {
         const offsetY = event.nativeEvent.contentOffset.y;
+        const delta = offsetY - lastScrollY.current;
+
         setIsSticky(offsetY >= filterTabsLayout.y);
+
+        // ALWAYS show tab bar when at the top
+        if (offsetY <= 50) {
+          if (!tabBarVisible.current) {
+            tabBarVisible.current = true;
+            AsyncStorage.setItem('tabBarVisible', 'true');
+          }
+          upGestureCount.current = 0;
+          upDistance.current = 0;
+          scrollDirection.current = null;
+          lastScrollY.current = offsetY;
+          return;
+        }
+
+        let direction: 'up' | 'down' = scrollDirection.current ?? 'down';
+        if (delta > MIN_SCROLL_DELTA) direction = 'down';
+        else if (delta < -MIN_SCROLL_DELTA) direction = 'up';
+
+        // DOWN: hide immediately (only when scrolled past 50)
+        if (direction === 'down' && offsetY > 50) {
+          if (tabBarVisible.current) {
+            tabBarVisible.current = false;
+            AsyncStorage.setItem('tabBarVisible', 'false');
+          }
+          upGestureCount.current = 0;
+          upDistance.current = 0;
+        }
+
+        // UP: accumulate distance
+        if (!tabBarVisible.current && direction === 'up') {
+          upDistance.current += Math.abs(delta);
+
+          if (upDistance.current >= UP_GESTURE_DISTANCE) {
+            upGestureCount.current += 1;
+            upDistance.current = 0;
+          }
+
+          if (upGestureCount.current >= 2) {
+            tabBarVisible.current = true;
+            AsyncStorage.setItem('tabBarVisible', 'true');
+            upGestureCount.current = 0;
+            upDistance.current = 0;
+          }
+        }
+
+        scrollDirection.current = direction;
+        lastScrollY.current = offsetY;
       },
     }
   );
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+      AsyncStorage.setItem('tabBarVisible', 'true');
+    };
+  }, []);
 
   const visibleSubSubcategories = searchQuery.trim()
     ? subSubcategories.filter(sub => sub.hasResults)
@@ -527,7 +913,7 @@ export default function SubcategoryScreen() {
     return (
       <View style={[styles.safeArea, styles.loadingContainer]}>
         <ActivityIndicator size="large" color={PRIMARY_TEAL} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <Text style={styles.loadingText}>{i18n.t('home.loading')}</Text>
       </View>
     );
   }
@@ -550,7 +936,7 @@ export default function SubcategoryScreen() {
               <TextInput
                 ref={searchInputRef}
                 style={styles.searchPlaceholder}
-                placeholder={`Search in ${subcategory?.name || 'this subcategory'}`}
+                placeholder={`${i18n.t('home.searchPlaceholder')} ${getSubcategoryTranslation(subcategory?.name || '')}`}
                 placeholderTextColor="#999"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -594,7 +980,7 @@ export default function SubcategoryScreen() {
                     selectedFilter === tab && styles.filterTextActive,
                   ]}
                 >
-                  {tab}
+                  {translateFilter(tab)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -628,7 +1014,7 @@ export default function SubcategoryScreen() {
                   style={styles.searchIcon}
                 />
                 <Text style={styles.searchInputPlaceholder} numberOfLines={1}>
-                  {searchQuery.trim() || `Search in ${subcategory?.name}`}
+                  {searchQuery.trim() || `${i18n.t('home.searchPlaceholder')} ${getSubcategoryTranslation(subcategory?.name || '')}`}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -641,12 +1027,12 @@ export default function SubcategoryScreen() {
           <View style={styles.breadcrumbContainer}>
             <TouchableOpacity onPress={() => router.push(`/category?id=${category?.id}`)}>
               <Text style={styles.breadcrumbText}>
-                {category?.name || "Category"}
+                {getCategoryTranslation(category?.name || "Category")}
               </Text>
             </TouchableOpacity>
             <Ionicons name="chevron-forward" size={16} color="#999" style={styles.breadcrumbArrow} />
             <Text style={[styles.breadcrumbText, styles.breadcrumbActive]}>
-              {subcategory?.name || "Subcategory"}
+              {getSubcategoryTranslation(subcategory?.name || "Subcategory")}
             </Text>
           </View>
 
@@ -667,7 +1053,7 @@ export default function SubcategoryScreen() {
                   styles.brandText,
                   selectedBrand === null && styles.brandTextActive
                 ]}>
-                  All
+                  {i18n.t('home.all')}
                 </Text>
               </TouchableOpacity>
               {visibleSubSubcategories.map((brand) => (
@@ -678,7 +1064,6 @@ export default function SubcategoryScreen() {
                     selectedBrand === brand.id && styles.brandPillActive,
                   ]}
                   onPress={() => {
-                    // Just set the selected brand filter, don't navigate away
                     setSelectedBrand(brand.id);
                   }}
                 >
@@ -689,7 +1074,7 @@ export default function SubcategoryScreen() {
                     styles.brandText,
                     selectedBrand === brand.id && styles.brandTextActive
                   ]}>
-                    {brand.name}
+                    {getSubSubcategoryTranslation(brand.name)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -725,7 +1110,7 @@ export default function SubcategoryScreen() {
                       selectedFilter === tab && styles.filterTextActive,
                     ]}
                   >
-                    {tab}
+                    {translateFilter(tab)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -734,7 +1119,7 @@ export default function SubcategoryScreen() {
 
           {filteredProducts.length === 0 ? (
             <Text style={styles.emptyText}>
-              {searchQuery.trim() ? "No products found matching your search" : "No products found"}
+              {searchQuery.trim() ? i18n.t('home.noProductsSearch') : i18n.t('home.noProductsFilter')}
             </Text>
           ) : (
             <View style={styles.productGrid}>
@@ -744,6 +1129,9 @@ export default function SubcategoryScreen() {
                   product={product}
                   userLat={userLat}
                   userLon={userLon}
+                  currentUserId={currentUserId}
+                  isLiked={likedProducts.has(product.id)}
+                  onToggleLike={handleToggleLike}
                 />
               ))}
             </View>
@@ -996,36 +1384,34 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '700',
   },
-  // 📦 UPDATED PRODUCT GRID - Match homepage spacing
   productGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    paddingHorizontal: 8, // Changed from 16 to 8
+    paddingHorizontal: 8,
   },
-  // 📦 UPDATED PRODUCT CARD - Match homepage design
   cardContainer: {
     width: CARD_WIDTH,
-    marginBottom: 8, // Changed from 16 to 8
-    borderRadius: 20, // Changed from 16 to 20
+    marginBottom: 8,
+    borderRadius: 20,
     backgroundColor: "white",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 }, // Increased shadow
-    shadowOpacity: 0.15, // Increased shadow
-    shadowRadius: 12, // Increased shadow
-    elevation: 8, // Increased elevation
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   cardTouchable: {
-    borderRadius: 20, // Changed from 16 to 20
+    borderRadius: 20,
     overflow: "hidden",
     flex: 1,
   },
   imageWrapper: {
     width: "100%",
-    aspectRatio: 0.8, // Changed from 1 to 0.8 (taller cards)
+    aspectRatio: 0.8,
     backgroundColor: "#F7F7F7",
-    borderTopLeftRadius: 20, // Changed from 16 to 20
-    borderTopRightRadius: 20, // Changed from 16 to 20
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     overflow: "hidden",
   },
   cardImage: {
@@ -1041,17 +1427,17 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
     shadowColor: "#000",
-    shadowOpacity: 0.2, // Increased shadow
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4, // Increased elevation
+    elevation: 4,
   },
   heartIcon: {
     position: "absolute",
-    top: 12, // Changed from 10 to 12
-    right: 12, // Changed from 10 to 12
-    backgroundColor: 'rgba(0,0,0,0.5)', // Added background
+    top: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 20,
-    padding: 6, // Changed from 5 to 6
+    padding: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
@@ -1066,23 +1452,23 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingVertical: 4,
     paddingHorizontal: 8,
-    marginBottom: 6, // Changed from 8 to 6
+    marginBottom: 6,
   },
   priceText: {
-    fontSize: 13, // Keep as 13
+    fontSize: 13,
     fontWeight: "700",
   },
   cardTitle: {
-    fontSize: 13, // Keep as 13
-    fontWeight: "500", // Changed from 600 to 500
+    fontSize: 13,
+    fontWeight: "500",
     color: "#333",
-    minHeight: 34, // Keep as 34
-    marginBottom: 4, // Keep as 4
+    minHeight: 34,
+    marginBottom: 4,
   },
   distanceContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2, // Keep as 2
+    marginTop: 2,
   },
   cardDistance: {
     marginLeft: 4,
@@ -1105,19 +1491,19 @@ const styles = StyleSheet.create({
   loadMoreContainer: {
     paddingHorizontal: 16,
     marginTop: 20,
-    marginBottom: 40, // Increased bottom margin
+    marginBottom: 40,
   },
   loadMoreButton: {
     backgroundColor: PRIMARY_TEAL,
-    borderRadius: 14, // Changed from 30 to 14
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: PRIMARY_TEAL,
-    shadowOffset: { width: 0, height: 6 }, // Increased shadow
-    shadowOpacity: 0.4, // Increased shadow
-    shadowRadius: 10, // Increased shadow
-    elevation: 8, // Increased elevation
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   loadMoreText: {
     color: "white",
