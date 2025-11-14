@@ -15,7 +15,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { supabase } from "../../../lib/Supabase";
@@ -137,6 +137,8 @@ const getSubcategoryTranslation = (subName: string): string => {
 
   const translationKey = `subcategories.${mappedKey}`;
   const translated = i18n.t(translationKey);
+  
+  // Return translated text or original name if translation not found
   return translated !== translationKey ? translated : subName;
 };
 
@@ -255,6 +257,75 @@ const calculateDistance = (
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+};
+
+// 🆕 Enhanced 3D Subcategory Card Component with Animation
+const SubcategoryCard: React.FC<{
+  subcategory: Subcategory;
+  isActive: boolean;
+  hasResults: boolean;
+  onPress: () => void;
+}> = ({ subcategory, isActive, hasResults, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.95,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 3,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  // Get translated name with proper fallback
+  const translatedName = getSubcategoryTranslation(subcategory.name);
+  
+  // Debug log to check translation
+  console.log('Subcategory:', subcategory.name, '-> Translated:', translatedName);
+
+  return (
+    <Animated.View
+      style={[
+        styles.subcategoryCard3D,
+        {
+          transform: [{ scale: scaleAnim }],
+        },
+      ]}
+    >
+      <TouchableOpacity
+        style={[
+          styles.subcategoryPill3D,
+          isActive && styles.subcategoryPillActive3D,
+        ]}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        {hasResults && <View style={styles.redDot3D} />}
+        
+        <View style={[
+          styles.iconCircle,
+          isActive && styles.iconCircleActive
+        ]}>
+          {getCategoryIcon(subcategory.name, 20, isActive ? "white" : PRIMARY_TEAL)}
+        </View>
+        
+        <Text style={[
+          styles.subcategoryText3D,
+          isActive && styles.subcategoryTextActive3D
+        ]}>
+          {translatedName}
+        </Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
 };
 
 const ProductCard: React.FC<{
@@ -486,7 +557,6 @@ export default function CategoryScreen() {
   const lastScrollY = useRef(0);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // 🆕 Tab bar scroll logic
   const tabBarVisible = useRef(true);
   const upGestureCount = useRef(0);
   const scrollDirection = useRef<'up' | 'down' | null>(null);
@@ -616,7 +686,6 @@ export default function CategoryScreen() {
           setCurrentSearchQuery("");
           setIsSearchActive(false);
         }
-        // Show tab bar when leaving screen
         AsyncStorage.setItem('tabBarVisible', 'true');
       };
     }, [searchMode])
@@ -834,7 +903,6 @@ export default function CategoryScreen() {
         
         setIsSticky(currentScrollY >= filterTabsLayout.y);
 
-        // ALWAYS show tab bar when at the top
         if (currentScrollY <= 50) {
           if (!tabBarVisible.current) {
             tabBarVisible.current = true;
@@ -851,7 +919,6 @@ export default function CategoryScreen() {
         if (delta > MIN_SCROLL_DELTA) direction = 'down';
         else if (delta < -MIN_SCROLL_DELTA) direction = 'up';
 
-        // DOWN: hide immediately (only when scrolled past 50)
         if (direction === 'down' && currentScrollY > 50) {
           if (tabBarVisible.current) {
             tabBarVisible.current = false;
@@ -870,7 +937,6 @@ export default function CategoryScreen() {
           }).start();
         }
 
-        // UP: accumulate distance
         if (!tabBarVisible.current && direction === 'up') {
           upDistance.current += Math.abs(delta);
 
@@ -1105,12 +1171,11 @@ export default function CategoryScreen() {
               contentContainerStyle={styles.subcategoryScroll}
             >
               {visibleSubcategories.map((sub) => (
-                <TouchableOpacity
+                <SubcategoryCard
                   key={sub.id}
-                  style={[
-                    styles.subcategoryPill,
-                    selectedSubcategory === sub.id && styles.subcategoryPillActive,
-                  ]}
+                  subcategory={sub}
+                  isActive={selectedSubcategory === sub.id}
+                  hasResults={sub.hasResults || false}
                   onPress={() => {
                     if (currentSearchQuery.trim()) {
                       router.push(
@@ -1120,15 +1185,7 @@ export default function CategoryScreen() {
                       router.push(`/category/subcategory/${sub.id}`);
                     }
                   }}
-                >
-                  {sub.hasResults && (
-                    <View style={styles.redDot} />
-                  )}
-                  {getCategoryIcon(sub.name, 20, DARK_GRAY)}
-                  <Text style={styles.subcategoryText}>
-                    {getSubcategoryTranslation(sub.name)}
-                  </Text>
-                </TouchableOpacity>
+                />
               ))}
             </ScrollView>
           )}
@@ -1210,7 +1267,6 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    marginBottom:110,
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
   },
@@ -1257,7 +1313,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingHorizontal: 16,
     borderWidth: 0,
-    
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
@@ -1340,50 +1395,97 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 20,
     paddingTop: 12,
+    paddingBottom: 8,
   },
-  subcategoryPill: {
+  // 🆕 Enhanced 3D Subcategory Styles
+  subcategoryCard3D: {
+    marginRight: 12,
+    shadowColor: "#16A085",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  subcategoryPill3D: {
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 16,
     backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#D0D0D0",
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
     overflow: "visible",
+    // 3D effect with inner shadow simulation
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
-  subcategoryPillActive: {
-    backgroundColor: "white",
-    borderColor: DARK_GRAY,
-    borderWidth: 1.5,
+  subcategoryPillActive3D: {
+    backgroundColor: PRIMARY_TEAL,
+    borderColor: PRIMARY_TEAL,
+    borderWidth: 0,
+    // Enhanced shadow for active state
+    shadowColor: PRIMARY_TEAL,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
   },
-  redDot: {
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#E8F5F3",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+    // Inner depth
+    shadowColor: "#16A085",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  iconCircleActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    shadowColor: "rgba(255, 255, 255, 0.5)",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+  },
+  redDot3D: {
     position: "absolute",
-    top: -10,
-    right: -10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    top: -12,
+    right: -12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: ACCENT_RED,
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: "white",
     zIndex: 20,
+    // Pulsing 3D shadow
     shadowColor: ACCENT_RED,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }],
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 10,
   },
-  subcategoryIcon: {
-    marginRight: 6,
-  },
-  subcategoryText: {
-    fontSize: 13,
-    fontWeight: "500",
+  subcategoryText3D: {
+    fontSize: 14,
+    fontWeight: "600",
     color: DARK_GRAY,
+    letterSpacing: 0.3,
+  },
+  subcategoryTextActive3D: {
+    color: "white",
+    fontWeight: "700",
+    textShadowColor: "rgba(0, 0, 0, 0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   floatingImageIcon: {
     width: 28,
@@ -1567,7 +1669,7 @@ const styles = StyleSheet.create({
   },
   floatingFilterButton: {
     position: "absolute",
-    bottom: 30,
+    bottom: 120,
     right: 20,
     backgroundColor: PRIMARY_TEAL,
     width: 60,

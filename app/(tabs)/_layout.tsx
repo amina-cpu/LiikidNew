@@ -1,5 +1,3 @@
-// In your _layout.tsx - Updated with real unread messages count
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
@@ -54,7 +52,7 @@ export default function TabLayout() {
 
   const handleHomePress = () => router.push('/');
 
-  // Fetch unread messages count
+  // FIXED: Only count conversations where OTHER people sent unread messages
   const fetchUnreadMessagesCount = async () => {
     if (!user?.user_id) {
       setUnreadMessagesCount(0);
@@ -62,51 +60,69 @@ export default function TabLayout() {
     }
     
     try {
-      const { data, error } = await supabase
+      // Get all conversations
+      const { data: conversations, error: convoError } = await supabase
         .from('conversation_list_view')
-        .select('unread_count')
+        .select('conversation_id, unread_count, last_message_sender_id')
         .eq('user_id', user.user_id);
 
-      if (error) {
-        console.error('Error fetching unread messages:', error);
+      if (convoError) {
+        console.error('Error fetching conversations:', convoError);
         return;
       }
 
-      // Sum up all unread counts from all conversations
-      const totalUnread = data?.reduce((sum, conv) => sum + (conv.unread_count || 0), 0) || 0;
-      console.log('📬 Total unread messages:', totalUnread);
-      setUnreadMessagesCount(totalUnread);
+      // Count conversations where:
+      // 1. There are unread messages (unread_count > 0)
+      // 2. The last message was NOT sent by current user
+      const unreadFromOthers = conversations?.filter(conv => 
+        (conv.unread_count || 0) > 0 && 
+        conv.last_message_sender_id !== user.user_id
+      ).length || 0;
+
+      console.log('📬 Unread conversations from others:', unreadFromOthers);
+      setUnreadMessagesCount(unreadFromOthers);
     } catch (error) {
-      console.error('Exception fetching unread messages:', error);
+      console.error('Exception fetching unread conversations:', error);
     }
   };
 
-  // Fetch unread count on mount and when user changes
   useEffect(() => {
     fetchUnreadMessagesCount();
   }, [user?.user_id]);
 
-  // Refresh unread count when returning to messages tab
+  // Real-time subscription
   useEffect(() => {
-    if (currentRoute === 'messages') {
+    if (!user?.user_id) return;
+
+    const messagesChannel = supabase
+      .channel('messages-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          console.log('📨 Messages changed, refreshing unread count');
+          fetchUnreadMessagesCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+    };
+  }, [user?.user_id]);
+
+  useEffect(() => {
+    if (currentRoute === 'messages' || currentRoute.startsWith('chat/')) {
+      console.log('📍 Entering messages/chat, refreshing count');
       fetchUnreadMessagesCount();
     }
   }, [currentRoute]);
 
-  // Poll for updates every 30 seconds
   useEffect(() => {
-    if (!user?.user_id) return;
-    
-    const interval = setInterval(() => {
-      fetchUnreadMessagesCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [user?.user_id]);
-
-  // ✅ FIX: Reset tab bar visibility when route changes
-  useEffect(() => {
-    // If not on home screen, always show tab bar
     if (!isHome) {
       AsyncStorage.setItem('tabBarVisible', 'true');
       setIsTabBarVisible(true);
@@ -119,7 +135,6 @@ export default function TabLayout() {
     }
   }, [currentRoute, isHome]);
 
-  // Listen to visibility changes from AsyncStorage
   useEffect(() => {
     const checkVisibility = setInterval(async () => {
       try {
@@ -168,7 +183,6 @@ export default function TabLayout() {
         },
       }}
     >
-      {/* HOME */}
       <Tabs.Screen
         name="index"
         options={{
@@ -194,7 +208,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* MAP */}
       <Tabs.Screen
         name="map"
         options={{
@@ -214,7 +227,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* ADD */}
       <Tabs.Screen
         name="add"
         options={{
@@ -234,7 +246,6 @@ export default function TabLayout() {
         }}
       />
 
-      {/* MESSAGES */}
       <Tabs.Screen
         name="messages"
         options={{
@@ -261,9 +272,14 @@ export default function TabLayout() {
             </Text>
           ),
         }}
+        listeners={{
+          focus: () => {
+            console.log('📍 Messages tab focused, refreshing count');
+            fetchUnreadMessagesCount();
+          },
+        }}
       />
 
-      {/* PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{
@@ -283,11 +299,11 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Hidden Screens */}
       <Tabs.Screen name="editprofile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="someonesProfile" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="filters" options={{ headerShown: false, href: null }} />
+       <Tabs.Screen name="conversation" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="product_detail" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />
@@ -298,7 +314,7 @@ export default function TabLayout() {
       <Tabs.Screen name="notification_settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="tenten" options={{ headerShown: false, href: null }} />
       <Tabs.Screen 
-        name="conversations" 
+        name="chat" 
         options={{ 
           headerShown: false, 
           href: null 

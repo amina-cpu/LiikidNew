@@ -1053,7 +1053,7 @@ export default function SubcategoryScreen() {
                   styles.brandText,
                   selectedBrand === null && styles.brandTextActive
                 ]}>
-                  {i18n.t('home.all')}
+                  {i18n.t('filterss.all')}
                 </Text>
               </TouchableOpacity>
               {visibleSubSubcategories.map((brand) => (
@@ -1162,7 +1162,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "white",
-    marginBottom:110,
+    // marginBottom:90,
     paddingTop: SAFE_AREA_PADDING,
   },
   loadingContainer: {
@@ -1512,7 +1512,7 @@ const styles = StyleSheet.create({
   },
   floatingFilterButton: {
     position: "absolute",
-    bottom: 30,
+     bottom: 120,
     right: 20,
     backgroundColor: PRIMARY_TEAL,
     width: 60,

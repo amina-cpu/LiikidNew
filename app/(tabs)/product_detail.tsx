@@ -384,7 +384,7 @@ const ProductDetailScreen = () => {
     );
   };
 
-  // NEW: Handle chat button press
+  // UPDATED: Handle chat button press with product context
   const handleChatPress = async () => {
     if (!currentUserId || !product?.user_id) {
       Alert.alert(i18n.t('productDetail.loginRequired'), i18n.t('productDetail.loginRequiredMessage'));
@@ -394,9 +394,15 @@ const ProductDetailScreen = () => {
     console.log('💬 Starting chat from product detail');
     console.log('💬 Current User:', currentUserId);
     console.log('💬 Product Owner:', product.user_id);
+    console.log('💬 Product ID:', product.id);
 
     try {
-      const conversationId = await getOrCreateConversation(currentUserId, product.user_id);
+      // Pass the product ID to create conversation with listing context
+      const conversationId = await getOrCreateConversation(
+        currentUserId, 
+        product.user_id, 
+        product.id  // CHANGED: Now passing product ID
+      );
       
       if (!conversationId || typeof conversationId !== 'number') {
         Alert.alert(i18n.t('productDetail.error'), 'Could not create conversation');
@@ -701,7 +707,7 @@ const ProductDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  flexContainer: { flex: 1, backgroundColor: COLORS.background },
+  flexContainer: { flex: 1, backgroundColor: COLORS.background, marginBottom:90},
   flexCenter: { flex: 1, justifyContent: "center", alignItems: "center" },
   container: { flex: 1 },
   loadingText: { marginTop: 10, color: COLORS.secondary },

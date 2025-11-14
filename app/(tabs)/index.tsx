@@ -36,6 +36,10 @@ const TAB_BAR_HEIGHT = 90;
 const INITIAL_PRODUCT_LIMIT = 14;
 const LOAD_MORE_INCREMENT = 10;
 
+// Replace the getCategoryIcon function and IconName type (lines 33-59)
+
+// Replace the getCategoryIcon function and IconName type (lines 33-59)
+
 type IconName =
   | "home"
   | "car"
@@ -46,8 +50,140 @@ type IconName =
   | "shopping-bag"
   | "cutlery"
   | "soccer-ball-o"
-  | "camera";
+  | "camera"
+  | "paw"
+  | "truck"
+  | "bed"
+  | "television"
+  | "briefcase"
+  | "medkit"
+  | "heart"
+  | "scissors"
+  | "child"
+  | "plane"
+  | "gamepad"
+  | "female";
 
+const getCategoryIcon = (categoryName: string): IconName => {
+  const name = categoryName.toLowerCase();
+  
+  // Real Estate
+  if (name.includes("real estate") || name.includes("property") || 
+      name.includes("immobilier") || name.includes("عقار")) {
+    return "home";
+  }
+  
+  // Vehicles
+  if (name.includes("vehicle") || name.includes("car") || name.includes("auto") ||
+      name.includes("voiture") || name.includes("سيارة")) {
+    return "car";
+  }
+  
+  // Phones & Accessories
+  if (name.includes("phone") || name.includes("mobile") || 
+      name.includes("téléphone") || name.includes("هاتف")) {
+    return "mobile";
+  }
+  
+  // Computers & Laptops
+  if (name.includes("computer") || name.includes("laptop") || name.includes("pc") ||
+      name.includes("ordinateur") || name.includes("كمبيوتر")) {
+    return "laptop";
+  }
+  
+  // Electronics & Accessories (TV icon for appliances)
+  if (name.includes("electronic") || name.includes("appliance") || 
+      name.includes("électronique") || name.includes("إلكترونيات")) {
+    return "television";
+  }
+  
+  // Clothing & Fashion (dress/female icon)
+  if (name.includes("clothing") || name.includes("fashion") || name.includes("apparel") ||
+      name.includes("vêtement") || name.includes("ملابس")) {
+    return "female";
+  }
+  
+  // Food
+  if (name.includes("food") || name.includes("alimentation") || 
+      name.includes("restaurant") || name.includes("طعام")) {
+    return "cutlery";
+  }
+  
+  // Sports
+  if (name.includes("sport") || name.includes("fitness") || 
+      name.includes("رياضة") || name.includes("gym")) {
+    return "soccer-ball-o";
+  }
+  
+  // Camera & Photography
+  if (name.includes("camera") || name.includes("photo") || 
+      name.includes("appareil photo")) {
+    return "camera";
+  }
+  
+  // Animals Shop
+  if (name.includes("animal") || name.includes("pet") || 
+      name.includes("animaux") || name.includes("حيوان")) {
+    return "paw";
+  }
+  
+  // Home & Furniture
+  if (name.includes("furniture") || name.includes("home") || name.includes("meuble") ||
+      name.includes("أثاث") || name.includes("maison")) {
+    return "bed";
+  }
+  
+  // Materials & Equipment
+  if (name.includes("material") || name.includes("equipment") || 
+      name.includes("matériel") || name.includes("معدات")) {
+    return "briefcase";
+  }
+  
+  // Repair Parts & Tools
+  if (name.includes("repair") || name.includes("part") || name.includes("tool") ||
+      name.includes("réparation") || name.includes("قطع غيار")) {
+    return "wrench";
+  }
+  
+  // Health & Beauty
+  if (name.includes("health") || name.includes("beauty") || name.includes("santé") ||
+      name.includes("beauté") || name.includes("صحة") || name.includes("جمال")) {
+    return "heart";
+  }
+  
+  // Baby Essentials
+  if (name.includes("baby") || name.includes("bébé") || 
+      name.includes("طفل") || name.includes("infant")) {
+    return "child";
+  }
+  
+  // Homemade & Handcrafted (scissors for crafts)
+  if (name.includes("homemade") || name.includes("handcraft") || name.includes("artisan") ||
+      name.includes("fait main") || name.includes("يدوي") || name.includes("craft")) {
+    return "scissors";
+  }
+  
+  // Hobbies & Entertainment
+  if (name.includes("hobby") || name.includes("hobbies") || name.includes("entertainment") ||
+      name.includes("loisir") || name.includes("هواية") || name.includes("game")) {
+    return "gamepad";
+  }
+  
+  // Travel
+  if (name.includes("travel") || name.includes("voyage") || 
+      name.includes("سفر") || name.includes("tourism")) {
+    return "plane";
+  }
+  
+  // Medical equipment
+  if (name.includes("medical") || name.includes("médical") || 
+      name.includes("طبي")) {
+    return "medkit";
+  }
+  
+  // Default fallback
+  return "cog";
+};
 interface Category {
   id: number;
   name: string;
@@ -73,19 +209,7 @@ interface Product {
 
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
-const getCategoryIcon = (categoryName: string): IconName => {
-  const name = categoryName.toLowerCase();
-  if (name.includes("real estate") || name.includes("property") || name.includes("immobilier") || name.includes("عقار")) return "home";
-  if (name.includes("vehicle") || name.includes("car") || name.includes("voiture") || name.includes("سيارة")) return "car";
-  if (name.includes("phone") || name.includes("téléphone") || name.includes("هاتف")) return "mobile";
-  if (name.includes("computer") || name.includes("laptop") || name.includes("ordinateur") || name.includes("كمبيوتر")) return "laptop";
-  if (name.includes("clothing") || name.includes("fashion") || name.includes("vêtement") || name.includes("ملابس"))
-    return "shopping-bag";
-  if (name.includes("food") || name.includes("alimentation") || name.includes("طعام")) return "cutlery";
-  if (name.includes("sport") || name.includes("رياضة")) return "soccer-ball-o";
-  if (name.includes("camera") || name.includes("photo")) return "camera";
-  return "cog";
-};
+
 
 const CATEGORY_COLORS = [
   ORANGE,
@@ -1046,7 +1170,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "white",
     paddingTop: SAFE_AREA_PADDING,
-    marginBottom:40
+   
   },
   
   // 🔍 SEARCH BAR - Enhanced shadow

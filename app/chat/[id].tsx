@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -14,13 +15,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useAuth } from '../context/AuthContext';
 import {
   getConversationMessages,
   markConversationAsRead,
   sendMessage,
+  updateConversationPinStatus,
 } from '../../lib/messaging';
 import { supabase } from '../../lib/Supabase';
+import { useAuth } from '../context/AuthContext';
 
 interface Message {
   message_id: number;
@@ -45,6 +47,7 @@ interface ConversationInfo {
   listing_name: string | null;
   listing_price: number | null;
   listing_image: string | null;
+  is_pinned: boolean;
 }
 
 const ChatScreen = () => {
@@ -56,16 +59,15 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationInfo, setConversationInfo] = useState<ConversationInfo | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [inputHeight, setInputHeight] = useState(40);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  // Fetch conversation info (other user + listing details)
   const fetchConversationInfo = useCallback(async () => {
     if (!conversationId || !user?.user_id) return;
 
     try {
-      // Get conversation with listing info
       const { data: convoData, error: convoError } = await supabase
         .from('conversations')
         .select('listing_id')
@@ -74,19 +76,19 @@ const ChatScreen = () => {
 
       if (convoError) throw convoError;
 
-      // Get participants
       const { data: participants, error: participantsError } = await supabase
         .from('conversation_participants')
-        .select('user_id')
+        .select('user_id, is_pinned')
         .eq('conversation_id', conversationId);
 
       if (participantsError) throw participantsError;
 
-      const otherUserId = participants?.find(p => p.user_id !== user.user_id)?.user_id;
+      const otherUserId = participants?.find((p) => p.user_id !== user.user_id)?.user_id;
+      const currentUserParticipant = participants?.find((p) => p.user_id === user.user_id);
+      const isPinned = currentUserParticipant?.is_pinned || false;
 
       if (!otherUserId) return;
 
-      // Get other user info
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('user_id, username, profile_image_url')
@@ -97,13 +99,13 @@ const ChatScreen = () => {
 
       let listingInfo = null;
       if (convoData?.listing_id) {
-        const { data: listing, error: listingError } = await supabase
+        const { data: listing } = await supabase
           .from('products')
           .select('id, name, price, image_url')
           .eq('id', convoData.listing_id)
           .single();
 
-        if (!listingError && listing) {
+        if (listing) {
           listingInfo = {
             listing_id: listing.id,
             listing_name: listing.name,
@@ -117,21 +119,23 @@ const ChatScreen = () => {
         other_user_id: userData.user_id,
         other_user_name: userData.username,
         other_user_avatar: userData.profile_image_url,
-        ...listingInfo,
+        is_pinned: isPinned,
+        listing_id: listingInfo?.listing_id || null,
+        listing_name: listingInfo?.listing_name || null,
+        listing_price: listingInfo?.listing_price || null,
+        listing_image: listingInfo?.listing_image || null,
       });
     } catch (error) {
       console.error('Error fetching conversation info:', error);
     }
   }, [conversationId, user?.user_id]);
 
-  // Load messages
   const loadMessages = useCallback(async () => {
     if (!conversationId || !user?.user_id) return;
 
     try {
       setIsLoading(true);
       const data = await getConversationMessages(conversationId);
-      
       if (data) {
         setMessages(data as Message[]);
         await markConversationAsRead(conversationId, user.user_id);
@@ -148,7 +152,7 @@ const ChatScreen = () => {
     loadMessages();
   }, [fetchConversationInfo, loadMessages]);
 
-  // Real-time subscription
+  // Real-time subscription for new messages
   useEffect(() => {
     if (!conversationId) return;
 
@@ -164,6 +168,11 @@ const ChatScreen = () => {
         },
         async (payload) => {
           const newMsg = payload.new as any;
+
+          // Skip if this is our own message (already added optimistically)
+          if (newMsg.sender_id === user?.user_id) {
+            return;
+          }
 
           const { data: senderData } = await supabase
             .from('users')
@@ -187,10 +196,32 @@ const ChatScreen = () => {
           };
 
           setMessages((prev) => [...prev, formattedMessage]);
-
-          if (newMsg.sender_id !== user?.user_id) {
-            await markConversationAsRead(conversationId, user!.user_id);
+          
+          // Mark as read if we're in the conversation
+          if (user?.user_id) {
+            await markConversationAsRead(conversationId, user.user_id);
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const updatedMsg = payload.new as any;
+          
+          // Update message read status
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.message_id === updatedMsg.message_id
+                ? { ...msg, is_read: updatedMsg.is_read }
+                : msg
+            )
+          );
         }
       )
       .subscribe();
@@ -200,17 +231,74 @@ const ChatScreen = () => {
     };
   }, [conversationId, user?.user_id]);
 
+  const handleTogglePin = async () => {
+    if (!conversationId || !user?.user_id || !conversationInfo) return;
+
+    const newPinStatus = !conversationInfo.is_pinned;
+    
+    setConversationInfo(prev => prev ? { ...prev, is_pinned: newPinStatus } : null);
+
+    const success = await updateConversationPinStatus(
+      conversationId,
+      user.user_id,
+      newPinStatus
+    );
+
+    if (!success) {
+      setConversationInfo(prev => prev ? { ...prev, is_pinned: !newPinStatus } : null);
+      Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
+    }
+  };
+
   const handleSend = async () => {
     if (!newMessage.trim() || !conversationId || !user?.user_id || isSending) return;
 
     const messageText = newMessage.trim();
     setNewMessage('');
+    setInputHeight(40);
     setIsSending(true);
 
+    // Create optimistic message
+    const tempId = Date.now();
+    const optimisticMessage: Message = {
+      message_id: tempId,
+      message_text: messageText,
+      created_at: new Date().toISOString(),
+      is_read: false,
+      sender_id: user.user_id,
+      sender: {
+        user_id: user.user_id,
+        username: user.username || 'You',
+        full_name: user.full_name || null,
+        avatar_url: user.avatar_url || null,
+        profile_image_url: user.profile_image_url || null,
+      },
+    };
+
+    // Add to UI immediately
+    setMessages((prev) => [...prev, optimisticMessage]);
+
     try {
-      await sendMessage(conversationId, user.user_id, messageText);
+      const sentMessage = await sendMessage(conversationId, user.user_id, messageText);
+      
+      // Replace optimistic message with real one
+      if (sentMessage) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.message_id === tempId
+              ? {
+                  ...msg,
+                  message_id: sentMessage.message_id,
+                  created_at: sentMessage.created_at,
+                }
+              : msg
+          )
+        );
+      }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((msg) => msg.message_id !== tempId));
       setNewMessage(messageText);
     } finally {
       setIsSending(false);
@@ -219,59 +307,57 @@ const ChatScreen = () => {
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    
+    return `${displayHours}:${displayMinutes} ${ampm} ${month} ${day}`;
+  };
+
+  const formatPrice = (price: number) => {
+    if (price >= 1000) {
+      const k = price / 1000;
+      return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`;
+    }
+    return price.toString();
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isOwnMessage = item.sender_id === user?.user_id;
+    const showSeen = isOwnMessage && item.is_read;
 
     return (
-      <View
-        style={[
-          styles.messageContainer,
-          isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
-        ]}
-      >
+      <View style={styles.messageWrapper}>
+        <Text style={styles.messageTimestamp}>{formatTime(item.created_at)}</Text>
         <View
           style={[
-            styles.messageBubble,
-            isOwnMessage ? styles.ownMessage : styles.otherMessage,
+            styles.messageContainer,
+            isOwnMessage ? styles.ownMessageContainer : styles.otherMessageContainer,
           ]}
         >
-          <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
-            {item.message_text}
-          </Text>
-          <Text style={[styles.messageTime, isOwnMessage && styles.ownMessageTime]}>
-            {formatTime(item.created_at)}
-          </Text>
+          <View
+            style={[
+              styles.messageBubble,
+              isOwnMessage ? styles.ownMessage : styles.otherMessage,
+            ]}
+          >
+            <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
+              {item.message_text}
+            </Text>
+          </View>
         </View>
-      </View>
-    );
-  };
-
-  const ListHeader = () => {
-    if (!conversationInfo?.listing_id) return null;
-
-    return (
-      <View style={styles.listingCard}>
-        <Image
-          source={{ uri: conversationInfo.listing_image || 'https://via.placeholder.com/60' }}
-          style={styles.listingImage}
-        />
-        <View style={styles.listingInfo}>
-          <Text style={styles.listingName} numberOfLines={1}>
-            {conversationInfo.listing_name}
-          </Text>
-          <Text style={styles.listingPrice}>
-            {conversationInfo.listing_price?.toLocaleString()} DA
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={styles.viewListingButton}
-          onPress={() => router.push(`/product_detail?id=${conversationInfo.listing_id}`)}
-        >
-          <Ionicons name="arrow-forward" size={20} color="#00A78F" />
-        </TouchableOpacity>
+        {showSeen ? (
+          <View style={styles.seenContainer}>
+            <Text style={styles.seenText}>Seen</Text>
+            <Ionicons name="checkmark-done" size={14} color="#00A78F" />
+          </View>
+        ) : null}
       </View>
     );
   };
@@ -286,47 +372,77 @@ const ChatScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header with user profile */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#000" />
-        </TouchableOpacity>
+      <View style={styles.stickyHeader}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#00A78F" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Message</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.iconButton} onPress={handleTogglePin}>
+              <Ionicons 
+                name={conversationInfo?.is_pinned ? "pin" : "pin-outline"} 
+                size={22} 
+                color="#00A78F" 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton}>
+              <Ionicons name="ellipsis-horizontal" size={22} color="#00A78F" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <TouchableOpacity
-          style={styles.userInfoContainer}
+          style={styles.userInfoCard}
           onPress={() => {
             if (conversationInfo?.other_user_id) {
               router.push(`/someonesProfile?userId=${conversationInfo.other_user_id}`);
             }
           }}
+          activeOpacity={0.8}
         >
-          {conversationInfo?.other_user_avatar ? (
-            <Image
-              source={{ uri: conversationInfo.other_user_avatar }}
-              style={styles.headerAvatar}
-            />
-          ) : (
-            <View style={styles.headerAvatarPlaceholder}>
-              <Text style={styles.headerAvatarText}>
-                {conversationInfo?.other_user_name?.charAt(0).toUpperCase() || 'U'}
+          <View style={styles.userInfoLeft}>
+            {conversationInfo?.other_user_avatar ? (
+              <Image
+                source={{ uri: conversationInfo.other_user_avatar }}
+                style={styles.userAvatar}
+              />
+            ) : (
+              <View style={styles.userAvatarPlaceholder}>
+                <Text style={styles.userAvatarText}>
+                  {conversationInfo?.other_user_name ? conversationInfo.other_user_name.charAt(0).toUpperCase() : 'U'}
+                </Text>
+              </View>
+            )}
+            <View style={styles.userDetails}>
+              <Text style={styles.userName}>
+                {conversationInfo?.other_user_name || 'User'}
               </Text>
+              <Text style={styles.userStatus}>Active in the last day</Text>
+              <Text style={styles.userLocation}>Columbia, MD</Text>
             </View>
-          )}
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerUsername}>{conversationInfo?.other_user_name || 'User'}</Text>
-            <Text style={styles.headerSubtext}>Active recently</Text>
           </View>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="call-outline" size={24} color="#000" />
+          {conversationInfo?.listing_image ? (
+            <View style={styles.productThumbnail}>
+              <Image
+                source={{ uri: conversationInfo.listing_image }}
+                style={styles.productImage}
+              />
+              <View style={styles.productPriceTag}>
+                <Text style={styles.productPrice}>
+                  ${formatPrice(conversationInfo.listing_price || 0)}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <FlatList
           ref={flatListRef}
@@ -334,23 +450,26 @@ const ChatScreen = () => {
           renderItem={renderMessage}
           keyExtractor={(item) => item.message_id.toString()}
           contentContainerStyle={styles.messagesList}
-          ListHeaderComponent={ListHeader}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
 
         <View style={styles.inputContainer}>
           <TouchableOpacity style={styles.attachButton}>
-            <Ionicons name="add-circle-outline" size={28} color="#00A78F" />
+            <Ionicons name="location" size={24} color="#00A78F" />
           </TouchableOpacity>
 
           <TextInput
-            style={styles.input}
+            style={[styles.input, { height: Math.max(40, Math.min(inputHeight, 120)) }]}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="Type a message..."
+            placeholder="Message..."
             placeholderTextColor="#999"
             multiline
+            onContentSizeChange={(e) => {
+              const height = e.nativeEvent.contentSize.height;
+              setInputHeight(height);
+            }}
             maxLength={1000}
           />
 
@@ -359,7 +478,7 @@ const ChatScreen = () => {
             onPress={handleSend}
             disabled={!newMessage.trim() || isSending}
           >
-            <Ionicons name="send" size={20} color="#fff" />
+            <Ionicons name="arrow-up" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -368,130 +487,123 @@ const ChatScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  flex: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  container: { flex: 1, backgroundColor: '#fff' },
+  flex: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  stickyHeader: {
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
-    marginTop: 40,
+    paddingTop: 45,
   },
-  backButton: {
-    padding: 4,
-    marginRight: 12,
-  },
-  userInfoContainer: {
-    flex: 1,
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  backButton: { padding: 4 },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 16,
+  },
+  headerRight: { flexDirection: 'row' },
+  iconButton: { padding: 4, marginLeft: 12 },
+  userInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8F9FA',
+  },
+  userInfoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     marginRight: 12,
   },
-  headerAvatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#B695C0',
+  userAvatarPlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#00A78F',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  headerAvatarText: {
-    fontSize: 18,
+  userAvatarText: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#fff',
   },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerUsername: {
+  userDetails: { flex: 1 },
+  userName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+    marginBottom: 2,
   },
-  headerSubtext: {
+  userStatus: {
     fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 2,
+    color: '#666',
+    marginBottom: 1,
   },
-  headerButton: {
-    padding: 8,
-    marginLeft: 8,
+  userLocation: {
+    fontSize: 12,
+    color: '#666',
   },
-  listingCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  listingImage: {
-    width: 60,
-    height: 60,
+  productThumbnail: { position: 'relative' },
+  productImage: {
+    width: 56,
+    height: 56,
     borderRadius: 8,
     backgroundColor: '#E5E5EA',
   },
-  listingInfo: {
-    flex: 1,
-    marginLeft: 12,
+  productPriceTag: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
   },
-  listingName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  listingPrice: {
-    fontSize: 16,
+  productPrice: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#00A78F',
-  },
-  viewListingButton: {
-    padding: 8,
+    color: '#fff',
+    textAlign: 'center',
   },
   messagesList: {
     paddingVertical: 16,
     paddingHorizontal: 16,
   },
-  messageContainer: {
-    marginBottom: 12,
-    maxWidth: '75%',
+  messageWrapper: { marginBottom: 16 },
+  messageTimestamp: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  ownMessageContainer: {
-    alignSelf: 'flex-end',
-  },
-  otherMessageContainer: {
-    alignSelf: 'flex-start',
-  },
+  messageContainer: { maxWidth: '75%' },
+  ownMessageContainer: { alignSelf: 'flex-end' },
+  otherMessageContainer: { alignSelf: 'flex-start' },
   messageBubble: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 20,
   },
   ownMessage: {
@@ -499,24 +611,25 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   otherMessage: {
-    backgroundColor: '#fff',
+    backgroundColor: '#E5E5EA',
     borderBottomLeftRadius: 4,
   },
   messageText: {
     fontSize: 15,
     color: '#000',
-    marginBottom: 4,
+    lineHeight: 20,
   },
-  ownMessageText: {
-    color: '#fff',
-  },
-  messageTime: {
-    fontSize: 11,
-    color: '#8E8E93',
+  ownMessageText: { color: '#fff' },
+  seenContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-end',
+    marginTop: 4,
   },
-  ownMessageTime: {
-    color: 'rgba(255,255,255,0.8)',
+  seenText: {
+    fontSize: 11,
+    color: '#00A78F',
+    marginRight: 4,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -529,26 +642,27 @@ const styles = StyleSheet.create({
   },
   attachButton: {
     marginRight: 8,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   input: {
     flex: 1,
     backgroundColor: '#F5F5F5',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingTop: 10,
+    paddingBottom: 10,
     fontSize: 15,
-    maxHeight: 100,
     marginRight: 8,
+    minHeight: 40,
   },
   sendButton: {
     backgroundColor: '#00A78F',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   sendButtonDisabled: {
     backgroundColor: '#B0B0B0',

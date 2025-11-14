@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     FlatList,
     Image,
@@ -12,7 +13,6 @@ import {
     Text,
     TouchableOpacity,
     View,
-    Alert,
 } from 'react-native';
 import {
     GestureHandlerRootView,
@@ -65,7 +65,6 @@ const NotificationsScreen = () => {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     
-    // 🔥 NEW: Edit mode states
     const [isEditMode, setIsEditMode] = useState(false);
     const [selectedNotifications, setSelectedNotifications] = useState<Set<number>>(new Set());
 
@@ -85,7 +84,6 @@ const NotificationsScreen = () => {
                 prev.filter(n => n.notification_id !== notificationId)
             );
             
-            console.log(`Notification ${notificationId} deleted successfully.`);
             return true;
 
         } catch (error) {
@@ -94,7 +92,6 @@ const NotificationsScreen = () => {
         }
     };
 
-    // 🔥 NEW: Delete multiple notifications
     const deleteSelectedNotifications = async () => {
         if (selectedNotifications.size === 0) return;
 
@@ -135,7 +132,6 @@ const NotificationsScreen = () => {
         );
     };
 
-    // 🔥 NEW: Mark selected as read
     const markSelectedAsRead = async () => {
         if (selectedNotifications.size === 0) return;
 
@@ -162,7 +158,6 @@ const NotificationsScreen = () => {
         }
     };
 
-    // 🔥 NEW: Toggle selection
     const toggleSelection = (notificationId: number) => {
         setSelectedNotifications(prev => {
             const newSet = new Set(prev);
@@ -175,13 +170,11 @@ const NotificationsScreen = () => {
         });
     };
 
-    // 🔥 NEW: Select all
     const selectAll = () => {
         const allIds = new Set(notifications.map(n => n.notification_id));
         setSelectedNotifications(allIds);
     };
 
-    // 🔥 NEW: Deselect all
     const deselectAll = () => {
         setSelectedNotifications(new Set());
     };
@@ -277,7 +270,7 @@ const NotificationsScreen = () => {
                 product: notif.product_id ? productsMap[notif.product_id] : undefined,
             }));
 
-            setNotifications(enrichedNotifications);
+            setNotifications(enrichedNotifications as NotificationItem[]);
 
         } catch (error) {
             console.error("Error fetching notifications:", error);
@@ -287,31 +280,138 @@ const NotificationsScreen = () => {
         }
     };
 
-    useEffect(() => {
-        fetchNotifications();
+    // ✅ FIXED: Real-time subscription with proper duplicate prevention
+useEffect(() => {
+    fetchNotifications();
 
-        const channel = supabase
-            .channel('notifications-realtime')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `receiver_id=eq.${user?.user_id}`
-                },
-                (payload) => {
-                    console.log('Notification change:', payload);
-                    fetchNotifications(); 
-                }
-            )
-            .subscribe();
+    if (!user?.user_id) return;
 
-        return () => {
-            channel.unsubscribe();
-        };
-    }, [user]);
+    const channel = supabase
+        .channel('notifications-realtime')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `receiver_id=eq.${user.user_id}`
+            },
+            async (payload) => {
+                console.log('📨 New notification received:', payload.new);
 
+                const newNotifId = (payload.new as any).notification_id;
+
+                // ✅ Check if notification already exists BEFORE fetching
+                setNotifications(prev => {
+                    const exists = prev.some(n => n.notification_id === newNotifId);
+                    if (exists) {
+                        console.log('⚠️ Duplicate notification prevented:', newNotifId);
+                        return prev;
+                    }
+
+                    // ✅ Fetch full notification data asynchronously
+                    (async () => {
+                        try {
+                            const { data, error } = await supabase
+                                .from("notifications")
+                                .select(
+                                    `notification_id,
+                                    type,
+                                    is_read,
+                                    created_at,
+                                    product_id,
+                                    post_id,
+                                    sender:users!fk_sender_id(
+                                        user_id,
+                                        username,
+                                        full_name,
+                                        profile_image_url
+                                    ),
+                                    product:products(id, name, image_url)`
+                                )
+                                .eq("notification_id", newNotifId)
+                                .single();
+
+                            if (error) {
+                                console.error("Error fetching new notification details:", error);
+                                return;
+                            }
+
+                            if (data) {
+                                const enrichedNotif: NotificationItem = {
+                                    ...data,
+                                    sender: data.sender as NotificationItem['sender'],
+                                    product: data.product ? {
+                                        id: data.product.id,
+                                        name: data.product.name,
+                                        image_url: data.product.image_url
+                                    } : undefined,
+                                };
+
+                                // ✅ Double-check before adding (prevents race conditions)
+                                setNotifications(currentNotifs => {
+                                    const stillExists = currentNotifs.some(n => n.notification_id === newNotifId);
+                                    if (stillExists) {
+                                        console.log('⚠️ Duplicate prevented during fetch:', newNotifId);
+                                        return currentNotifs;
+                                    }
+                                    console.log('✅ Adding new notification:', newNotifId);
+                                    return [enrichedNotif, ...currentNotifs];
+                                });
+                            }
+                        } catch (error) {
+                            console.error("Exception fetching notification:", error);
+                        }
+                    })();
+
+                    return prev; // Return unchanged while async fetch completes
+                });
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `receiver_id=eq.${user.user_id}`
+            },
+            (payload) => {
+                console.log('📝 Notification updated:', payload.new);
+                const updatedNotif = payload.new as any;
+                
+                setNotifications(prev => 
+                    prev.map(n => 
+                        n.notification_id === updatedNotif.notification_id 
+                            ? { ...n, is_read: updatedNotif.is_read }
+                            : n
+                    )
+                );
+            }
+        )
+        .on(
+            'postgres_changes',
+            {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `receiver_id=eq.${user.user_id}`
+            },
+            (payload) => {
+                console.log('🗑️ Notification deleted:', payload.old);
+                const deletedId = (payload.old as any).notification_id;
+                
+                setNotifications(prev => 
+                    prev.filter(n => n.notification_id !== deletedId)
+                );
+            }
+        )
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+}, [user?.user_id]);
     const onRefresh = () => {
         setRefreshing(true);
         fetchNotifications(true);
@@ -368,7 +468,6 @@ const NotificationsScreen = () => {
     };
 
     const handleNotificationPress = async (item: NotificationItem) => {
-        // 🔥 In edit mode, toggle selection instead of navigating
         if (isEditMode) {
             toggleSelection(item.notification_id);
             return;
@@ -425,7 +524,6 @@ const NotificationsScreen = () => {
                 activeOpacity={0.7}
             >
                 <View style={styles.itemContent}>
-                    {/* 🔥 NEW: Checkbox in edit mode */}
                     {isEditMode && (
                         <View style={styles.checkboxContainer}>
                             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
@@ -470,7 +568,6 @@ const NotificationsScreen = () => {
             </TouchableOpacity>
         );
 
-        // 🔥 Disable swipe in edit mode
         if (isEditMode) {
             return renderNotificationContent();
         }
@@ -508,7 +605,6 @@ const NotificationsScreen = () => {
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaView style={styles.container}>
-                {/* 🔥 UPDATED HEADER */}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.backButton}>
                         <Ionicons name="chevron-back" size={28} color="#000" />
@@ -527,7 +623,6 @@ const NotificationsScreen = () => {
                     </View>
                 </View>
 
-                {/* 🔥 NEW: Edit mode action bar */}
                 {isEditMode && (
                     <View style={styles.editModeBar}>
                         <View style={styles.editModeLeft}>
@@ -567,7 +662,7 @@ const NotificationsScreen = () => {
                                 style={[styles.actionButton, selectedNotifications.size === 0 && styles.actionButtonDisabled]}
                             >
                                 <Text style={[styles.actionButtonText, selectedNotifications.size === 0 && styles.actionButtonTextDisabled]}>
-                                    Mark unread
+                                    Mark read
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -649,19 +744,14 @@ const styles = StyleSheet.create({
     editButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
+        marginRight: 4,
     },
     editText: {
         fontSize: 16,
         color: '#00A78F',
         fontWeight: '600',
+        marginLeft: 4,
     },
-    markAllRead: {
-        fontSize: 14,
-        color: "#00A78F",
-        fontWeight: '600',
-    },
-    // 🔥 NEW: Edit mode bar styles
     editModeBar: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -675,10 +765,10 @@ const styles = StyleSheet.create({
     editModeLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
     },
     selectAllButton: {
         padding: 4,
+        marginRight: 12,
     },
     actionButton: {
         paddingHorizontal: 12,
@@ -700,7 +790,6 @@ const styles = StyleSheet.create({
         color: '#00A78F',
         fontWeight: '600',
     },
-    // 🔥 NEW: Checkbox styles
     checkboxContainer: {
         marginRight: 12,
     },

@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -19,7 +20,6 @@ import {
   Swipeable,
 } from "react-native-gesture-handler";
 import {
-  getUserConversations,
   updateConversationPinStatus
 } from "../../lib/messaging";
 import { supabase } from "../../lib/Supabase";
@@ -40,6 +40,16 @@ interface Conversation {
   is_premium: boolean; 
   listing_image_url: string | null;
   listing_id: number | null;
+  other_user_last_seen: string | null;
+}
+
+interface GroupedListing {
+  listing_id: number;
+  listing_image: string | null;
+  listing_name: string;
+  conversations: Conversation[];
+  total_unread: number;
+  latest_time: string | null;
 }
 
 interface NotificationSettings {
@@ -56,9 +66,24 @@ const MessagesScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
-  
   const [isGrouped, setIsGrouped] = useState(false); 
-  const toggleAnim = useRef(new Animated.Value(isGrouped ? 1 : 0)).current;
+  
+  const toggleAnim = useRef(new Animated.Value(0)).current;
+
+  // Load grouping preference
+  useEffect(() => {
+    const loadGroupingPreference = async () => {
+      try {
+        const value = await AsyncStorage.getItem('messages_grouped_by_listing');
+        if (value !== null) {
+          setIsGrouped(value === 'true');
+        }
+      } catch (error) {
+        console.error('Error loading grouping preference:', error);
+      }
+    };
+    loadGroupingPreference();
+  }, []);
 
   useEffect(() => {
     Animated.timing(toggleAnim, {
@@ -66,10 +91,18 @@ const MessagesScreen = () => {
       duration: 250,
       useNativeDriver: true,
     }).start();
-  }, [isGrouped, toggleAnim]);
+  }, [isGrouped]);
 
-  const handleToggle = () => {
-    setIsGrouped(prev => !prev);
+  const handleToggle = async () => {
+    const newValue = !isGrouped;
+    setIsGrouped(newValue);
+    
+    // Save preference
+    try {
+      await AsyncStorage.setItem('messages_grouped_by_listing', newValue.toString());
+    } catch (error) {
+      console.error('Error saving grouping preference:', error);
+    }
   };
   
   const toggleTranslateX = toggleAnim.interpolate({
@@ -87,19 +120,22 @@ const MessagesScreen = () => {
                 { 
                     text: "Delete", 
                     style: "destructive", 
-                    onPress: () => {
-                        setConversations(prev => 
-                            prev.filter(c => c.conversation_id !== conversationId)
-                        );
-                        console.log(`Conversation ${conversationId} marked as deleted.`);
+                    onPress: async () => {
+                        try {
+                            await supabase.from('messages').delete().eq('conversation_id', conversationId);
+                            await supabase.from('conversation_participants').delete().eq('conversation_id', conversationId);
+                            await supabase.from('conversations').delete().eq('conversation_id', conversationId);
+                            setConversations(prev => prev.filter(c => c.conversation_id !== conversationId));
+                        } catch (error) {
+                            console.error('Error deleting conversation:', error);
+                            Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+                        }
                     }
                 }
             ]
         );
-        
     } catch (error) {
       console.error("Exception during conversation deletion:", error);
-      return false;
     }
   };
   
@@ -107,26 +143,13 @@ const MessagesScreen = () => {
       if (!user?.user_id) return;
       
       const newPinStatus = !currentPinStatus;
+      setConversations(prev => prev.map(c => c.conversation_id === conversationId ? { ...c, is_pinned: newPinStatus } : c));
 
-      setConversations(prev => 
-          prev.map(c => 
-              c.conversation_id === conversationId ? { ...c, is_pinned: newPinStatus } : c
-          )
-      );
-
-      const success = await updateConversationPinStatus(
-          conversationId, 
-          user.user_id, 
-          newPinStatus
-      );
+      const success = await updateConversationPinStatus(conversationId, user.user_id, newPinStatus);
 
       if (!success) {
         Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
-        setConversations(prev => 
-            prev.map(c => 
-                c.conversation_id === conversationId ? { ...c, is_pinned: currentPinStatus } : c
-            )
-        );
+        setConversations(prev => prev.map(c => c.conversation_id === conversationId ? { ...c, is_pinned: currentPinStatus } : c));
       }
   };
 
@@ -158,14 +181,12 @@ const MessagesScreen = () => {
         }
 
         const { count, error } = await query;
-
         if (error) {
             console.error('Error fetching unread count:', error);
             setUnreadNotificationsCount(0);
             return;
         }
         setUnreadNotificationsCount(count || 0); 
-
     } catch (error) {
       console.error('Exception fetching unread count:', error);
       setUnreadNotificationsCount(0);
@@ -179,11 +200,8 @@ const MessagesScreen = () => {
     }
 
     try {
-      if (!isRefreshing) {
-        setIsLoading(true);
-      }
+      if (!isRefreshing) setIsLoading(true);
       
-      // Get conversations with listing info
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversation_list_view')
         .select('*')
@@ -192,25 +210,30 @@ const MessagesScreen = () => {
 
       if (conversationsError) throw conversationsError;
 
-      // For each conversation, fetch the listing image if listing_id exists
       const conversationsWithImages = await Promise.all(
         (conversationsData || []).map(async (convo) => {
+          let listingImageUrl = null;
+          let otherUserLastSeen = null;
+
           if (convo.listing_id) {
             const { data: productData } = await supabase
               .from('products')
               .select('image_url')
               .eq('id', convo.listing_id)
               .single();
-
-            return {
-              ...convo,
-              listing_image_url: productData?.image_url || null,
-            };
+            listingImageUrl = productData?.image_url || null;
           }
-          return {
-            ...convo,
-            listing_image_url: null,
-          };
+
+          if (convo.other_user_id) {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('last_seen')
+              .eq('user_id', convo.other_user_id)
+              .single();
+            otherUserLastSeen = userData?.last_seen || null;
+          }
+
+          return { ...convo, listing_image_url: listingImageUrl, other_user_last_seen: otherUserLastSeen };
         })
       );
 
@@ -220,9 +243,7 @@ const MessagesScreen = () => {
       setConversations([]);
     } finally {
       setIsLoading(false);
-      if (isRefreshing) {
-        setRefreshing(false);
-      }
+      if (isRefreshing) setRefreshing(false);
     }
   }, [user?.user_id]);
 
@@ -244,6 +265,7 @@ const MessagesScreen = () => {
     const diff = new Date().getTime() - new Date(timestamp).getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
+    if (hours < 1) return 'Just now';
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;
   }; 
@@ -260,12 +282,77 @@ const MessagesScreen = () => {
     return conversation.last_message || "No messages yet"; 
   };
   
-  const handleConversationPress = (conversationId: number) => { 
+  const isUserOnline = (lastSeen: string | null): boolean => {
+    if (!lastSeen) return false;
+    const lastSeenDate = new Date(lastSeen);
+    const now = new Date();
+    const diffMinutes = (now.getTime() - lastSeenDate.getTime()) / (1000 * 60);
+    return diffMinutes < 5;
+  };
+  
+  const handleConversationPress = async (conversationId: number) => { 
+    if (user?.user_id) {
+      setConversations(prev => prev.map(c => c.conversation_id === conversationId ? { ...c, unread_count: 0 } : c));
+    }
     router.push(`/chat/${conversationId}`); 
   };
   
   const handleNotificationPress = () => { 
     router.push('/(tabs)/notifications'); 
+  };
+
+  const groupConversationsByListing = async (): Promise<(GroupedListing | Conversation)[]> => {
+    const grouped: { [key: number]: GroupedListing } = {};
+    const noListing: Conversation[] = [];
+    
+    // Collect all unique listing IDs
+    const listingIds = [...new Set(conversations.map(c => c.listing_id).filter(Boolean))] as number[];
+    
+    // Fetch product names for all listings
+    const productNames: { [key: number]: string } = {};
+    if (listingIds.length > 0) {
+      try {
+        const { data: products } = await supabase
+          .from('products')
+          .select('id, name')
+          .in('id', listingIds);
+        
+        products?.forEach(p => {
+          productNames[p.id] = p.name;
+        });
+      } catch (error) {
+        console.error('Error fetching product names:', error);
+      }
+    }
+    
+    conversations.forEach(convo => {
+      if (convo.listing_id) {
+        if (!grouped[convo.listing_id]) {
+          grouped[convo.listing_id] = {
+            listing_id: convo.listing_id,
+            listing_image: convo.listing_image_url,
+            listing_name: productNames[convo.listing_id] || `Product #${convo.listing_id}`,
+            conversations: [],
+            total_unread: 0,
+            latest_time: convo.last_message_time,
+          };
+        }
+        grouped[convo.listing_id].conversations.push(convo);
+        
+        if (convo.unread_count > 0 && convo.last_message_sender_id !== user?.user_id) {
+          grouped[convo.listing_id].total_unread += 1;
+        }
+        
+        if (convo.last_message_time && (!grouped[convo.listing_id].latest_time || 
+             new Date(convo.last_message_time) > new Date(grouped[convo.listing_id].latest_time!))) {
+          grouped[convo.listing_id].latest_time = convo.last_message_time;
+        }
+      } else {
+        noListing.push(convo);
+      }
+    });
+    
+    return [...Object.values(grouped), ...noListing];
   };
 
   const sortedConversations = conversations.sort((a, b) => {
@@ -276,6 +363,14 @@ const MessagesScreen = () => {
   
   const pinnedConversations = sortedConversations.filter(c => c.is_pinned);
   const unpinnedConversations = sortedConversations.filter(c => !c.is_pinned);
+  
+  const [groupedData, setGroupedData] = useState<(GroupedListing | Conversation)[]>([]);
+
+  useEffect(() => {
+    if (isGrouped) {
+      groupConversationsByListing().then(setGroupedData);
+    }
+  }, [isGrouped, conversations]);
 
   const renderRightActions = (
     progress: Animated.AnimatedInterpolation<number>,
@@ -284,21 +379,13 @@ const MessagesScreen = () => {
     index: number,
   ) => {
     const isPinned = item.is_pinned;
-    
-    const scale = dragX.interpolate({
-        inputRange: [-160, -80, 0], 
-        outputRange: [1, 1, 0],
-        extrapolate: 'clamp',
-    });
+    const scale = dragX.interpolate({ inputRange: [-160, -80, 0], outputRange: [1, 1, 0], extrapolate: 'clamp' });
     
     return (
         <View style={styles.swipeActionsContainer}>
             <TouchableOpacity 
                 style={[styles.actionButtonContainer, styles.pinAction]}
-                onPress={() => {
-                    row.current[index]?.close(); 
-                    pinConversation(item.conversation_id, isPinned);
-                }}
+                onPress={() => { row.current[index]?.close(); pinConversation(item.conversation_id, isPinned); }}
             >
                 <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
                     <Ionicons name={isPinned ? "bookmark-outline" : "pin-outline"} size={24} color="white" />
@@ -308,10 +395,7 @@ const MessagesScreen = () => {
 
             <TouchableOpacity 
                 style={[styles.actionButtonContainer, styles.deleteAction]}
-                onPress={() => {
-                    row.current[index]?.close(); 
-                    deleteConversation(item.conversation_id);
-                }}
+                onPress={() => { row.current[index]?.close(); deleteConversation(item.conversation_id); }}
             >
                 <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
                     <Ionicons name="trash-outline" size={24} color="white" />
@@ -325,16 +409,11 @@ const MessagesScreen = () => {
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.headerTitle}>Inbox</Text>
-      <TouchableOpacity 
-        style={styles.notificationButton}
-        onPress={handleNotificationPress}
-      >
+      <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
         <Ionicons name="notifications-outline" size={26} color="#000" /> 
         {unreadNotificationsCount > 0 && (
           <View style={styles.notificationBadge}>
-            <Text style={styles.badgeText}>
-              {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount} 
-            </Text>
+            <Text style={styles.badgeText}>{unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}</Text>
           </View>
         )}
       </TouchableOpacity>
@@ -353,23 +432,21 @@ const MessagesScreen = () => {
         </TouchableOpacity>
         <Text style={styles.groupByText}>Group by listing</Text>
       </View>
-      
+{/*       
       <View style={styles.premiumRow}>
         <Ionicons name="diamond-outline" size={16} color="#7B4DFF" />
         <Text style={styles.premiumText}>Get faster responses.</Text>
         <TouchableOpacity style={styles.tryFreeButton}>
           <Text style={styles.tryFreeText}>Try for FREE</Text>
         </TouchableOpacity>
-      </View>
+      </View> */}
     </View>
   );
 
   const renderSectionHeader = (title: string, actionText?: string) => (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleContainer}>
-        {title === "Pinned" && (
-          <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />
-        )}
+        {title === "Pinned" && <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />}
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {actionText && (
@@ -388,32 +465,63 @@ const MessagesScreen = () => {
       </TouchableOpacity>
       
       <TouchableOpacity style={styles.sortButton}>
-        <Ionicons name="options-outline" size={16} color="#000" style={styles.sortIcon} />
+        <Ionicons name="funnel-outline" size={16} color="#00A78F" style={styles.sortIcon} />
         <Text style={styles.sortText}>Sort: Default</Text>
       </TouchableOpacity>
     </View>
   );
 
+  const renderMultipleAvatars = (conversations: Conversation[]) => {
+    const maxShow = 3;
+    const toShow = conversations.slice(0, maxShow);
+    const remaining = conversations.length - maxShow;
+
+    return (
+      <View style={styles.multiAvatarContainer}>
+        {toShow.map((convo, index) => {
+          const online = isUserOnline(convo.other_user_last_seen);
+          const hasUnread = convo.unread_count > 0 && convo.last_message_sender_id !== user?.user_id;
+          
+          return (
+            <View 
+              key={convo.conversation_id} 
+              style={[
+                styles.stackedAvatar,
+                index === 0 && styles.stackedAvatarFirst,
+                index === 1 && styles.stackedAvatarSecond,
+                index === 2 && styles.stackedAvatarThird,
+              ]}
+            >
+              <Image source={{ uri: getAvatarUrl(convo) }} style={[styles.smallAvatar, online && styles.avatarOnline]} />
+              {hasUnread && <View style={styles.smallUnreadDot} />}
+              {online && <View style={styles.smallOnlineIndicator} />}
+            </View>
+          );
+        })}
+        {remaining > 0 && (
+          <View style={[styles.stackedAvatar, styles.remainingBadge]}>
+            <Text style={styles.remainingText}>+{remaining}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderConversationItem = ({ item, index }: { item: Conversation, index: number }) => {
-    const hasUnread = item.unread_count > 0;
+    const hasUnread = item.unread_count > 0 && item.last_message_sender_id !== user?.user_id;
+    const online = isUserOnline(item.other_user_last_seen);
 
     const renderContent = () => (
-      <TouchableOpacity
-        style={[styles.conversationItem, hasUnread && styles.conversationItemUnread]}
-        onPress={() => handleConversationPress(item.conversation_id)}
-        activeOpacity={1} 
-      >
+      <TouchableOpacity style={styles.conversationItem} onPress={() => handleConversationPress(item.conversation_id)}>
         <View style={styles.avatarContainer}>
-          <Image 
-            source={{ uri: getAvatarUrl(item) }} 
-            style={styles.avatar}
-          />
+          <Image source={{ uri: getAvatarUrl(item) }} style={[styles.avatar, online && styles.avatarOnline]} />
           {item.is_premium && (
             <View style={styles.premiumLabelContainer}>
               <Text style={styles.premiumLabelText}>PREMIUM</Text>
             </View>
           )}
           {hasUnread && <View style={styles.unreadDot} />}
+          {online && <View style={styles.onlineIndicator} />}
         </View>
 
         <View style={styles.conversationInfo}>
@@ -421,28 +529,15 @@ const MessagesScreen = () => {
             <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
               {getDisplayName(item)}
             </Text>
-            <Text style={styles.messageTime}>
-              {formatTime(item.last_message_time)} 
-            </Text>
+            <Text style={styles.messageTime}>{formatTime(item.last_message_time)}</Text>
           </View>
 
-          <Text
-            style={[
-              styles.messagePreview,
-              hasUnread && styles.messagePreviewUnread,
-            ]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]} numberOfLines={1}>
             {getLastMessagePreview(item)}
           </Text>
         </View>
         
-        {item.listing_image_url && (
-          <Image 
-            source={{ uri: item.listing_image_url }} 
-            style={styles.messageThumbnail} 
-          />
-        )}
+        {item.listing_image_url && <Image source={{ uri: item.listing_image_url }} style={styles.messageThumbnail} />}
       </TouchableOpacity>
     );
 
@@ -454,11 +549,7 @@ const MessagesScreen = () => {
         renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item, index)}
         onSwipeableOpen={(direction) => {
             if (direction === 'right') {
-                row.current.forEach((ref, i) => {
-                    if (i !== index && ref) {
-                        ref.close();
-                    }
-                });
+                row.current.forEach((ref, i) => { if (i !== index && ref) ref.close(); });
             }
         }}
         overshootRight={false}
@@ -467,12 +558,61 @@ const MessagesScreen = () => {
       </Swipeable>
     );
   };
+
+  const renderGroupedItem = (group: GroupedListing) => {
+    const conversationCount = group.conversations.length;
+
+    return (
+      <TouchableOpacity
+        style={styles.conversationItem}
+        onPress={() => {
+          router.push({
+            pathname: '/conversation',
+            params: { listingId: group.listing_id, listingImage: group.listing_image || '' },
+          });
+        }}
+      >
+        {renderMultipleAvatars(group.conversations)}
+
+        <View style={styles.conversationInfo}>
+          <View style={styles.conversationHeader}>
+            <Text style={[styles.userName, group.total_unread > 0 && styles.userNameUnread]} numberOfLines={1}>
+              {group.listing_name}
+            </Text>
+            <Text style={styles.messageTime}>{formatTime(group.latest_time)}</Text>
+          </View>
+
+          <View style={styles.conversationSubHeader}>
+            <Text style={[styles.messagePreview, group.total_unread > 0 && styles.messagePreviewUnread]}>
+              {conversationCount} conversation{conversationCount !== 1 ? 's' : ''}
+            </Text>
+            {group.total_unread > 0 && (
+              <>
+                {/* <Text style={styles.unreadSeparator}> • </Text> */}
+                <Text style={styles.unreadCountText}>{group.total_unread} unread</Text>
+              </>
+            )}
+          </View>
+        </View>
+        
+        {group.listing_image && <Image source={{ uri: group.listing_image }} style={styles.messageThumbnail} />}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderItem = ({ item, index }: { item: any, index: number }) => {
+    if ('conversations' in item) {
+      return renderGroupedItem(item as GroupedListing);
+    } else {
+      return renderConversationItem({ item: item as Conversation, index });
+    }
+  };
   
   const ListHeader = () => (
     <View style={{ backgroundColor: '#fff' }}>
         {renderGroupBy()}
         
-        {pinnedConversations.length > 0 && (
+        {!isGrouped && pinnedConversations.length > 0 && (
             <>
                 {renderSectionHeader("Pinned", "View all")}
                 {pinnedConversations.map((item, index) => (
@@ -481,14 +621,25 @@ const MessagesScreen = () => {
                         {index < pinnedConversations.length - 1 && <View style={styles.separator} />}
                     </React.Fragment>
                 ))}
-                {pinnedConversations.length > 0 && <View style={styles.separator} />}
+                <View style={styles.separator} />
             </>
         )}
         
-        {renderSectionHeader("All")}
-        {renderEditSortButtons()} 
-        
-        {unpinnedConversations.length > 0 && <View style={styles.separator} />}
+        {!isGrouped && (
+          <>
+            {renderSectionHeader("All")}
+            {renderEditSortButtons()} 
+            {unpinnedConversations.length > 0 && <View style={styles.separator} />}
+          </>
+        )}
+
+        {isGrouped && (
+          <>
+            {renderSectionHeader("All")}
+            {renderEditSortButtons()} 
+            {groupedData.length > 0 && <View style={styles.separator} />}
+          </>
+        )}
     </View>
   );
 
@@ -513,26 +664,22 @@ const MessagesScreen = () => {
           </>
         ) : (
           <FlatList
-            data={unpinnedConversations} 
-            renderItem={({ item, index }) => renderConversationItem({ item, index: index + unpinnedStartIndex })} 
-            keyExtractor={(item) => `unpinned-${item.conversation_id.toString()}`}
+            data={isGrouped ? groupedData : unpinnedConversations}
+            renderItem={isGrouped ? renderItem : ({ item, index }) => renderConversationItem({ item, index: index + unpinnedStartIndex })}
+            keyExtractor={(item, index) => 
+              isGrouped 
+                ? ('conversations' in item ? `group-${item.listing_id}` : `conv-${item.conversation_id}`)
+                : `unpinned-${item.conversation_id.toString()}`
+            }
             ListHeaderComponent={ListHeader} 
             ItemSeparatorComponent={() => <View style={styles.separator} />}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#007AFF"
-                colors={["#007AFF"]}
-              />
-            }
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" colors={["#007AFF"]} />}
           />
         )}
       </SafeAreaView>
     </GestureHandlerRootView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -602,7 +749,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5EA', 
   },
   toggleActive: {
-    backgroundColor: "#16A085", 
+    backgroundColor: "#00A78F", 
   },
   toggleCircle: {
     width: 26,
@@ -666,7 +813,7 @@ const styles = StyleSheet.create({
   },
   sectionAction: {
     fontSize: 16,
-    color: '#00A86B', 
+    color: '#00A78F', 
     fontWeight: '500',
   },
   editSortRow: {
@@ -685,13 +832,13 @@ const styles = StyleSheet.create({
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E9F6E9', 
+    backgroundColor: '#E6F7F5', 
     borderRadius: 20, 
-    paddingVertical: 8, 
-    paddingHorizontal: 14, 
+    paddingVertical: 6, 
+    paddingHorizontal: 12, 
   },
   sortIcon: {
-    marginRight: 4, 
+    marginRight: 6, 
   },
   editText: {
     fontSize: 16,
@@ -700,9 +847,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sortText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000', 
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#00A78F', 
   },
   conversationItem: {
     flexDirection: "row",
@@ -710,9 +857,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: "#fff", 
     alignItems: 'center',
-  },
-  conversationItemUnread: {
-    backgroundColor: '#E6F7E6', 
   },
   separator: {
     height: 1,
@@ -730,13 +874,17 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     backgroundColor: "#E5E5EA",
   },
+  avatarOnline: {
+    borderWidth: 3,
+    borderColor: '#00A78F',
+  },
   premiumLabelContainer: {
     position: 'absolute',
     bottom: -4,
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderColor: "#16A085",
+    borderColor: "#00A78F",
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 4,
@@ -758,6 +906,17 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#00A86B', 
     borderWidth: 1,
+    borderColor: '#fff',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#00A78F',
+    borderWidth: 2,
     borderColor: '#fff',
   },
   conversationInfo: {
@@ -798,6 +957,80 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginLeft: 10,
     backgroundColor: '#E5E5EA',
+  },
+  multiAvatarContainer: {
+    width: 56,
+    height: 56,
+    marginRight: 12,
+    position: 'relative',
+  },
+  stackedAvatar: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  stackedAvatarFirst: {
+    top: 0,
+    left: 10,
+    zIndex: 3,
+  },
+  stackedAvatarSecond: {
+    top: 10,
+    left: 0,
+    zIndex: 2,
+  },
+  stackedAvatarThird: {
+    top: 10,
+    right: 0,
+    zIndex: 1,
+  },
+  smallAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E5E5EA',
+  },
+  smallUnreadDot: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#00A86B',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  smallOnlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#00A78F',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  remainingBadge: {
+    top: 20,
+    left: 20,
+    backgroundColor: '#666',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 0,
+  },
+  remainingText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  expandedContainer: {
+    backgroundColor: '#F8F9FA',
+    paddingLeft: 20,
   },
   swipeActionsContainer: {
       flexDirection: 'row',

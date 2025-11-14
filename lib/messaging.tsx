@@ -1,69 +1,113 @@
-// lib/messaging.ts - Complete fix for all messaging issues
+// lib/messaging.ts - Fixed to prevent duplicate conversations
 
 import { supabase } from './Supabase';
 
 /**
  * Get or create a conversation between two users
- * EMERGENCY FIX: Simple version with no fancy error handling
+ * If productId is provided, update the conversation's listing_id
  */
 export const getOrCreateConversation = async (
   userId1: number,
-  userId2: number
+  userId2: number,
+  productId?: number | null
 ): Promise<number | null> => {
-  // Step 1: Get user1's conversations
-  const { data: user1Convos } = await supabase
-    .from('conversation_participants')
-    .select('conversation_id')
-    .eq('user_id', userId1);
+  console.log('🔍 Getting/creating conversation:', { userId1, userId2, productId });
 
-  if (!user1Convos || user1Convos.length === 0) {
-    // User has no conversations, create new one
-    return await createNewConversation(userId1, userId2);
+  try {
+    // Step 1: Get all conversations for user1
+    const { data: user1Convos, error: user1Error } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', userId1);
+
+    if (user1Error) throw user1Error;
+
+    if (!user1Convos || user1Convos.length === 0) {
+      // User has no conversations, create new one
+      console.log('📝 No existing conversations, creating new one');
+      return await createNewConversation(userId1, userId2, productId);
+    }
+
+    // Step 2: Check if user2 is in any of these conversations
+    const conversationIds = user1Convos.map(c => c.conversation_id);
+    
+    const { data: user2Convos, error: user2Error } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', userId2)
+      .in('conversation_id', conversationIds);
+
+    if (user2Error) throw user2Error;
+
+    // Step 3: If conversation exists between these users, use it
+    if (user2Convos && user2Convos.length > 0) {
+      const existingConvoId = user2Convos[0].conversation_id;
+      console.log('✅ Found existing conversation:', existingConvoId);
+      
+      // Update the listing_id if productId is provided
+      if (productId) {
+        console.log('📝 Updating conversation with new product:', productId);
+        await supabase
+          .from('conversations')
+          .update({ listing_id: productId })
+          .eq('conversation_id', existingConvoId);
+      }
+      
+      return existingConvoId;
+    }
+
+    // Step 4: No conversation exists, create new one
+    console.log('📝 No conversation found, creating new one');
+    return await createNewConversation(userId1, userId2, productId);
+    
+  } catch (error) {
+    console.error('❌ Error in getOrCreateConversation:', error);
+    return null;
   }
-
-  // Step 2: Check if user2 is in any of them
-  const conversationIds = user1Convos.map(c => c.conversation_id);
-  
-  const { data: user2Convos } = await supabase
-    .from('conversation_participants')
-    .select('conversation_id')
-    .eq('user_id', userId2)
-    .in('conversation_id', conversationIds);
-
-  // Step 3: If found, return it
-  if (user2Convos && user2Convos.length > 0) {
-    return user2Convos[0].conversation_id;
-  }
-
-  // Step 4: Create new conversation
-  return await createNewConversation(userId1, userId2);
 };
 
 /**
  * Helper function to create a new conversation with participants
- * EMERGENCY FIX: Minimal error handling
  */
-async function createNewConversation(userId1: number, userId2: number): Promise<number | null> {
-  // Create conversation
-  const { data: newConvo } = await supabase
-    .from('conversations')
-    .insert({ listing_id: null })
-    .select('conversation_id')
-    .single();
+async function createNewConversation(
+  userId1: number, 
+  userId2: number, 
+  productId?: number | null
+): Promise<number | null> {
+  console.log('📝 Creating new conversation with product:', productId);
 
-  if (!newConvo) return null;
+  try {
+    // Create conversation
+    const { data: newConvo, error: convoError } = await supabase
+      .from('conversations')
+      .insert({ listing_id: productId || null })
+      .select('conversation_id')
+      .single();
 
-  const conversationId = newConvo.conversation_id;
+    if (convoError) throw convoError;
+    if (!newConvo) {
+      console.error('❌ Failed to create conversation');
+      return null;
+    }
 
-  // Add participants
-  await supabase
-    .from('conversation_participants')
-    .insert([
-      { conversation_id: conversationId, user_id: userId1, is_pinned: false },
-      { conversation_id: conversationId, user_id: userId2, is_pinned: false },
-    ]);
+    const conversationId = newConvo.conversation_id;
+    console.log('✅ Created conversation:', conversationId);
 
-  return conversationId;
+    // Add participants
+    const { error: participantsError } = await supabase
+      .from('conversation_participants')
+      .insert([
+        { conversation_id: conversationId, user_id: userId1, is_pinned: false },
+        { conversation_id: conversationId, user_id: userId2, is_pinned: false },
+      ]);
+
+    if (participantsError) throw participantsError;
+
+    return conversationId;
+  } catch (error) {
+    console.error('❌ Error creating conversation:', error);
+    return null;
+  }
 }
 
 /**
@@ -120,35 +164,6 @@ export const getConversationMessages = async (conversationId: number) => {
 /**
  * Send a new message
  */
-
-
-export const updateConversationPinStatus = async (
-  conversationId: number,
-  userId: number, // The user whose status is being updated
-  isPinned: boolean
-): Promise<boolean> => {
-  try {
-    // 1. Update the is_pinned status in the conversation_participants table
-    const { error } = await supabase
-      .from('conversation_participants')
-      .update({ is_pinned: isPinned })
-      .match({ 
-        conversation_id: conversationId, 
-        user_id: userId 
-      });
-
-    if (error) {
-      console.error('❌ Error updating pin status in conversation_participants:', error);
-      return false;
-    }
-
-    console.log(`✅ Conversation ${conversationId} ${isPinned ? 'pinned' : 'unpinned'} for user ${userId}.`);
-    return true;
-  } catch (error) {
-    console.error('❌ Exception updating pin status:', error);
-    return false;
-  }
-};
 export const sendMessage = async (
   conversationId: number,
   senderId: number,
@@ -175,8 +190,7 @@ export const sendMessage = async (
 };
 
 /**
- * Mark messages as read - FIXED VERSION using database function
- * This marks ALL unread messages in the conversation that were sent by the OTHER user
+ * Mark messages as read
  */
 export const markConversationAsRead = async (
   conversationId: number,
@@ -186,7 +200,6 @@ export const markConversationAsRead = async (
     console.log('📖 Marking messages as read via database function');
     console.log('📖 Conversation:', conversationId, 'User:', currentUserId);
 
-    // Use the database function
     const { data, error } = await supabase
       .rpc('mark_messages_as_read', {
         p_conversation_id: conversationId,
@@ -203,5 +216,35 @@ export const markConversationAsRead = async (
   } catch (error) {
     console.error('❌ Error in markConversationAsRead:', error);
     return null;
+  }
+};
+
+/**
+ * Update conversation pin status
+ */
+export const updateConversationPinStatus = async (
+  conversationId: number,
+  userId: number,
+  isPinned: boolean
+): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('conversation_participants')
+      .update({ is_pinned: isPinned })
+      .match({ 
+        conversation_id: conversationId, 
+        user_id: userId 
+      });
+
+    if (error) {
+      console.error('❌ Error updating pin status:', error);
+      return false;
+    }
+
+    console.log(`✅ Conversation ${conversationId} ${isPinned ? 'pinned' : 'unpinned'} for user ${userId}.`);
+    return true;
+  } catch (error) {
+    console.error('❌ Exception updating pin status:', error);
+    return false;
   }
 };
