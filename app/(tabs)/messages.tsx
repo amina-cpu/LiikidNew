@@ -20,6 +20,7 @@ import {
   Swipeable,
 } from "react-native-gesture-handler";
 import {
+  markConversationAsRead,
   updateConversationPinStatus
 } from "../../lib/messaging";
 import { supabase } from "../../lib/Supabase";
@@ -66,11 +67,14 @@ const MessagesScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
-  const [isGrouped, setIsGrouped] = useState(false); 
+  const [isGrouped, setIsGrouped] = useState(false);
+  
+  // ✅ NEW: Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedConversations, setSelectedConversations] = useState<Set<number>>(new Set());
   
   const toggleAnim = useRef(new Animated.Value(0)).current;
 
-  // Load grouping preference
   useEffect(() => {
     const loadGroupingPreference = async () => {
       try {
@@ -97,7 +101,6 @@ const MessagesScreen = () => {
     const newValue = !isGrouped;
     setIsGrouped(newValue);
     
-    // Save preference
     try {
       await AsyncStorage.setItem('messages_grouped_by_listing', newValue.toString());
     } catch (error) {
@@ -109,6 +112,94 @@ const MessagesScreen = () => {
     inputRange: [0, 1],
     outputRange: [2, 22], 
   });
+
+  // ✅ NEW: Toggle selection
+  const toggleSelection = (conversationId: number) => {
+    setSelectedConversations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
+      } else {
+        newSet.add(conversationId);
+      }
+      return newSet;
+    });
+  };
+
+  // ✅ NEW: Select all
+  const selectAll = () => {
+    const allIds = new Set(conversations.map(c => c.conversation_id));
+    setSelectedConversations(allIds);
+  };
+
+  // ✅ NEW: Deselect all
+  const deselectAll = () => {
+    setSelectedConversations(new Set());
+  };
+
+  // ✅ NEW: Delete selected conversations
+  const deleteSelectedConversations = async () => {
+    if (selectedConversations.size === 0) return;
+
+    Alert.alert(
+      'Delete Conversations',
+      `Delete ${selectedConversations.size} conversation${selectedConversations.size > 1 ? 's' : ''}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const idsToDelete = Array.from(selectedConversations);
+              
+              for (const convId of idsToDelete) {
+                await supabase.from('messages').delete().eq('conversation_id', convId);
+                await supabase.from('conversation_participants').delete().eq('conversation_id', convId);
+                await supabase.from('conversations').delete().eq('conversation_id', convId);
+              }
+
+              setConversations(prev => 
+                prev.filter(c => !selectedConversations.has(c.conversation_id))
+              );
+              
+              setSelectedConversations(new Set());
+              setIsEditMode(false);
+            } catch (error) {
+              console.error('Error deleting conversations:', error);
+              Alert.alert('Error', 'Failed to delete conversations.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // ✅ NEW: Mark selected as read
+  const markSelectedAsRead = async () => {
+    if (selectedConversations.size === 0 || !user?.user_id) return;
+
+    try {
+      const idsToUpdate = Array.from(selectedConversations);
+      
+      for (const convId of idsToUpdate) {
+        await markConversationAsRead(convId, user.user_id);
+      }
+
+      setConversations(prev =>
+        prev.map(c => 
+          selectedConversations.has(c.conversation_id) 
+            ? { ...c, unread_count: 0 } 
+            : c
+        )
+      );
+      
+      setSelectedConversations(new Set());
+      setIsEditMode(false);
+    } catch (error) {
+      console.error("Error marking as read:", error);
+    }
+  };
 
   const deleteConversation = async (conversationId: number) => {
     try {
@@ -202,6 +293,8 @@ const MessagesScreen = () => {
     try {
       if (!isRefreshing) setIsLoading(true);
       
+      console.log('🔄 Loading conversations for user:', user.user_id);
+      
       const { data: conversationsData, error: conversationsError } = await supabase
         .from('conversation_list_view')
         .select('*')
@@ -238,7 +331,9 @@ const MessagesScreen = () => {
       );
 
       setConversations(conversationsWithImages as Conversation[]);
+      console.log('✅ Conversations loaded successfully');
     } catch (error) {
+      console.error('❌ Error loading conversations:', error);
       Alert.alert('Error', 'Failed to load messages.');
       setConversations([]);
     } finally {
@@ -249,8 +344,9 @@ const MessagesScreen = () => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log('📱 Messages screen focused - reloading conversations');
       loadConversations();
-      fetchUnreadNotificationsCount(); 
+      fetchUnreadNotificationsCount();
     }, [loadConversations, fetchUnreadNotificationsCount])
   );
 
@@ -290,25 +386,37 @@ const MessagesScreen = () => {
     return diffMinutes < 5;
   };
   
-  const handleConversationPress = async (conversationId: number) => { 
-    if (user?.user_id) {
-      setConversations(prev => prev.map(c => c.conversation_id === conversationId ? { ...c, unread_count: 0 } : c));
+  const handleConversationPress = async (conversationId: number) => {
+    // ✅ If in edit mode, toggle selection instead
+    if (isEditMode) {
+      toggleSelection(conversationId);
+      return;
     }
-    router.push(`/chat/${conversationId}`); 
+
+    console.log('👆 Conversation pressed:', conversationId);
+    
+    if (user?.user_id) {
+      await markConversationAsRead(conversationId, user.user_id);
+    }
+    
+    router.push(`/chat/${conversationId}`);
   };
   
   const handleNotificationPress = () => { 
     router.push('/(tabs)/notifications'); 
   };
 
+  // ✅ NEW: Handle "View All" for pinned conversations
+  const handleViewAllPinned = () => {
+    router.push('/pinned');
+  };
+
   const groupConversationsByListing = async (): Promise<(GroupedListing | Conversation)[]> => {
     const grouped: { [key: number]: GroupedListing } = {};
     const noListing: Conversation[] = [];
     
-    // Collect all unique listing IDs
     const listingIds = [...new Set(conversations.map(c => c.listing_id).filter(Boolean))] as number[];
     
-    // Fetch product names for all listings
     const productNames: { [key: number]: string } = {};
     if (listingIds.length > 0) {
       try {
@@ -363,6 +471,9 @@ const MessagesScreen = () => {
   
   const pinnedConversations = sortedConversations.filter(c => c.is_pinned);
   const unpinnedConversations = sortedConversations.filter(c => !c.is_pinned);
+  
+  // ✅ Show only first 3 pinned conversations
+  const displayedPinnedConversations = pinnedConversations.slice(0, 3);
   
   const [groupedData, setGroupedData] = useState<(GroupedListing | Conversation)[]>([]);
 
@@ -432,41 +543,97 @@ const MessagesScreen = () => {
         </TouchableOpacity>
         <Text style={styles.groupByText}>Group by listing</Text>
       </View>
-{/*       
-      <View style={styles.premiumRow}>
-        <Ionicons name="diamond-outline" size={16} color="#7B4DFF" />
-        <Text style={styles.premiumText}>Get faster responses.</Text>
-        <TouchableOpacity style={styles.tryFreeButton}>
-          <Text style={styles.tryFreeText}>Try for FREE</Text>
-        </TouchableOpacity>
-      </View> */}
     </View>
   );
 
-  const renderSectionHeader = (title: string, actionText?: string) => (
+  const renderSectionHeader = (title: string, actionText?: string, onActionPress?: () => void) => (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleContainer}>
         {title === "Pinned" && <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />}
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
-      {actionText && (
-        <TouchableOpacity>
+      {actionText && onActionPress && (
+        <TouchableOpacity onPress={onActionPress}>
           <Text style={styles.sectionAction}>{actionText}</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 
+  // ✅ NEW: Edit/Sort buttons with edit mode functionality
   const renderEditSortButtons = () => (
     <View style={styles.editSortRow}>
-      <TouchableOpacity style={styles.editButton}>
-        <Ionicons name="create-outline" size={20} color="#000" />
-        <Text style={styles.editText}>Edit</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity style={styles.sortButton}>
-        <Ionicons name="funnel-outline" size={16} color="#00A78F" style={styles.sortIcon} />
-        <Text style={styles.sortText}>Sort: Default</Text>
+      {!isEditMode ? (
+        <>
+          <TouchableOpacity 
+            style={styles.editButton}
+            onPress={() => setIsEditMode(true)}
+          >
+            <Ionicons name="create-outline" size={20} color="#000" />
+            <Text style={styles.editText}>Edit</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.sortButton}>
+            <Ionicons name="funnel-outline" size={16} color="#00A78F" style={styles.sortIcon} />
+            <Text style={styles.sortText}>Sort: Default</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
+    </View>
+  );
+
+  // ✅ NEW: Edit mode bar
+  const renderEditModeBar = () => (
+    <View style={styles.editModeBar}>
+      <View style={styles.editModeLeft}>
+        <TouchableOpacity
+          style={styles.selectAllButton}
+          onPress={() => {
+            if (selectedConversations.size === conversations.length) {
+              deselectAll();
+            } else {
+              selectAll();
+            }
+          }}
+        >
+          <View style={[
+            styles.checkbox, 
+            selectedConversations.size === conversations.length && styles.checkboxSelected
+          ]}>
+            {selectedConversations.size === conversations.length && (
+              <Ionicons name="checkmark" size={18} color="white" />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={deleteSelectedConversations}
+          disabled={selectedConversations.size === 0}
+          style={[styles.actionButton, selectedConversations.size === 0 && styles.actionButtonDisabled]}
+        >
+          <Text style={[styles.actionButtonText, selectedConversations.size === 0 && styles.actionButtonTextDisabled]}>
+            Delete
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={markSelectedAsRead}
+          disabled={selectedConversations.size === 0}
+          style={[styles.actionButton, selectedConversations.size === 0 && styles.actionButtonDisabled]}
+        >
+          <Text style={[styles.actionButtonText, selectedConversations.size === 0 && styles.actionButtonTextDisabled]}>
+            Mark read
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        onPress={() => {
+          setIsEditMode(false);
+          setSelectedConversations(new Set());
+        }}
+      >
+        <Text style={styles.doneButton}>Done</Text>
       </TouchableOpacity>
     </View>
   );
@@ -510,36 +677,58 @@ const MessagesScreen = () => {
   const renderConversationItem = ({ item, index }: { item: Conversation, index: number }) => {
     const hasUnread = item.unread_count > 0 && item.last_message_sender_id !== user?.user_id;
     const online = isUserOnline(item.other_user_last_seen);
+    const isSelected = selectedConversations.has(item.conversation_id);
 
     const renderContent = () => (
-      <TouchableOpacity style={styles.conversationItem} onPress={() => handleConversationPress(item.conversation_id)}>
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: getAvatarUrl(item) }} style={[styles.avatar, online && styles.avatarOnline]} />
-          {item.is_premium && (
-            <View style={styles.premiumLabelContainer}>
-              <Text style={styles.premiumLabelText}>PREMIUM</Text>
+      <TouchableOpacity 
+        style={[
+          styles.conversationItem,
+          hasUnread && styles.conversationItemUnread,
+          isEditMode && isSelected && styles.selected
+        ]} 
+        onPress={() => handleConversationPress(item.conversation_id)}
+      >
+        <View style={styles.itemContent}>
+          {isEditMode && (
+            <View style={styles.checkboxContainer}>
+              <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                {isSelected && <Ionicons name="checkmark" size={18} color="white" />}
+              </View>
             </View>
           )}
-          {hasUnread && <View style={styles.unreadDot} />}
-          {online && <View style={styles.onlineIndicator} />}
-        </View>
 
-        <View style={styles.conversationInfo}>
-          <View style={styles.conversationHeader}>
-            <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
-              {getDisplayName(item)}
-            </Text>
-            <Text style={styles.messageTime}>{formatTime(item.last_message_time)}</Text>
+          <View style={styles.avatarContainer}>
+            <Image source={{ uri: getAvatarUrl(item) }} style={[styles.avatar, online && styles.avatarOnline]} />
+            {item.is_premium && (
+              <View style={styles.premiumLabelContainer}>
+                <Text style={styles.premiumLabelText}>PREMIUM</Text>
+              </View>
+            )}
+            {hasUnread && !isEditMode && <View style={styles.unreadDot} />}
+            {online && <View style={styles.onlineIndicator} />}
           </View>
 
-          <Text style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]} numberOfLines={1}>
-            {getLastMessagePreview(item)}
-          </Text>
+          <View style={styles.conversationInfo}>
+            <View style={styles.conversationHeader}>
+              <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
+                {getDisplayName(item)}
+              </Text>
+              <Text style={styles.messageTime}>{formatTime(item.last_message_time)}</Text>
+            </View>
+
+            <Text style={[styles.messagePreview, hasUnread && styles.messagePreviewUnread]} numberOfLines={1}>
+              {getLastMessagePreview(item)}
+            </Text>
+          </View>
+          
+          {item.listing_image_url && <Image source={{ uri: item.listing_image_url }} style={styles.messageThumbnail} />}
         </View>
-        
-        {item.listing_image_url && <Image source={{ uri: item.listing_image_url }} style={styles.messageThumbnail} />}
       </TouchableOpacity>
     );
+
+    if (isEditMode) {
+      return renderContent();
+    }
 
     return (
       <Swipeable
@@ -588,7 +777,6 @@ const MessagesScreen = () => {
             </Text>
             {group.total_unread > 0 && (
               <>
-                {/* <Text style={styles.unreadSeparator}> • </Text> */}
                 <Text style={styles.unreadCountText}>{group.total_unread} unread</Text>
               </>
             )}
@@ -612,13 +800,13 @@ const MessagesScreen = () => {
     <View style={{ backgroundColor: '#fff' }}>
         {renderGroupBy()}
         
-        {!isGrouped && pinnedConversations.length > 0 && (
+        {!isGrouped && displayedPinnedConversations.length > 0 && (
             <>
-                {renderSectionHeader("Pinned", "View all")}
-                {pinnedConversations.map((item, index) => (
+                {renderSectionHeader("Pinned", pinnedConversations.length > 3 ? "View all" : undefined, handleViewAllPinned)}
+                {displayedPinnedConversations.map((item, index) => (
                     <React.Fragment key={`pinned-item-${item.conversation_id}`}>
                         {renderConversationItem({ item, index })}
-                        {index < pinnedConversations.length - 1 && <View style={styles.separator} />}
+                        {index < displayedPinnedConversations.length - 1 && <View style={styles.separator} />}
                     </React.Fragment>
                 ))}
                 <View style={styles.separator} />
@@ -649,6 +837,8 @@ const MessagesScreen = () => {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
         {renderHeader()}
+        
+        {isEditMode && renderEditModeBar()}
 
         {isLoading && !refreshing ? (
           <View style={styles.loadingContainer}>
@@ -680,6 +870,7 @@ const MessagesScreen = () => {
     </GestureHandlerRootView>
   );
 };
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -764,32 +955,67 @@ const styles = StyleSheet.create({
     position: 'absolute', 
     left: 2, 
   },
-  premiumRow: {
+  editModeBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F7F2FF', 
-    borderRadius: 20,
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8F8F8',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  editModeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectAllButton: {
+    padding: 4,
+    marginRight: 12,
+  },
+  actionButton: {
     paddingHorizontal: 12,
-    marginTop: 8,
+    paddingVertical: 6,
   },
-  premiumText: {
-    marginLeft: 6,
-    fontSize: 14,
+  actionButtonDisabled: {
+    opacity: 0.4,
+  },
+  actionButtonText: {
+    fontSize: 15,
+    color: '#000',
     fontWeight: '500',
-    color: '#7B4DFF', 
   },
-  tryFreeButton: {
-    backgroundColor: '#7B4DFF', 
-    borderRadius: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    marginLeft: 'auto', 
+  actionButtonTextDisabled: {
+    color: '#999',
   },
-  tryFreeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
+  doneButton: {
+    fontSize: 16,
+    color: '#00A78F',
+    fontWeight: '600',
+  },
+  checkboxContainer: {
+    marginRight: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ccc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'white',
+  },
+  checkboxSelected: {
+    backgroundColor: '#00A78F',
+    borderColor: '#00A78F',
+  },
+  selected: {
+    backgroundColor: '#E8F5F3',
+  },
+  itemContent: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   pinIcon: {
     marginRight: 6,
@@ -857,6 +1083,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: "#fff", 
     alignItems: 'center',
+  },
+  conversationItemUnread: {
+    backgroundColor: '#E8F5F3',
   },
   separator: {
     height: 1,
@@ -929,6 +1158,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 2,
   },
+  conversationSubHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   userName: {
     fontSize: 16,
     fontWeight: "400",
@@ -950,6 +1183,12 @@ const styles = StyleSheet.create({
   messagePreviewUnread: {
     fontWeight: "500",
     color: "#000",
+  },
+  unreadCountText: {
+    fontSize: 13,
+    color: '#00A78F',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   messageThumbnail: {
     width: 56,
@@ -1027,10 +1266,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 11,
     fontWeight: '700',
-  },
-  expandedContainer: {
-    backgroundColor: '#F8F9FA',
-    paddingLeft: 20,
   },
   swipeActionsContainer: {
       flexDirection: 'row',

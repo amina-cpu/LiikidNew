@@ -152,7 +152,6 @@ const ChatScreen = () => {
     loadMessages();
   }, [fetchConversationInfo, loadMessages]);
 
-  // Real-time subscription for new messages
   useEffect(() => {
     if (!conversationId) return;
 
@@ -169,7 +168,6 @@ const ChatScreen = () => {
         async (payload) => {
           const newMsg = payload.new as any;
 
-          // Skip if this is our own message (already added optimistically)
           if (newMsg.sender_id === user?.user_id) {
             return;
           }
@@ -197,7 +195,6 @@ const ChatScreen = () => {
 
           setMessages((prev) => [...prev, formattedMessage]);
           
-          // Mark as read if we're in the conversation
           if (user?.user_id) {
             await markConversationAsRead(conversationId, user.user_id);
           }
@@ -214,7 +211,6 @@ const ChatScreen = () => {
         (payload) => {
           const updatedMsg = payload.new as any;
           
-          // Update message read status
           setMessages((prev) =>
             prev.map((msg) =>
               msg.message_id === updatedMsg.message_id
@@ -229,6 +225,16 @@ const ChatScreen = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [conversationId, user?.user_id]);
+
+  useEffect(() => {
+    const markAsReadOnFocus = async () => {
+      if (conversationId && user?.user_id) {
+        await markConversationAsRead(conversationId, user.user_id);
+      }
+    };
+
+    markAsReadOnFocus();
   }, [conversationId, user?.user_id]);
 
   const handleTogglePin = async () => {
@@ -258,7 +264,6 @@ const ChatScreen = () => {
     setInputHeight(40);
     setIsSending(true);
 
-    // Create optimistic message
     const tempId = Date.now();
     const optimisticMessage: Message = {
       message_id: tempId,
@@ -275,13 +280,11 @@ const ChatScreen = () => {
       },
     };
 
-    // Add to UI immediately
     setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
       const sentMessage = await sendMessage(conversationId, user.user_id, messageText);
       
-      // Replace optimistic message with real one
       if (sentMessage) {
         setMessages((prev) =>
           prev.map((msg) =>
@@ -297,7 +300,6 @@ const ChatScreen = () => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      // Remove optimistic message on error
       setMessages((prev) => prev.filter((msg) => msg.message_id !== tempId));
       setNewMessage(messageText);
     } finally {
@@ -372,78 +374,78 @@ const ChatScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.stickyHeader}>
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#00A78F" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Message</Text>
-          <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconButton} onPress={handleTogglePin}>
-              <Ionicons 
-                name={conversationInfo?.is_pinned ? "pin" : "pin-outline"} 
-                size={22} 
-                color="#00A78F" 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton}>
-              <Ionicons name="ellipsis-horizontal" size={22} color="#00A78F" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.userInfoCard}
-          onPress={() => {
-            if (conversationInfo?.other_user_id) {
-              router.push(`/someonesProfile?userId=${conversationInfo.other_user_id}`);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.userInfoLeft}>
-            {conversationInfo?.other_user_avatar ? (
-              <Image
-                source={{ uri: conversationInfo.other_user_avatar }}
-                style={styles.userAvatar}
-              />
-            ) : (
-              <View style={styles.userAvatarPlaceholder}>
-                <Text style={styles.userAvatarText}>
-                  {conversationInfo?.other_user_name ? conversationInfo.other_user_name.charAt(0).toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            <View style={styles.userDetails}>
-              <Text style={styles.userName}>
-                {conversationInfo?.other_user_name || 'User'}
-              </Text>
-              <Text style={styles.userStatus}>Active in the last day</Text>
-              <Text style={styles.userLocation}>Columbia, MD</Text>
-            </View>
-          </View>
-
-          {conversationInfo?.listing_image ? (
-            <View style={styles.productThumbnail}>
-              <Image
-                source={{ uri: conversationInfo.listing_image }}
-                style={styles.productImage}
-              />
-              <View style={styles.productPriceTag}>
-                <Text style={styles.productPrice}>
-                  ${formatPrice(conversationInfo.listing_price || 0)}
-                </Text>
-              </View>
-            </View>
-          ) : null}
-        </TouchableOpacity>
-      </View>
-
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        <View style={styles.stickyHeader}>
+          <View style={styles.topBar}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="#00A78F" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Message</Text>
+            <View style={styles.headerRight}>
+              <TouchableOpacity style={styles.iconButton} onPress={handleTogglePin}>
+                <Ionicons 
+                  name={conversationInfo?.is_pinned ? "pin" : "pin-outline"} 
+                  size={22} 
+                  color="#00A78F" 
+                />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconButton}>
+                <Ionicons name="ellipsis-horizontal" size={22} color="#00A78F" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.userInfoCard}
+            onPress={() => {
+              if (conversationInfo?.other_user_id) {
+                router.push(`/someonesProfile?userId=${conversationInfo.other_user_id}`);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.userInfoLeft}>
+              {conversationInfo?.other_user_avatar ? (
+                <Image
+                  source={{ uri: conversationInfo.other_user_avatar }}
+                  style={styles.userAvatar}
+                />
+              ) : (
+                <View style={styles.userAvatarPlaceholder}>
+                  <Text style={styles.userAvatarText}>
+                    {conversationInfo?.other_user_name ? conversationInfo.other_user_name.charAt(0).toUpperCase() : 'U'}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.userDetails}>
+                <Text style={styles.userName}>
+                  {conversationInfo?.other_user_name || 'User'}
+                </Text>
+                <Text style={styles.userStatus}>Active in the last day</Text>
+                <Text style={styles.userLocation}>Columbia, MD</Text>
+              </View>
+            </View>
+
+            {conversationInfo?.listing_image ? (
+              <View style={styles.productThumbnail}>
+                <Image
+                  source={{ uri: conversationInfo.listing_image }}
+                  style={styles.productImage}
+                />
+                <View style={styles.productPriceTag}>
+                  <Text style={styles.productPrice}>
+                    ${formatPrice(conversationInfo.listing_price || 0)}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
+
         <FlatList
           ref={flatListRef}
           data={messages}

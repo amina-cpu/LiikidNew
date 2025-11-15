@@ -18,7 +18,7 @@ import {
     View,
 } from 'react-native';
 import { supabase } from '../../lib/Supabase';
-import i18n from '../../lib/i18n'; 
+import i18n from '../../lib/i18n';
 import { useAuth } from '../context/AuthContext';
 
 const CARD_WIDTH = Dimensions.get("window").width / 2 - 12;
@@ -713,6 +713,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         paddingBottom:50,
+         marginBottom:50,
         // *** CHANGE 1: Main screen background to white (#FFFFFF) ***
         backgroundColor: '#FFFFFF', 
     },

@@ -304,6 +304,7 @@ export default function TabLayout() {
       <Tabs.Screen name="settings" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="filters" options={{ headerShown: false, href: null }} />
        <Tabs.Screen name="conversation" options={{ headerShown: false, href: null }} />
+        <Tabs.Screen name="pinned" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="search" options={{ headerShown: false, href: null }} />
       <Tabs.Screen name="product_detail" options={{ href: null }} />
       <Tabs.Screen name="category" options={{ href: null }} />

@@ -98,50 +98,124 @@ const getCategoryTranslation = (catName: string): string => {
 };
 
 const getSubcategoryTranslation = (subName: string): string => {
+  if (!subName) return '';
+  
   const normalized = subName.trim().toLowerCase();
 
   const subcategoryMap: { [key: string]: string } = {
+    // Food
+    'meat & fish': 'MeatAndFish',
+    'meat and fish': 'MeatAndFish',
+    'milk products': 'MilkProducts',
+    'dairy': 'MilkProducts',
+    'nuts & seeds': 'NutsAndSeeds',
+    'nuts and seeds': 'NutsAndSeeds',
+    'oils': 'Oils',
+    'oil': 'Oils',
+    'pasta': 'Pasta',
+    'sauces - spices - condiments': 'SaucesSpicesCondiments',
+    'sauces spices condiments': 'SaucesSpicesCondiments',
+    'seeds - rice - cereals': 'SeedsRiceCereals',
+    'seeds rice cereals': 'SeedsRiceCereals',
+    'sugars & sweet products': 'SugarsAndSweetProducts',
+    'sugars and sweet products': 'SugarsAndSweetProducts',
+    'wheat and flour': 'WheatAndFlour',
+    'wheat & flour': 'WheatAndFlour',
+    'fruits & vegetables': 'FruitsAndVegetables',
+    'fruits and vegetables': 'FruitsAndVegetables',
+    'beverages': 'Beverages',
+    'drinks': 'Beverages',
+    
+    // Phones & Accessories
     'phones': 'Phones',
+    'phone': 'Phones',
     'phone cases': 'PhoneCases',
+    'cases': 'PhoneCases',
     'chargers & cables': 'ChargersAndCables',
+    'chargers and cables': 'ChargersAndCables',
+    'charger': 'ChargersAndCables',
     'headphones & earphones': 'HeadphonesAndEarphones',
+    'headphones and earphones': 'HeadphonesAndEarphones',
+    'headphones': 'HeadphonesAndEarphones',
     'screen protectors': 'ScreenProtectors',
+    'screen protector': 'ScreenProtectors',
     'power banks': 'PowerBanks',
+    'power bank': 'PowerBanks',
+    
+    // Computers
     'laptops': 'Laptops',
+    'laptop': 'Laptops',
     'desktop computers': 'DesktopComputers',
+    'desktop': 'DesktopComputers',
     'tablets': 'Tablets',
+    'tablet': 'Tablets',
     'monitors': 'Monitors',
+    'monitor': 'Monitors',
     'keyboards & mice': 'KeyboardsAndMice',
+    'keyboards and mice': 'KeyboardsAndMice',
+    'keyboard': 'KeyboardsAndMice',
     'printers & scanners': 'PrintersAndScanners',
+    'printers and scanners': 'PrintersAndScanners',
+    'printer': 'PrintersAndScanners',
+    
+    // Vehicles
     'cars': 'Cars',
+    'car': 'Cars',
     'motorcycles': 'Motorcycles',
+    'motorcycle': 'Motorcycles',
     'trucks & vans': 'TrucksAndVans',
+    'trucks and vans': 'TrucksAndVans',
+    'truck': 'TrucksAndVans',
     'bicycles': 'Bicycles',
+    'bicycle': 'Bicycles',
+    
+    // Real Estate
     'apartments': 'Apartments',
+    'apartment': 'Apartments',
     'houses & villas': 'HousesAndVillas',
+    'houses and villas': 'HousesAndVillas',
+    'house': 'HousesAndVillas',
     'commercial properties': 'CommercialProperties',
+    'commercial property': 'CommercialProperties',
     'land': 'Land',
+    
+    // Furniture
     'living room': 'LivingRoom',
     'bedroom': 'Bedroom',
     'office furniture': 'OfficeFurniture',
+    'office': 'OfficeFurniture',
     'dining room': 'DiningRoom',
     'outdoor furniture': 'OutdoorFurniture',
+    'outdoor': 'OutdoorFurniture',
+    
+    // Appliances
     'refrigerators': 'Refrigerators',
+    'refrigerator': 'Refrigerators',
+    'fridge': 'Refrigerators',
     'washing machine': 'WashingMachine',
+    'washing machines': 'WashingMachine',
     'full pack': 'FullPack',
   };
 
   const mappedKey = subcategoryMap[normalized];
 
-  if (!mappedKey) return subName;
+  if (!mappedKey) {
+    if (__DEV__) {
+      console.log('⚠️ No mapping found for subcategory:', normalized);
+    }
+    return subName;
+  }
 
   const translationKey = `subcategories.${mappedKey}`;
   const translated = i18n.t(translationKey);
   
+  if (__DEV__) {
+    console.log('✅ Translation:', subName, '->', translated);
+  }
+  
   // Return translated text or original name if translation not found
   return translated !== translationKey ? translated : subName;
 };
-
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
 const getCategoryIcon = (name: string, size = 24, color = "#16A085") => {
