@@ -169,6 +169,43 @@ someonesProfile: {
   sellerNotAvailable: "Seller information is not available.",
   failedToUpdateLike: "Failed to update like status",
 },
+ messages: {
+    inbox: "Inbox",
+    groupByListing: "Group by listing",
+    pinned: "Pinned",
+    all: "All",
+    viewAll: "View all",
+    edit: "Edit",
+    sort: "Sort: Default",
+    selectAll: "Select All",
+    delete: "Delete",
+    markRead: "Mark read",
+    done: "Done",
+    deleteConversations: "Delete Conversations",
+    deleteConversationsMessage: "Delete {{count}} conversation(s)?",
+    cancel: "Cancel",
+    noMessages: "No messages",
+    loadingConversations: "Loading conversations...",
+    justNow: "Just now",
+    hoursAgo: "{{count}}h ago",
+    daysAgo: "{{count}}d ago",
+    unpin: "Unpin",
+    pin: "Pin",
+    deleteConversation: "Delete Conversation",
+    deleteConversationMessage: "Are you sure you want to delete this conversation? This action cannot be undone.",
+    error: "Error",
+    failedToDelete: "Failed to delete conversation. Please try again.",
+    failedToPin: "Failed to {{action}} conversation.",
+    noMessagesYet: "No messages yet",
+  },
+    chat: {
+    message: "Message",
+    activeLastDay: "Active in the last day",
+    messagee: "Message...",
+    seen: "Seen",
+    loadingMessages: "Loading messages...",
+    failedToPin: "Failed to {{action}} conversation.",
+  },
 // ... (inside the en: { ... } block)
 notificationsSettings: {
     title: "Notifications",
@@ -387,7 +424,12 @@ profileContent: {
   addToCollection: "Add to your collection",
   emptyLikedMsg: "You haven't liked any products yet.",
   startBrowsing: "Start browsing",
+ unlikeProduct: "Unlike Product",
+    unlikeProductMessage: "Remove this product from your liked items?",
+    unlike: "Unlike",
+    cancel: "Cancel",
 },
+
 "subcategories": {
     "Phones": "Phones",
     "PhoneCases": "Phone Cases",
@@ -443,6 +485,14 @@ profileContent: {
     "Offices": "Offices",
     "RetailShops": "Retail Shops",
     "Warehouses": "Warehouses",
+     "BabyCareAndHygiene": "Baby Care & Hygiene",
+    "BabyClothingAndAccessories": "Baby Clothing & Accessories",
+    "BabyGearAndMobility": "Baby Gear & Mobility",
+    "FeedingAndBabyFood": "Feeding & Baby Food",
+    "HealthAndSafety": "Health & Safety",
+    "MaternityAndMomEssentials": "Maternity & Mom Essentials",
+    "NurseryAndBabyFurniture": "Nursery & Baby Furniture",
+    "ToysAndEarlyLearning": "Toys & Early Learning",
     "Restaurants": "Restaurants",
     "Hotels": "Hotels",
     "Sofas": "Sofas",
@@ -714,6 +764,8 @@ notificationsSettings: {
     ordersTitle: "Commandes",
     ordersDescription: "Mises à jour sur vos commandes et achats",
 },
+ 
+ 
 // ... (rest of the fr: block)
   search: {
   "title": "Rechercher",
@@ -871,6 +923,7 @@ productDetail: {
   sellerNotAvailable: "Les informations du vendeur ne sont pas disponibles.",
   failedToUpdateLike: "Échec de la mise à jour du statut j'aime",
 },
+
 // <<< ADDED KEYS FOR PROFILE CONTENT >>>
 profileContent: {
   posts: "Annonces",
@@ -988,6 +1041,14 @@ profile: {
     "SelfieSticks": "Perches à Selfie",
     "Stabilizers": "Stabilisateurs",
     "VR": "VR",
+     "BabyCareAndHygiene": "Soins & Hygiène Bébé",
+    "BabyClothingAndAccessories": "Vêtements & Accessoires Bébé",
+    "BabyGearAndMobility": "Équipement & Mobilité Bébé",
+    "FeedingAndBabyFood": "Alimentation & Nourriture Bébé",
+    "HealthAndSafety": "Santé & Sécurité",
+    "MaternityAndMomEssentials": "Maternité & Essentiels Maman",
+    "NurseryAndBabyFurniture": "Chambre & Meubles Bébé",
+    "ToysAndEarlyLearning": "Jouets & Apprentissage Précoce",
     "MemoryCards": "Cartes Mémoire",
     "OthersAccessories": "Autres Accessoires",
     "Laptop": "Ordinateur Portable",
@@ -1124,7 +1185,46 @@ profile: {
     "emptyMessage": "Vous n'avez bloqué aucun utilisateur pour le moment.",
     "emptySubtext": "Les utilisateurs que vous bloquez ne pourront pas voir vos produits, et vous ne verrez pas les leurs."
   },
-
+  
+  messages: {
+    inbox: "Boîte de réception",
+    groupByListing: "Grouper par annonce",
+    pinned: "Épinglé",
+    all: "Tout",
+    viewAll: "Voir tout",
+    edit: "Modifier",
+    sort: "Trier : Par défaut",
+    selectAll: "Tout sélectionner",
+    delete: "Supprimer",
+    markRead: "Marquer comme lu",
+    done: "Terminé",
+    deleteConversations: "Supprimer les conversations",
+    deleteConversationsMessage: "Supprimer {{count}} conversation(s) ?",
+    cancel: "Annuler",
+    noMessages: "Aucun message",
+    loadingConversations: "Chargement des conversations...",
+    justNow: "À l'instant",
+    hoursAgo: "Il y a {{count}}h",
+    daysAgo: "Il y a {{count}}j",
+    unpin: "Désépingler",
+    pin: "Épingler",
+    deleteConversation: "Supprimer la conversation",
+    deleteConversationMessage: "Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action ne peut pas être annulée.",
+    error: "Erreur",
+    failedToDelete: "Échec de la suppression de la conversation. Veuillez réessayer.",
+    failedToPin: "Échec de {{action}} la conversation.",
+    noMessagesYet: "Pas encore de messages",
+  },
+  
+  chat: {
+    message: "Message",
+    activeLastDay: "Actif au cours de la dernière journée",
+    messagePlaceholder: "Message...",
+    seen: "Vu",
+    loadingMessages: "Chargement des messages...",
+    failedToPin: "Échec de {{action}} la conversation.",
+  },
+  
 settingsScreen: {
   general: "Général",
   notifications: "Notifications",
@@ -1497,6 +1597,14 @@ filterss: {
     "Restaurants": "المطاعم",
     "Hotels": "الفنادق",
     "Sofas": "الأرائك",
+    "BabyCareAndHygiene": "عناية ونظافة الأطفال",
+    "BabyClothingAndAccessories": "ملابس وإكسسوارات الأطفال",
+    "BabyGearAndMobility": "معدات وتنقل الأطفال",
+    "FeedingAndBabyFood": "التغذية وطعام الأطفال",
+    "HealthAndSafety": "الصحة والسلامة",
+    "MaternityAndMomEssentials": "الأمومة ومستلزمات الأم",
+    "NurseryAndBabyFurniture": "غرفة وأثاث الأطفال",
+    "ToysAndEarlyLearning": "الألعاب والتعلم المبكر",
     "CoffeeTables": "طاولات القهوة",
     "TVStands": "حوامل التلفزيون",
     "Bookshelves": "أرفف الكتب",
@@ -1695,7 +1803,14 @@ filterss: {
   HealthBeauty: "صحة وجمال",
   HomemadeHandcrafted: "مصنوع يدويًا ومنزليًا",
 
-      
+      "BabyCareAndHygiene": "عناية ونظافة الأطفال",
+    "BabyClothingAndAccessories": "ملابس وإكسسوارات الأطفال",
+    "BabyGearAndMobility": "معدات وتنقل الأطفال",
+    "FeedingAndBabyFood": "التغذية وطعام الأطفال",
+    "HealthAndSafety": "الصحة والسلامة",
+    "MaternityAndMomEssentials": "الأمومة ومستلزمات الأم",
+    "NurseryAndBabyFurniture": "غرفة وأثاث الأطفال",
+    "ToysAndEarlyLearning": "الألعاب والتعلم المبكر",
       // Subcategories - Electronics
       Phones: "هواتف",
       PhoneCases: "أغطية هواتف",
@@ -1833,6 +1948,45 @@ search: {
     "emptyMessage": "لم تقم بحظر أي مستخدم حتى الآن.",
     "emptySubtext": "لن يتمكن المستخدمون الذين تحظرهم من رؤية منتجاتك، ولن تتمكن من رؤية منتجاتهم."
   },
+  messages: {
+    inbox: "صندوق الوارد",
+    groupByListing: "التجميع حسب الإعلان",
+    pinned: "مثبت",
+    all: "الكل",
+    viewAll: "عرض الكل",
+    edit: "تعديل",
+    sort: "الترتيب: افتراضي",
+    selectAll: "تحديد الكل",
+    delete: "حذف",
+    markRead: "تحديد كمقروء",
+    done: "تم",
+    deleteConversations: "حذف المحادثات",
+    deleteConversationsMessage: "حذف {{count}} محادثة؟",
+    cancel: "إلغاء",
+    noMessages: "لا توجد رسائل",
+    loadingConversations: "جارٍ تحميل المحادثات...",
+    justNow: "الآن",
+    hoursAgo: "منذ {{count}} ساعة",
+    daysAgo: "منذ {{count}} يوم",
+    unpin: "إلغاء التثبيت",
+    pin: "تثبيت",
+    deleteConversation: "حذف المحادثة",
+    deleteConversationMessage: "هل أنت متأكد من رغبتك في حذف هذه المحادثة؟ لا يمكن التراجع عن هذا الإجراء.",
+    error: "خطأ",
+    failedToDelete: "فشل حذف المحادثة. يرجى المحاولة مرة أخرى.",
+    failedToPin: "فشل {{action}} المحادثة.",
+    noMessagesYet: "لا توجد رسائل بعد",
+  },
+  
+  chat: {
+    message: "رسالة",
+    activeLastDay: "نشط في اليوم الأخير",
+    messagePlaceholder: "رسالة...",
+    seen: "تم العرض",
+    loadingMessages: "جارٍ تحميل الرسائل...",
+    failedToPin: "فشل {{action}} المحادثة.",
+  },
+  
     // Filter tabs
     filters: {
       All: "الكل",
@@ -1872,54 +2026,62 @@ search: {
   },
 };
 
-// Current language state
 let currentLanguage: Language = 'en';
 
-// i18n object
+// i18n object with improved functionality
 const i18n = {
-  t: (key: string): string => {
-    const keys = key.split('.');
-    let value: any = translations[currentLanguage];
-    
-    for (const k of keys) {
-      if (value && typeof value === 'object') {
-        value = value[k];
-      } else {
-        return key; // Return key if translation not found
-      }
-    }
-    
-    return typeof value === 'string' ? value : key;
-  },
-  
-  changeLanguage: async (lang: Language) => {
-    currentLanguage = lang;
-    await AsyncStorage.setItem('appLanguage', lang);
-  },
-  
-  getLanguage: () => currentLanguage,
+  t: (key: string): string => {
+    const keys = key.split('.');
+    let value: any = translations[currentLanguage];
+    
+    for (const k of keys) {
+      if (value && typeof value === 'object') {
+        value = value[k];
+      } else {
+        if (__DEV__) {
+          console.log('⚠️ Translation missing:', key, 'for language:', currentLanguage);
+        }
+        return key;
+      }
+    }
+    
+    return typeof value === 'string' ? value : key;
+  },
+  
+  changeLanguage: async (lang: Language) => {
+    console.log('🌐 Changing language from', currentLanguage, 'to', lang);
+    currentLanguage = lang;
+    await AsyncStorage.setItem('appLanguage', lang);
+  },
+  
+  getLanguage: () => currentLanguage,
+  
+  getCurrentLanguage: () => currentLanguage,
 };
 
-// Function to change language (renamed to setLocale, fixing the original error)
+// Function to change language
 export const setLocale = async (languageCode: Language) => {
-  await i18n.changeLanguage(languageCode);
+  await i18n.changeLanguage(languageCode);
 };
 
 // Function to get current language
 export const getCurrentLanguage = async (): Promise<Language> => {
-  const savedLanguage = await AsyncStorage.getItem('appLanguage');
-  return (savedLanguage as Language) || 'en';
+  const savedLanguage = await AsyncStorage.getItem('appLanguage');
+  return (savedLanguage as Language) || 'en';
 };
 
-// Function to initialize language on app start (renamed to loadLocale)
+// Function to initialize language on app start
 export const loadLocale = async () => {
-  const savedLanguage = await getCurrentLanguage();
-  currentLanguage = savedLanguage;
+  const savedLanguage = await getCurrentLanguage();
+  console.log('📚 Loading saved language:', savedLanguage);
+  currentLanguage = savedLanguage;
 };
 
 // Helper function to translate filter tabs
 export const translateFilter = (filter: string): string => {
-  return i18n.t(`filters.${filter}`);
+  return i18n.t(`filters.${filter}`);
 };
 
 export default i18n;
+
+// NOTE: Make sure to copy your full transl

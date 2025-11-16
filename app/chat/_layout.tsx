@@ -3,7 +3,7 @@ import { View } from "react-native"; // <-- Import View
 
 export default function ChatLayout() {
   return (
-    <View style={{ flex: 1, marginBottom: 30, }}> 
+    <View style={{ flex: 1, marginBottom: 40, }}> 
       <Stack screenOptions={{ headerShown: false }} />
     </View>
   );

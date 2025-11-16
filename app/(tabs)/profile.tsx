@@ -55,7 +55,8 @@ interface Category {
     delivery: boolean;
 }
 
-// NOTE: The ProductCard component remains unchanged as the filtering happens in the fetch logic.
+// Add this updated ProductCard component to replace the existing one in your ProfileScreen.tsx
+
 const ProductCard: React.FC<{
     product: Product;
     categories: Category[];
@@ -108,9 +109,23 @@ const ProductCard: React.FC<{
         return `${product.price.toLocaleString()} ${i18n.t('product.priceSuffixDA')}`;
     };
 
-    const handleUnlike = async () => {
+    const handleUnlike = async (e: any) => {
+        e.stopPropagation(); // Prevent navigation to product detail
         if (onUnlike) {
-            await onUnlike(product.id);
+            Alert.alert(
+                'Unlike Product',
+                'Remove this product from your liked items?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Unlike',
+                        style: 'destructive',
+                        onPress: async () => {
+                            await onUnlike(product.id);
+                        }
+                    }
+                ]
+            );
         }
     };
 
@@ -137,6 +152,16 @@ const ProductCard: React.FC<{
                             />
                         </View>
                     )}
+
+                    {/* Unlike button - only shown when isLiked is true */}
+                    {isLiked && onUnlike && (
+                        <TouchableOpacity 
+                            style={styles.heartIconFilled}
+                            onPress={handleUnlike}
+                        >
+                            <Ionicons name="heart" size={20} color="#FF3B30" />
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 <View style={styles.cardDetails}>
@@ -154,7 +179,6 @@ const ProductCard: React.FC<{
         </View>
     );
 };
-
 
 const ProfileScreen = () => {
     const router = useRouter();

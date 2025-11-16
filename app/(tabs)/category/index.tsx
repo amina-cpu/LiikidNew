@@ -97,6 +97,163 @@ const getCategoryTranslation = (catName: string): string => {
   return translated !== translationKey ? translated : catName;
 };
 
+const getSubSubcategoryTranslation = (subSubName: string): string => {
+  if (!subSubName) return '';
+  
+  const normalized = subSubName.trim().toLowerCase();
+
+  const subSubcategoryMap: { [key: string]: string } = {
+    // Computers
+    'desktop computer': 'DesktopComputer',
+    'central unit': 'CentralUnit',
+    'all in one': 'AllInOne',
+    'switchs': 'Switchs',
+    'switches': 'Switchs',
+    'modems & routers': 'ModemsRouters',
+    'modems routers': 'ModemsRouters',
+    'wifi access points': 'WifiAccessPoints',
+    'ethernet cards': 'EthernetCards',
+    'wifi repeater': 'WifiRepeater',
+    'other': 'Other',
+    
+    // Real Estate
+    'villa': 'Villa',
+    'offices': 'Offices',
+    'office': 'Offices',
+    'retail shops': 'RetailShops',
+    'warehouses': 'Warehouses',
+    'warehouse': 'Warehouses',
+    'restaurants': 'Restaurants',
+    'restaurant': 'Restaurants',
+    'hotels': 'Hotels',
+    'hotel': 'Hotels',
+    
+    // Furniture
+    'sofas': 'Sofas',
+    'sofa': 'Sofas',
+    'coffee tables': 'CoffeeTables',
+    'tv stands': 'TVStands',
+    'bookshelves': 'Bookshelves',
+    'bookshelf': 'Bookshelves',
+    'armchairs': 'Armchairs',
+    'armchair': 'Armchairs',
+    'beds': 'Beds',
+    'bed': 'Beds',
+    'mattresses': 'Mattresses',
+    'mattress': 'Mattresses',
+    'wardrobes': 'Wardrobes',
+    'wardrobe': 'Wardrobes',
+    'nightstands': 'Nightstands',
+    'nightstand': 'Nightstands',
+    'dressers': 'Dressers',
+    'dresser': 'Dressers',
+    
+    // Computer Parts
+    'hard disk': 'HardDisk',
+    'charger': 'Charger',
+    'ram': 'RAM',
+    'motherboard': 'Motherboard',
+    'screen protection': 'ScreenProtection',
+    'shockproof cases': 'ShockproofCases',
+    'shockproof & cases': 'ShockproofCases',
+    'supports': 'Supports',
+    'selfie sticks': 'SelfieSticks',
+    'stabilizers': 'Stabilizers',
+    'vr': 'VR',
+    'memory cards': 'MemoryCards',
+    'others accessories': 'OthersAccessories',
+    'laptop': 'Laptop',
+    'macbooks': 'Macbooks',
+    'laser printers': 'LaserPrinters',
+    'cartridges & toners': 'CartridgesToners',
+    'multifunction': 'Multifunction',
+    'inkjet printers': 'InkjetPrinters',
+    'photocopier': 'Photocopier',
+    'barcodes & labelers': 'BarcodesLabelers',
+    'photo printers & badges': 'PhotoPrintersBadges',
+    'graphic card': 'GraphicCard',
+    'power supply - case': 'PowerSupplyCase',
+    'power supply case': 'PowerSupplyCase',
+    'processor': 'Processor',
+    'cooling': 'Cooling',
+    'reader - writer': 'ReaderWriter',
+    'reader writer': 'ReaderWriter',
+    'internal storage': 'InternalStorage',
+    'screens': 'Screens',
+    'screen': 'Screens',
+    'keyboard - touchpad': 'KeyboardTouchpad',
+    'keyboard touchpad': 'KeyboardTouchpad',
+    'batteries': 'Batteries',
+    'battery': 'Batteries',
+    'baffle - webcam': 'BaffleWebcam',
+    'baffle webcam': 'BaffleWebcam',
+    'data shows': 'DataShows',
+    'hard drivers': 'HardDrivers',
+    'flash disk': 'FlashDisk',
+    'memory card': 'MemoryCard',
+    'rack': 'Rack',
+    
+    // Vehicles
+    'jet-ski': 'JetSki',
+    'jet ski': 'JetSki',
+    'rigid boats': 'RigidBoats',
+    'inflatable boats': 'InflatableBoats',
+    'boats': 'Boats',
+    'boat': 'Boats',
+    'mechanical and electrical parts': 'MechanicalElectricalParts',
+    'car body parts': 'CarBodyParts',
+    'auto accessories': 'AutoAccessories',
+    'car seats': 'CarSeats',
+    'optics and lighting': 'OpticsLighting',
+    'sound': 'Sound',
+    'tires & rims': 'TiresRims',
+    'tires rims': 'TiresRims',
+    'windows & windshield': 'WindowsWindshield',
+    'windows windshield': 'WindowsWindshield',
+    'pieces': 'Pieces',
+    'accessories': 'Accessories',
+    'helmets and protection': 'HelmetsProtection',
+    'engines': 'Engines',
+    'engine': 'Engines',
+    
+    // Clothing
+    'tops and t-shirts': 'TopsTShirts',
+    'tops t-shirts': 'TopsTShirts',
+    'shirts': 'Shirts',
+    'shirt': 'Shirts',
+    'gilets': 'Gilets',
+    'gilet': 'Gilets',
+    'jeans and pants': 'JeansPants',
+    'jeans pants': 'JeansPants',
+    'coats and jackets': 'CoatsJackets',
+    'coats jackets': 'CoatsJackets',
+    'tracksuits': 'Tracksuits',
+    'tracksuit': 'Tracksuits',
+    'suits and blazers': 'SuitsBlazers',
+    'suits blazers': 'SuitsBlazers',
+    'shorts and pants': 'ShortsPants',
+    'shorts pants': 'ShortsPants',
+  };
+
+  const mappedKey = subSubcategoryMap[normalized];
+
+  if (!mappedKey) {
+    if (__DEV__) {
+      console.log('⚠️ No mapping found for sub-subcategory:', normalized);
+    }
+    return subSubName;
+  }
+
+  const translationKey = `subSubcategories.${mappedKey}`;
+  const translated = i18n.t(translationKey);
+  
+  if (__DEV__) {
+    console.log('✅ Sub-subcategory Translation:', subSubName, '->', translated);
+  }
+  
+  return translated !== translationKey ? translated : subSubName;
+};
+
 const getSubcategoryTranslation = (subName: string): string => {
   if (!subName) return '';
   
@@ -216,6 +373,8 @@ const getSubcategoryTranslation = (subName: string): string => {
   // Return translated text or original name if translation not found
   return translated !== translationKey ? translated : subName;
 };
+
+
 const FILTER_TABS = ["All", "Sell", "Rent", "Exchange"];
 
 const getCategoryIcon = (name: string, size = 24, color = "#16A085") => {

@@ -25,6 +25,7 @@ import {
 } from "../../lib/messaging";
 import { supabase } from "../../lib/Supabase";
 import { useAuth } from "../context/AuthContext";
+import i18n from '../../lib/i18n';
 
 interface Conversation {
   conversation_id: number;
@@ -69,7 +70,6 @@ const MessagesScreen = () => {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [isGrouped, setIsGrouped] = useState(false);
   
-  // ✅ NEW: Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedConversations, setSelectedConversations] = useState<Set<number>>(new Set());
   
@@ -113,7 +113,6 @@ const MessagesScreen = () => {
     outputRange: [2, 22], 
   });
 
-  // ✅ NEW: Toggle selection
   const toggleSelection = (conversationId: number) => {
     setSelectedConversations(prev => {
       const newSet = new Set(prev);
@@ -126,28 +125,25 @@ const MessagesScreen = () => {
     });
   };
 
-  // ✅ NEW: Select all
   const selectAll = () => {
     const allIds = new Set(conversations.map(c => c.conversation_id));
     setSelectedConversations(allIds);
   };
 
-  // ✅ NEW: Deselect all
   const deselectAll = () => {
     setSelectedConversations(new Set());
   };
 
-  // ✅ NEW: Delete selected conversations
   const deleteSelectedConversations = async () => {
     if (selectedConversations.size === 0) return;
 
     Alert.alert(
-      'Delete Conversations',
-      `Delete ${selectedConversations.size} conversation${selectedConversations.size > 1 ? 's' : ''}?`,
+      i18n.t('messages.deleteConversations'),
+      i18n.t('messages.deleteConversationsMessage').replace('{{count}}', selectedConversations.size.toString()),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: i18n.t('messages.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: i18n.t('messages.delete'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -167,7 +163,7 @@ const MessagesScreen = () => {
               setIsEditMode(false);
             } catch (error) {
               console.error('Error deleting conversations:', error);
-              Alert.alert('Error', 'Failed to delete conversations.');
+              Alert.alert(i18n.t('messages.error'), i18n.t('messages.failedToDelete'));
             }
           }
         }
@@ -175,7 +171,6 @@ const MessagesScreen = () => {
     );
   };
 
-  // ✅ NEW: Mark selected as read
   const markSelectedAsRead = async () => {
     if (selectedConversations.size === 0 || !user?.user_id) return;
 
@@ -204,12 +199,12 @@ const MessagesScreen = () => {
   const deleteConversation = async (conversationId: number) => {
     try {
         Alert.alert(
-            "Delete Conversation",
-            "Are you sure you want to delete this conversation? This action cannot be undone.",
+            i18n.t('messages.deleteConversation'),
+            i18n.t('messages.deleteConversationMessage'),
             [
-                { text: "Cancel", style: "cancel" },
+                { text: i18n.t('messages.cancel'), style: "cancel" },
                 { 
-                    text: "Delete", 
+                    text: i18n.t('messages.delete'), 
                     style: "destructive", 
                     onPress: async () => {
                         try {
@@ -219,7 +214,7 @@ const MessagesScreen = () => {
                             setConversations(prev => prev.filter(c => c.conversation_id !== conversationId));
                         } catch (error) {
                             console.error('Error deleting conversation:', error);
-                            Alert.alert('Error', 'Failed to delete conversation. Please try again.');
+                            Alert.alert(i18n.t('messages.error'), i18n.t('messages.failedToDelete'));
                         }
                     }
                 }
@@ -239,7 +234,8 @@ const MessagesScreen = () => {
       const success = await updateConversationPinStatus(conversationId, user.user_id, newPinStatus);
 
       if (!success) {
-        Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
+        const action = newPinStatus ? i18n.t('messages.pin') : i18n.t('messages.unpin');
+        Alert.alert(i18n.t('messages.error'), i18n.t('messages.failedToPin').replace('{{action}}', action.toLowerCase()));
         setConversations(prev => prev.map(c => c.conversation_id === conversationId ? { ...c, is_pinned: currentPinStatus } : c));
       }
   };
@@ -334,7 +330,7 @@ const MessagesScreen = () => {
       console.log('✅ Conversations loaded successfully');
     } catch (error) {
       console.error('❌ Error loading conversations:', error);
-      Alert.alert('Error', 'Failed to load messages.');
+      Alert.alert(i18n.t('messages.error'), i18n.t('messages.failedToLoad'));
       setConversations([]);
     } finally {
       setIsLoading(false);
@@ -361,9 +357,9 @@ const MessagesScreen = () => {
     const diff = new Date().getTime() - new Date(timestamp).getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const days = Math.floor(hours / 24);
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
+    if (hours < 1) return i18n.t('messages.justNow');
+    if (hours < 24) return i18n.t('messages.hoursAgo').replace('{{count}}', hours.toString());
+    return i18n.t('messages.daysAgo').replace('{{count}}', days.toString());
   }; 
   
   const getAvatarUrl = (conversation: Conversation) => { 
@@ -375,7 +371,7 @@ const MessagesScreen = () => {
   };
   
   const getLastMessagePreview = (conversation: Conversation) => { 
-    return conversation.last_message || "No messages yet"; 
+    return conversation.last_message || i18n.t('messages.noMessagesYet'); 
   };
   
   const isUserOnline = (lastSeen: string | null): boolean => {
@@ -387,7 +383,6 @@ const MessagesScreen = () => {
   };
   
   const handleConversationPress = async (conversationId: number) => {
-    // ✅ If in edit mode, toggle selection instead
     if (isEditMode) {
       toggleSelection(conversationId);
       return;
@@ -406,7 +401,6 @@ const MessagesScreen = () => {
     router.push('/(tabs)/notifications'); 
   };
 
-  // ✅ NEW: Handle "View All" for pinned conversations
   const handleViewAllPinned = () => {
     router.push('/pinned');
   };
@@ -472,7 +466,6 @@ const MessagesScreen = () => {
   const pinnedConversations = sortedConversations.filter(c => c.is_pinned);
   const unpinnedConversations = sortedConversations.filter(c => !c.is_pinned);
   
-  // ✅ Show only first 3 pinned conversations
   const displayedPinnedConversations = pinnedConversations.slice(0, 3);
   
   const [groupedData, setGroupedData] = useState<(GroupedListing | Conversation)[]>([]);
@@ -500,7 +493,7 @@ const MessagesScreen = () => {
             >
                 <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
                     <Ionicons name={isPinned ? "bookmark-outline" : "pin-outline"} size={24} color="white" />
-                    <Text style={styles.actionButtonText}>{isPinned ? "Unpin" : "Pin"}</Text>
+                    <Text style={styles.actionButtonText}>{isPinned ? i18n.t('messages.unpin') : i18n.t('messages.pin')}</Text>
                 </Animated.View>
             </TouchableOpacity>
 
@@ -510,7 +503,7 @@ const MessagesScreen = () => {
             >
                 <Animated.View style={[styles.actionButton, { transform: [{ scale }] }]}>
                     <Ionicons name="trash-outline" size={24} color="white" />
-                    <Text style={styles.actionButtonText}>Delete</Text>
+                    <Text style={styles.actionButtonText}>{i18n.t('messages.delete')}</Text>
                 </Animated.View>
             </TouchableOpacity>
         </View>
@@ -519,7 +512,7 @@ const MessagesScreen = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>Inbox</Text>
+      <Text style={styles.headerTitle}>{i18n.t('messages.inbox')}</Text>
       <TouchableOpacity style={styles.notificationButton} onPress={handleNotificationPress}>
         <Ionicons name="notifications-outline" size={26} color="#000" /> 
         {unreadNotificationsCount > 0 && (
@@ -541,7 +534,7 @@ const MessagesScreen = () => {
         >
           <Animated.View style={[styles.toggleCircle, { transform: [{ translateX: toggleTranslateX }] }]} />
         </TouchableOpacity>
-        <Text style={styles.groupByText}>Group by listing</Text>
+        <Text style={styles.groupByText}>{i18n.t('messages.groupByListing')}</Text>
       </View>
     </View>
   );
@@ -549,7 +542,7 @@ const MessagesScreen = () => {
   const renderSectionHeader = (title: string, actionText?: string, onActionPress?: () => void) => (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionTitleContainer}>
-        {title === "Pinned" && <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />}
+        {title === i18n.t('messages.pinned') && <Ionicons name="pin" size={16} color="#000" style={styles.pinIcon} />}
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {actionText && onActionPress && (
@@ -560,7 +553,6 @@ const MessagesScreen = () => {
     </View>
   );
 
-  // ✅ NEW: Edit/Sort buttons with edit mode functionality
   const renderEditSortButtons = () => (
     <View style={styles.editSortRow}>
       {!isEditMode ? (
@@ -570,19 +562,18 @@ const MessagesScreen = () => {
             onPress={() => setIsEditMode(true)}
           >
             <Ionicons name="create-outline" size={20} color="#000" />
-            <Text style={styles.editText}>Edit</Text>
+            <Text style={styles.editText}>{i18n.t('messages.edit')}</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.sortButton}>
             <Ionicons name="funnel-outline" size={16} color="#00A78F" style={styles.sortIcon} />
-            <Text style={styles.sortText}>Sort: Default</Text>
+            <Text style={styles.sortText}>{i18n.t('messages.sort')}</Text>
           </TouchableOpacity>
         </>
       ) : null}
     </View>
   );
 
-  // ✅ NEW: Edit mode bar
   const renderEditModeBar = () => (
     <View style={styles.editModeBar}>
       <View style={styles.editModeLeft}>
@@ -612,7 +603,7 @@ const MessagesScreen = () => {
           style={[styles.actionButton, selectedConversations.size === 0 && styles.actionButtonDisabled]}
         >
           <Text style={[styles.actionButtonText, selectedConversations.size === 0 && styles.actionButtonTextDisabled]}>
-            Delete
+            {i18n.t('messages.delete')}
           </Text>
         </TouchableOpacity>
 
@@ -622,7 +613,7 @@ const MessagesScreen = () => {
           style={[styles.actionButton, selectedConversations.size === 0 && styles.actionButtonDisabled]}
         >
           <Text style={[styles.actionButtonText, selectedConversations.size === 0 && styles.actionButtonTextDisabled]}>
-            Mark read
+            {i18n.t('messages.markRead')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -633,7 +624,7 @@ const MessagesScreen = () => {
           setSelectedConversations(new Set());
         }}
       >
-        <Text style={styles.doneButton}>Done</Text>
+        <Text style={styles.doneButton}>{i18n.t('messages.done')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -802,7 +793,7 @@ const MessagesScreen = () => {
         
         {!isGrouped && displayedPinnedConversations.length > 0 && (
             <>
-                {renderSectionHeader("Pinned", pinnedConversations.length > 3 ? "View all" : undefined, handleViewAllPinned)}
+                {renderSectionHeader(i18n.t('messages.pinned'), pinnedConversations.length > 3 ? i18n.t('messages.viewAll') : undefined, handleViewAllPinned)}
                 {displayedPinnedConversations.map((item, index) => (
                     <React.Fragment key={`pinned-item-${item.conversation_id}`}>
                         {renderConversationItem({ item, index })}
@@ -815,7 +806,7 @@ const MessagesScreen = () => {
         
         {!isGrouped && (
           <>
-            {renderSectionHeader("All")}
+            {renderSectionHeader(i18n.t('messages.all'))}
             {renderEditSortButtons()} 
             {unpinnedConversations.length > 0 && <View style={styles.separator} />}
           </>
@@ -823,7 +814,7 @@ const MessagesScreen = () => {
 
         {isGrouped && (
           <>
-            {renderSectionHeader("All")}
+            {renderSectionHeader(i18n.t('messages.all'))}
             {renderEditSortButtons()} 
             {groupedData.length > 0 && <View style={styles.separator} />}
           </>
@@ -843,13 +834,13 @@ const MessagesScreen = () => {
         {isLoading && !refreshing ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.loadingText}>Loading conversations...</Text>
+            <Text style={styles.loadingText}>{i18n.t('messages.loadingConversations')}</Text>
           </View>
         ) : conversations.length === 0 && !refreshing ? (
           <>
             {renderGroupBy()} 
             <View style={{ flex: 1, backgroundColor: '#fff' }}> 
-                <Text style={styles.emptyStateTitle}>No messages</Text>
+                <Text style={styles.emptyStateTitle}>{i18n.t('messages.noMessages')}</Text>
             </View>
           </>
         ) : (
@@ -1058,10 +1049,12 @@ const styles = StyleSheet.create({
   sortButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E6F7F5', 
+    backgroundColor: '#fff', 
     borderRadius: 20, 
     paddingVertical: 6, 
     paddingHorizontal: 12, 
+    borderWidth:1,
+    borderColor:'#00A78F'
   },
   sortIcon: {
     marginRight: 6, 
@@ -1073,7 +1066,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sortText: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '500',
     color: '#00A78F', 
   },
@@ -1277,18 +1270,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 80, 
     height: '100%',
-  },
-  actionButton: {
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  actionButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 12,
-    marginTop: 2,
   },
   pinAction: {
     backgroundColor: '#4A4A4A', 

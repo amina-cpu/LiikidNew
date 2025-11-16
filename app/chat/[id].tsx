@@ -23,6 +23,7 @@ import {
 } from '../../lib/messaging';
 import { supabase } from '../../lib/Supabase';
 import { useAuth } from '../context/AuthContext';
+import i18n from '../../lib/i18n';
 
 interface Message {
   message_id: number;
@@ -252,7 +253,8 @@ const ChatScreen = () => {
 
     if (!success) {
       setConversationInfo(prev => prev ? { ...prev, is_pinned: !newPinStatus } : null);
-      Alert.alert('Error', `Failed to ${newPinStatus ? 'pin' : 'unpin'} conversation.`);
+      const action = newPinStatus ? i18n.t('chat.pin') : i18n.t('chat.unpin');
+      Alert.alert(i18n.t('chat.error'), i18n.t('chat.failedToPin').replace('{{action}}', action.toLowerCase()));
     }
   };
 
@@ -322,12 +324,26 @@ const ChatScreen = () => {
     return `${displayHours}:${displayMinutes} ${ampm} ${month} ${day}`;
   };
 
-  const formatPrice = (price: number) => {
-    if (price >= 1000) {
+  const formatPrice = (price: number): string => {
+    if (price >= 10000) {
+      const millions = price / 10000;
+      let formattedMillions;
+
+      if (millions % 1 === 0) {
+        formattedMillions = millions.toString();
+      } else if (millions >= 10) {
+        formattedMillions = Math.round(millions).toString();
+      } else {
+        formattedMillions = millions.toFixed(1);
+      }
+      
+      return `${formattedMillions} M `;
+    } else if (price >= 1000) {
       const k = price / 1000;
-      return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`;
+      const formattedK = k % 1 === 0 ? `${k}` : `${k.toFixed(1)}`;
+      return `${formattedK}K `;
     }
-    return price.toString();
+    return `${price.toLocaleString()} `;
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
@@ -356,7 +372,7 @@ const ChatScreen = () => {
         </View>
         {showSeen ? (
           <View style={styles.seenContainer}>
-            <Text style={styles.seenText}>Seen</Text>
+            <Text style={styles.seenText}>{i18n.t('chat.seen')}</Text>
             <Ionicons name="checkmark-done" size={14} color="#00A78F" />
           </View>
         ) : null}
@@ -368,6 +384,7 @@ const ChatScreen = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00A78F" />
+        <Text style={styles.loadingText}>{i18n.t('chat.loadingMessages')}</Text>
       </View>
     );
   }
@@ -384,17 +401,17 @@ const ChatScreen = () => {
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#00A78F" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Message</Text>
+            <Text style={styles.headerTitle}>{i18n.t('chat.message')}</Text>
             <View style={styles.headerRight}>
               <TouchableOpacity style={styles.iconButton} onPress={handleTogglePin}>
                 <Ionicons 
-                  name={conversationInfo?.is_pinned ? "pin" : "pin-outline"} 
-                  size={22} 
+                  name={conversationInfo?.is_pinned ? "bookmark" : "bookmark-outline"} 
+                  size={20} 
                   color="#00A78F" 
                 />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="ellipsis-horizontal" size={22} color="#00A78F" />
+                <Ionicons name="ellipsis-horizontal" size={20} color="#00A78F" />
               </TouchableOpacity>
             </View>
           </View>
@@ -425,7 +442,7 @@ const ChatScreen = () => {
                 <Text style={styles.userName}>
                   {conversationInfo?.other_user_name || 'User'}
                 </Text>
-                <Text style={styles.userStatus}>Active in the last day</Text>
+                <Text style={styles.userStatus}>{i18n.t('chat.activeLastDay')}</Text>
                 <Text style={styles.userLocation}>Columbia, MD</Text>
               </View>
             </View>
@@ -438,7 +455,7 @@ const ChatScreen = () => {
                 />
                 <View style={styles.productPriceTag}>
                   <Text style={styles.productPrice}>
-                    ${formatPrice(conversationInfo.listing_price || 0)}
+                    {formatPrice(conversationInfo.listing_price || 0)}
                   </Text>
                 </View>
               </View>
@@ -465,7 +482,7 @@ const ChatScreen = () => {
             style={[styles.input, { height: Math.max(40, Math.min(inputHeight, 120)) }]}
             value={newMessage}
             onChangeText={setNewMessage}
-            placeholder="Message..."
+            placeholder={i18n.t('chat.messagePlaceholder')}
             placeholderTextColor="#999"
             multiline
             onContentSizeChange={(e) => {
@@ -491,7 +508,17 @@ const ChatScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   flex: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
   stickyHeader: {
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -514,8 +541,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 16,
   },
-  headerRight: { flexDirection: 'row' },
-  iconButton: { padding: 4, marginLeft: 12 },
+  headerRight: { flexDirection: 'row', gap: 8 },
+  iconButton: { 
+    padding: 6,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   userInfoCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -567,8 +600,8 @@ const styles = StyleSheet.create({
   },
   productThumbnail: { position: 'relative' },
   productImage: {
-    width: 56,
-    height: 56,
+    width: 65,
+    height: 65,
     borderRadius: 8,
     backgroundColor: '#E5E5EA',
   },
@@ -584,7 +617,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   productPrice: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '700',
     color: '#fff',
     textAlign: 'center',
